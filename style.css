@@ -33,17 +33,37 @@ body { -webkit-font-smoothing: antialiased; }
 }
 .form-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px #e0e7ff; }
 
-.filter-select {
-  padding: 8px 12px;
-  border-radius: 8px;
+/* ===== 스테퍼 (시즌 / 시청횟수) ===== */
+.stepper {
+  display: flex;
+  align-items: stretch;
   border: 1px solid #cbd5e1;
-  font-size: 13px;
-  font-weight: 500;
-  color: #475569;
+  border-radius: 8px;
+  overflow: hidden;
   background: #fff;
-  outline: none;
+  height: 42px;
 }
-.filter-select:focus { border-color: #6366f1; }
+.step-btn {
+  width: 40px;
+  color: #64748b;
+  background: #f8fafc;
+  font-size: 12px;
+  transition: background .12s, color .12s;
+}
+.step-btn:hover { background: #e0e7ff; color: #4f46e5; }
+.step-btn:active { background: #c7d2fe; }
+.step-val {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  border-left: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  user-select: none;
+}
 
 /* ===== 별점 선택 ===== */
 .star-btn {
@@ -67,6 +87,7 @@ body { -webkit-font-smoothing: antialiased; }
   box-shadow: 0 4px 16px rgba(15,23,42,.10);
   transform: translateY(-2px);
 }
+.wl-card.wl-pending { border-color: #fcd34d; }
 .wl-poster {
   aspect-ratio: 2/3;
   width: 100%;
@@ -103,6 +124,7 @@ body { -webkit-font-smoothing: antialiased; }
 .badge-ott    { background: #d1fae5; color: #065f46; }
 .badge-genre  { background: #f1f5f9; color: #475569; }
 .badge-season { background: #fef3c7; color: #92400e; }
+.badge-cast   { background: #fce7f3; color: #9d174d; }
 
 /* 요약 박스 */
 .stat-box {
@@ -124,7 +146,7 @@ body { -webkit-font-smoothing: antialiased; }
   transition: background .12s, border-color .12s;
 }
 .tmdb-item:hover { background: #f8fafc; border-color: #a5b4fc; }
-.tmdb-item img { width: 46px; border-radius: 6px; background: #e2e8f0; object-fit: cover; }
+.tmdb-item img { width: 46px; border-radius: 6px; background: #e2e8f0; object-fit: cover; align-self: flex-start; }
 
 /* ===== 히트맵 ===== */
 .heat-cell {
@@ -142,6 +164,10 @@ body { -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
+.line-clamp-2 {
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
 .line-clamp-3 {
   display: -webkit-box; -webkit-line-clamp: 3;
   -webkit-box-orient: vertical; overflow: hidden;
