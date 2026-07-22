@@ -5,10 +5,12 @@
 /* ---------- 설정 ---------- */
 const APP_PASSWORD = "9066";        // 사이트 입장 비밀번호
 
-/* 스페인어 단어장과 동일한 Realtime Database 사용.
-   경로만 watchlog/ 로 분리되어 단어장 데이터와 섞이지 않음. */
-const FIREBASE_DB_URL = "https://nyanya-vocab-default-rtdb.firebaseio.com";
-const SYNC_KEY = "nyanya9066";      // 데이터가 저장되는 방 이름 (바꾸면 새 방이 됨)
+/* Watch LOG 전용 Realtime Database (단어장과 완전히 분리된 별도 프로젝트) */
+const FIREBASE_DB_URL = "https://nyanya-watchlog-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+/* Firebase 규칙에서 watchlog 경로만 읽기·쓰기 허용됨 */
+const SYNC_BRANCH = "watchlog";
+const SYNC_KEY = "data";            // 데이터가 저장되는 방 이름 (바꾸면 새 방이 됨)
 
 const AUTO_SYNC_DELAY = 2500;       // 자동 저장 대기시간(ms)
 /* --------------------------------------------- */
@@ -19,7 +21,7 @@ const LS_AUTH = "watchlog_auth";
 const LS_MODIFIED = "watchlog_modified";
 const LS_BACKUP = "watchlog_items_backup";
 
-const DATA_URL = `${FIREBASE_DB_URL}/watchlog/${SYNC_KEY}.json`;
+const DATA_URL = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${SYNC_KEY}.json`;
 
 const State = {
   items: [],
@@ -134,10 +136,12 @@ async function autoPush() {
         count: State.items.length
       })
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) throw new Error(describeHttp(res.status));
     setSyncIcon("saved");
+    State.lastError = "";
   } catch (e) {
     console.error("자동 저장 실패", e);
+    State.lastError = e.message;
     setSyncIcon("error");
   } finally {
     State.syncing = false;
@@ -159,12 +163,14 @@ async function pushToServer() {
         count: State.items.length
       })
     });
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) throw new Error(describeHttp(res.status));
     setSyncIcon("saved");
+    State.lastError = "";
     toast(`서버에 저장 완료 (${State.items.length}개)`, "success");
     return true;
   } catch (e) {
     console.error(e);
+    State.lastError = e.message;
     setSyncIcon("error");
     toast("저장 실패: " + e.message, "error");
     return false;
@@ -173,7 +179,7 @@ async function pushToServer() {
 
 async function fetchServer() {
   const res = await fetch(DATA_URL + "?t=" + Date.now());
-  if (!res.ok) throw new Error("HTTP " + res.status);
+  if (!res.ok) throw new Error(describeHttp(res.status));
   return await res.json();   // null 이면 서버에 데이터 없음
 }
 
@@ -255,6 +261,40 @@ window.addEventListener("beforeunload", (e) => {
     e.returnValue = "";
   }
 });
+
+/* ---------- 에러 해설 ---------- */
+function describeHttp(status) {
+  if (status === 401 || status === 403)
+    return `권한 거부 (${status}) — Firebase 보안 규칙이 이 경로를 막고 있습니다`;
+  if (status === 404)
+    return `주소를 찾을 수 없음 (404) — DB 주소를 확인하세요`;
+  if (status >= 500)
+    return `서버 오류 (${status}) — 잠시 후 다시 시도하세요`;
+  return `HTTP ${status}`;
+}
+
+/* ---------- 연결 테스트 ---------- */
+async function testConnection() {
+  const out = { url: DATA_URL, read: "", write: "" };
+  try {
+    const r = await fetch(DATA_URL + "?t=" + Date.now());
+    out.read = r.ok ? "성공" : describeHttp(r.status);
+  } catch (e) { out.read = "네트워크 오류: " + e.message; }
+
+  try {
+    const testUrl = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${SYNC_KEY}_test.json`;
+    const w = await fetch(testUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ping: new Date().toISOString() })
+    });
+    out.write = w.ok ? "성공" : describeHttp(w.status);
+    if (w.ok) await fetch(testUrl, { method: "DELETE" });
+  } catch (e) { out.write = "네트워크 오류: " + e.message; }
+
+  return out;
+}
+window.testConnection = testConnection;
 
 /* ---------- 복구용 (콘솔에서 호출) ---------- */
 window.restoreBackup = function () {
