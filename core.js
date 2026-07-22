@@ -1,26 +1,25 @@
 /* ============================================
-   core.js — Firebase, 인증, 상태, 공통 유틸
+   core.js — Firebase(RTDB), 인증, 상태, 공통 유틸
    ============================================ */
 
-/* ---------- 설정 (여기를 수정하세요) ---------- */
-const APP_PASSWORD = "1234";        // ← 원하는 비밀번호로 변경
+/* ---------- 설정 ---------- */
+const APP_PASSWORD = "9066";        // 사이트 입장 비밀번호
 
-const FIREBASE_CONFIG = {
-  apiKey: "여기에_apiKey",
-  authDomain: "여기에_authDomain",
-  projectId: "여기에_projectId",
-  storageBucket: "여기에_storageBucket",
-  messagingSenderId: "여기에_messagingSenderId",
-  appId: "여기에_appId"
-};
+/* 스페인어 단어장과 동일한 Realtime Database 사용.
+   경로만 watchlog/ 로 분리되어 단어장 데이터와 섞이지 않음. */
+const FIREBASE_DB_URL = "https://nyanya-vocab-default-rtdb.firebaseio.com";
+const SYNC_KEY = "nyanya9066";      // 데이터가 저장되는 방 이름 (바꾸면 새 방이 됨)
 
-const FB_COLLECTION = "watchlog";   // Firestore 컬렉션명
-const FB_DOC = "data";              // 문서명
+const AUTO_SYNC_DELAY = 2500;       // 자동 저장 대기시간(ms)
 /* --------------------------------------------- */
 
 const LS_KEY = "watchlog_items";
 const LS_TMDB = "watchlog_tmdb_key";
 const LS_AUTH = "watchlog_auth";
+const LS_MODIFIED = "watchlog_modified";
+const LS_BACKUP = "watchlog_items_backup";
+
+const DATA_URL = `${FIREBASE_DB_URL}/watchlog/${SYNC_KEY}.json`;
 
 const State = {
   items: [],
@@ -29,7 +28,9 @@ const State = {
   perPage: 24,
   editingId: null,
   selectedTmdb: null,
-  db: null
+  online: true,
+  syncing: false,
+  autoSync: true
 };
 
 /* ---------- 유틸 ---------- */
@@ -47,7 +48,7 @@ function toast(msg, type = "info") {
     (type === "error" ? "bg-red-600" : type === "success" ? "bg-emerald-600" : "bg-slate-800");
   t.classList.remove("hidden");
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.add("hidden"), 2600);
+  t._timer = setTimeout(() => t.classList.add("hidden"), 2800);
 }
 
 function fmtDate(d) {
@@ -72,9 +73,43 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* ---------- 동기화 상태 아이콘 ---------- */
+function setSyncIcon(state) {
+  const btn = $("#syncBtn");
+  if (!btn) return;
+  const map = {
+    idle:    ["fa-cloud",             "text-slate-400",   "대기 중 (클릭하면 즉시 저장)"],
+    pending: ["fa-pen",               "text-amber-500",   "저장 대기 중..."],
+    saving:  ["fa-spinner fa-spin",   "text-indigo-500",  "서버 저장 중..."],
+    saved:   ["fa-cloud",             "text-emerald-600", "서버에 저장됨"],
+    error:   ["fa-triangle-exclamation", "text-red-500",  "저장 실패 — 클릭해서 재시도"]
+  };
+  const [icon, color, title] = map[state] || map.idle;
+  btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
+  btn.className = `w-9 h-9 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition ${color}`;
+  btn.title = title;
+}
+
 /* ---------- 로컬 저장 ---------- */
-function saveLocal() {
-  localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+let _syncTimer = null;
+
+function saveLocal(skipCloud) {
+  try {
+    // 직전 상태를 백업으로 하나 남겨둠 (사고 대비)
+    const prev = localStorage.getItem(LS_KEY);
+    if (prev && prev.length > 20) localStorage.setItem(LS_BACKUP, prev);
+
+    localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+    localStorage.setItem(LS_MODIFIED, new Date().toISOString());
+  } catch (e) {
+    console.error("로컬 저장 실패", e);
+    toast("브라우저 저장 공간이 부족합니다", "error");
+  }
+
+  if (skipCloud || !State.autoSync) return;
+  setSyncIcon("pending");
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(autoPush, AUTO_SYNC_DELAY);
 }
 
 function loadLocal() {
@@ -83,55 +118,164 @@ function loadLocal() {
   } catch { State.items = []; }
 }
 
-/* ---------- Firebase ---------- */
-function initFirebase() {
-  if (!FIREBASE_CONFIG.projectId || FIREBASE_CONFIG.projectId.startsWith("여기에")) {
-    console.warn("Firebase 설정이 비어있습니다. 로컬 저장만 동작합니다.");
-    return false;
-  }
+/* ---------- 서버 통신 (Realtime Database REST) ---------- */
+async function autoPush() {
+  _syncTimer = null;
+  if (State.syncing) return;
+  State.syncing = true;
+  setSyncIcon("saving");
   try {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    State.db = firebase.firestore();
-    return true;
+    const res = await fetch(DATA_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: State.items,
+        updatedAt: localStorage.getItem(LS_MODIFIED) || new Date().toISOString(),
+        count: State.items.length
+      })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    setSyncIcon("saved");
   } catch (e) {
-    console.error("Firebase 초기화 실패", e);
-    return false;
+    console.error("자동 저장 실패", e);
+    setSyncIcon("error");
+  } finally {
+    State.syncing = false;
   }
 }
 
 async function pushToServer() {
-  if (!State.db) { toast("Firebase 설정이 필요합니다", "error"); return false; }
+  clearTimeout(_syncTimer);
+  _syncTimer = null;
+  State.syncing = true;
+  setSyncIcon("saving");
   try {
-    await State.db.collection(FB_COLLECTION).doc(FB_DOC).set({
-      items: State.items,
-      updatedAt: new Date().toISOString(),
-      count: State.items.length
+    const res = await fetch(DATA_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: State.items,
+        updatedAt: new Date().toISOString(),
+        count: State.items.length
+      })
     });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    setSyncIcon("saved");
     toast(`서버에 저장 완료 (${State.items.length}개)`, "success");
     return true;
   } catch (e) {
     console.error(e);
+    setSyncIcon("error");
     toast("저장 실패: " + e.message, "error");
+    return false;
+  } finally { State.syncing = false; }
+}
+
+async function fetchServer() {
+  const res = await fetch(DATA_URL + "?t=" + Date.now());
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return await res.json();   // null 이면 서버에 데이터 없음
+}
+
+async function pullFromServer(silent) {
+  try {
+    const d = await fetchServer();
+    if (!d || !Array.isArray(d.items)) {
+      if (!silent) toast("서버에 데이터가 없습니다", "error");
+      return false;
+    }
+    State.items = d.items;
+    localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+    localStorage.setItem(LS_MODIFIED, d.updatedAt || new Date().toISOString());
+    setSyncIcon("saved");
+    if (!silent) toast(`서버에서 불러옴 (${State.items.length}개)`, "success");
+    return true;
+  } catch (e) {
+    console.error(e);
+    if (!silent) toast("불러오기 실패: " + e.message, "error");
     return false;
   }
 }
 
-async function pullFromServer() {
-  if (!State.db) { toast("Firebase 설정이 필요합니다", "error"); return false; }
+/* 부팅 시 서버/로컬 중 최신본 자동 선택 */
+async function syncOnBoot() {
+  setSyncIcon("saving");
   try {
-    const snap = await State.db.collection(FB_COLLECTION).doc(FB_DOC).get();
-    if (!snap.exists) { toast("서버에 데이터가 없습니다", "error"); return false; }
-    const d = snap.data();
-    State.items = d.items || [];
-    saveLocal();
-    toast(`서버에서 불러옴 (${State.items.length}개)`, "success");
-    return true;
+    const d = await fetchServer();
+    const localMod = localStorage.getItem(LS_MODIFIED) || "";
+    const localCount = State.items.length;
+
+    // 서버가 비어있음 → 로컬을 올림
+    if (!d || !Array.isArray(d.items)) {
+      if (localCount) await autoPush();
+      else setSyncIcon("idle");
+      return;
+    }
+
+    const serverMod = d.updatedAt || "";
+    const serverCount = d.items.length;
+
+    // 서버가 더 최신
+    if (serverMod > localMod) {
+      // 안전장치: 서버 데이터가 로컬보다 현저히 적으면 물어봄
+      if (localCount > 0 && serverCount < localCount * 0.5) {
+        const ok = confirm(
+          `서버 데이터(${serverCount}개)가 이 기기 데이터(${localCount}개)보다 적습니다.\n` +
+          `서버 것으로 덮어쓸까요?\n\n` +
+          `[취소]를 누르면 이 기기 데이터를 유지하고 서버에 올립니다.`
+        );
+        if (!ok) { await autoPush(); return; }
+      }
+      State.items = d.items;
+      localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+      localStorage.setItem(LS_MODIFIED, serverMod);
+      applyFilters();
+      setSyncIcon("saved");
+      toast(`서버에서 불러옴 (${State.items.length}개)`);
+      return;
+    }
+
+    // 로컬이 더 최신
+    if (localMod > serverMod) { await autoPush(); return; }
+
+    setSyncIcon("saved");
   } catch (e) {
-    console.error(e);
-    toast("불러오기 실패: " + e.message, "error");
-    return false;
+    console.error("부팅 동기화 실패", e);
+    setSyncIcon("error");
+    toast("서버 연결 실패 — 이 기기에만 저장됩니다", "error");
   }
 }
+
+/* 저장 대기 중 페이지 닫기 방지 */
+window.addEventListener("beforeunload", (e) => {
+  if (_syncTimer) {
+    clearTimeout(_syncTimer);
+    autoPush();
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+
+/* ---------- 복구용 (콘솔에서 호출) ---------- */
+window.restoreBackup = function () {
+  const b = localStorage.getItem(LS_BACKUP);
+  if (!b) { console.log("백업이 없습니다"); return; }
+  const arr = JSON.parse(b);
+  if (!confirm(`백업 ${arr.length}개로 되돌릴까요?`)) return;
+  State.items = arr;
+  saveLocal();
+  applyFilters();
+  console.log("복구 완료:", arr.length);
+};
+
+window.showStorage = function () {
+  const cur = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+  const bak = JSON.parse(localStorage.getItem(LS_BACKUP) || "[]");
+  console.log("현재 데이터:", cur.length, "개");
+  console.log("백업 데이터:", bak.length, "개");
+  console.log("마지막 저장:", localStorage.getItem(LS_MODIFIED));
+  return { current: cur.length, backup: bak.length };
+};
 
 /* ---------- 로그인 ---------- */
 function initLogin() {
@@ -151,6 +295,7 @@ function initLogin() {
   };
   $("#loginBtn").addEventListener("click", doLogin);
   $("#pwInput").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+  $("#pwInput").focus();
 
   if (sessionStorage.getItem(LS_AUTH) === "1") {
     $("#loginScreen").classList.add("hidden");
@@ -180,19 +325,26 @@ function bootApp() {
   if (_booted) return;
   _booted = true;
 
-  initFirebase();
   loadLocal();
-
-  if (State.items.length === 0 && window.SEED_DATA) {
-    State.items = window.SEED_DATA.map(x => ({ ...x, createdAt: new Date().toISOString() }));
-    saveLocal();
-  }
 
   initTabs();
   initWatchlog();
   initTmdb();
   initSettings();
   applyFilters();
+
+  // 서버 확인 후, 양쪽 다 비어있을 때만 노션 시드 사용
+  bootSync();
+}
+
+async function bootSync() {
+  await syncOnBoot();
+  if (State.items.length === 0 && window.SEED_DATA) {
+    State.items = window.SEED_DATA.map(x => ({ ...x, createdAt: new Date().toISOString() }));
+    applyFilters();
+    saveLocal();
+    toast(`노션 데이터 ${State.items.length}개를 불러왔습니다`);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", initLogin);
