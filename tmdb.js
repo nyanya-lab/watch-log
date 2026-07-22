@@ -1,254 +1,357 @@
-/* ============================================
-   tmdb.js — TMDB API 검색 및 정보 추출
-   ============================================ */
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎬 냐냐's Watch LOG</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-const TMDB_BASE = "https://api.themoviedb.org/3";
-const TMDB_IMG = "https://image.tmdb.org/t/p/w500";
-const TMDB_IMG_SM = "https://image.tmdb.org/t/p/w92";
+<!-- ===== 로그인 화면 ===== -->
+<div id="loginScreen" class="fixed inset-0 flex items-center justify-center z-50" style="background:linear-gradient(135deg,#6366f1,#8b5cf6,#ec4899)">
+  <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4">
+    <div class="text-center mb-6">
+      <div class="text-5xl mb-3">🎬</div>
+      <h1 class="text-xl font-bold text-slate-800">냐냐's Watch LOG</h1>
+      <p class="text-sm text-slate-500 mt-2">비밀번호를 입력해주세요</p>
+    </div>
+    <input type="password" id="pwInput" placeholder="비밀번호"
+      class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-base mb-3">
+    <div id="pwError" class="hidden text-sm text-red-600 mb-3 text-center font-medium"></div>
+    <button id="loginBtn" class="w-full py-3 rounded-lg text-white font-semibold transition" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+      <i class="fa-solid fa-unlock mr-2"></i>입장하기
+    </button>
+  </div>
+</div>
 
-function getTmdbKey() { return localStorage.getItem(LS_TMDB) || ""; }
-function setTmdbKey(k) { localStorage.setItem(LS_TMDB, k.trim()); }
+<!-- ===== 메인 앱 ===== -->
+<div id="app" class="hidden">
 
-/* 국가코드 → 한글 */
-const COUNTRY_KO = {
-  KR: "한국", US: "미국", JP: "일본", CN: "중국", GB: "영국",
-  FR: "프랑스", DE: "독일", ES: "스페인", IT: "이탈리아",
-  TW: "대만", TH: "태국", IN: "인도", CA: "캐나다", AU: "호주",
-  HK: "홍콩", RU: "러시아", BR: "브라질", MX: "멕시코", SE: "스웨덴",
-  NZ: "뉴질랜드", NO: "노르웨이", DK: "덴마크", NL: "네덜란드",
-  BE: "벨기에", IE: "아일랜드", PL: "폴란드", TR: "터키", AR: "아르헨티나"
-};
-
-function mapType(mediaType, genres) {
-  const g = (genres || []).map(x => x.name || x);
-  if (g.includes("애니메이션") || g.includes("Animation")) return "애니";
-  if (g.includes("다큐멘터리") || g.includes("Documentary")) return "다큐";
-  if (g.includes("리얼리티") || g.includes("Reality")) return "예능";
-  if (g.includes("토크") || g.includes("Talk")) return "예능";
-  return mediaType === "tv" ? "드라마" : "영화";
-}
-
-/* ---------- 제목 변형 생성 (검색 실패 시 재시도용) ---------- */
-function titleVariants(title) {
-  const t = (title || "").trim();
-  const out = [t];
-  const push = (s) => {
-    s = (s || "").trim().replace(/\s+/g, " ");
-    if (s && s.length >= 2 && !out.includes(s)) out.push(s);
-  };
-
-  // 콜론/대시/물결 앞부분만
-  push(t.split(/\s*[:：]\s*/)[0]);
-  push(t.split(/\s*[-–—]\s*/)[0]);
-  push(t.split(/\s*[,·]\s*/)[0]);
-
-  // 괄호 제거
-  push(t.replace(/[([{（].*?[)\]}）]/g, ""));
-
-  // 시즌/파트 표기 제거
-  push(t.replace(/\s*(시즌|season|part|파트)\s*\d+.*$/i, ""));
-  push(t.replace(/\s*\d+$/, ""));
-
-  // 조사/기호 정리
-  push(t.replace(/[^\w가-힣\s]/g, " "));
-
-  // 띄어쓰기 제거 / 첫 두 단어
-  push(t.replace(/\s+/g, ""));
-  const words = t.split(/\s+/);
-  if (words.length > 2) push(words.slice(0, 2).join(" "));
-  if (words.length > 1) push(words[0]);
-
-  return out;
-}
-
-/* ---------- 검색 ---------- */
-async function tmdbSearchRaw(query) {
-  const key = getTmdbKey();
-  if (!key) throw new Error("TMDB API 키를 설정 탭에서 먼저 입력하세요");
-
-  const url = `${TMDB_BASE}/search/multi?api_key=${key}&language=ko-KR&query=${encodeURIComponent(query)}&include_adult=false`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("TMDB 요청 실패 (" + res.status + ")");
-  const data = await res.json();
-
-  return (data.results || [])
-    .filter(r => r.media_type === "movie" || r.media_type === "tv")
-    .slice(0, 12)
-    .map(r => ({
-      tmdbId: r.id,
-      mediaType: r.media_type,
-      title: r.title || r.name || "",
-      originalTitle: r.original_title || r.original_name || "",
-      poster: r.poster_path ? TMDB_IMG + r.poster_path : null,
-      posterSm: r.poster_path ? TMDB_IMG_SM + r.poster_path : null,
-      year: (r.release_date || r.first_air_date || "").slice(0, 4),
-      overview: r.overview || ""
-    }));
-}
-
-/* 변형 제목까지 시도하는 검색 — { results, usedQuery, wasFallback } */
-async function tmdbSearchSmart(query) {
-  const variants = titleVariants(query);
-  for (let i = 0; i < variants.length; i++) {
-    const results = await tmdbSearchRaw(variants[i]);
-    if (results.length) {
-      return { results, usedQuery: variants[i], wasFallback: i > 0 };
-    }
-    if (i < variants.length - 1) await new Promise(r => setTimeout(r, 120));
-  }
-  return { results: [], usedQuery: query, wasFallback: false };
-}
-
-/* 하위호환 */
-async function tmdbSearch(q) { return (await tmdbSearchSmart(q)).results; }
-
-/* ---------- 상세 (출연진 포함) ---------- */
-async function tmdbDetail(id, mediaType) {
-  const key = getTmdbKey();
-  const url = `${TMDB_BASE}/${mediaType}/${id}?api_key=${key}&language=ko-KR&append_to_response=credits`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("TMDB 상세 조회 실패");
-  const d = await res.json();
-
-  const originCountry = d.origin_country || [];
-  const prodCountries = d.production_countries || [];
-  let country = "";
-  if (originCountry.length) country = COUNTRY_KO[originCountry[0]] || originCountry[0];
-  else if (prodCountries.length) country = COUNTRY_KO[prodCountries[0].iso_3166_1] || prodCountries[0].name;
-
-  const cast = ((d.credits && d.credits.cast) || [])
-    .slice(0, 8)
-    .map(c => ({ name: c.name, character: c.character || "" }));
-
-  const crew = (d.credits && d.credits.crew) || [];
-  const director = crew.find(c => c.job === "Director");
-  const creator = (d.created_by || [])[0];
-
-  return {
-    tmdbId: d.id,
-    mediaType,
-    title: d.title || d.name || "",
-    poster: d.poster_path ? TMDB_IMG + d.poster_path : null,
-    genres: (d.genres || []).map(g => g.name),
-    overview: d.overview || "",
-    country: country || "",
-    releaseYear: (d.release_date || d.first_air_date || "").slice(0, 4),
-    totalSeasons: d.number_of_seasons || null,
-    cast,
-    director: director ? director.name : (creator ? creator.name : ""),
-    type: mapType(mediaType, d.genres)
-  };
-}
-
-/* 제목으로 자동 매칭 */
-async function tmdbAutoMatch(title, hintType) {
-  const { results } = await tmdbSearchSmart(title);
-  if (!results.length) return null;
-
-  let best = results[0];
-  if (hintType === "드라마" || hintType === "예능") {
-    const tv = results.find(r => r.mediaType === "tv");
-    if (tv) best = tv;
-  } else if (hintType === "영화") {
-    const mv = results.find(r => r.mediaType === "movie");
-    if (mv) best = mv;
-  }
-  return await tmdbDetail(best.tmdbId, best.mediaType);
-}
-
-/* ---------- 검색 UI ---------- */
-function initTmdb() {
-  $("#tmdbSearchBtn").addEventListener("click", runSearch);
-  $("#tmdbQuery").addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); runSearch(); }
-  });
-  $("#clearSelection").addEventListener("click", () => {
-    State.selectedTmdb = null;
-    $("#selectedInfo").classList.add("hidden");
-    $("#tmdbSearchArea").classList.remove("hidden");
-  });
-}
-
-async function runSearch() {
-  const q = $("#tmdbQuery").value.trim();
-  if (!q) return;
-  const box = $("#tmdbResults");
-  box.innerHTML = `<div class="text-center py-4 text-slate-400 text-sm font-medium">
-    <i class="fa-solid fa-spinner fa-spin mr-2"></i>검색 중...</div>`;
-
-  try {
-    const { results, usedQuery, wasFallback } = await tmdbSearchSmart(q);
-    if (!results.length) {
-      box.innerHTML = `<div class="text-center py-5 text-slate-400 text-sm font-medium">
-        <i class="fa-solid fa-face-frown text-2xl mb-2 block"></i>
-        "${esc(q)}" 검색 결과가 없습니다<br>
-        <span class="text-xs">제목을 줄여서 다시 검색해보세요</span></div>`;
-      return;
-    }
-
-    const notice = wasFallback
-      ? `<div class="text-xs font-semibold text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mb-1">
-           "${esc(q)}" 결과가 없어 <b>"${esc(usedQuery)}"</b>로 검색했습니다</div>`
-      : "";
-
-    box.innerHTML = notice + results.map((r, i) => `
-      <div class="tmdb-item" data-idx="${i}">
-        ${r.posterSm
-          ? `<img src="${r.posterSm}" alt="">`
-          : `<div class="w-[46px] h-[69px] rounded-md bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-image"></i></div>`}
-        <div class="flex-1 min-w-0">
-          <div class="font-semibold text-sm text-slate-800">${esc(r.title)}</div>
-          ${r.originalTitle && r.originalTitle !== r.title
-            ? `<div class="text-xs text-slate-400 font-medium">${esc(r.originalTitle)}</div>` : ""}
-          <div class="text-xs text-slate-500 font-medium mt-0.5">
-            ${r.mediaType === "tv" ? "📺 TV" : "🎬 영화"} · ${r.year || "연도미상"}
-          </div>
-          <div class="text-xs text-slate-400 mt-1 line-clamp-2">${esc(r.overview.slice(0, 80))}</div>
+  <!-- 헤더 -->
+  <header class="border-b border-slate-200 sticky top-0 z-30" style="background:linear-gradient(135deg,#eef2ff,#faf5ff)">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">🎬</span>
+          <h1 class="text-lg font-bold text-slate-800">냐냐's Watch LOG</h1>
+          <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-bold shadow-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+            <i class="fa-solid fa-film text-xs"></i><span id="totalCount">0</span>
+          </span>
         </div>
-      </div>`).join("");
+        <button id="syncBtn" class="w-9 h-9 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition" title="동기화">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+        </button>
+      </div>
+      <nav class="flex gap-1 -mb-px">
+        <button class="tab-btn active" data-tab="list"><i class="fa-solid fa-grip mr-2"></i>목록</button>
+        <button class="tab-btn" data-tab="stats"><i class="fa-solid fa-chart-pie mr-2"></i>통계</button>
+        <button class="tab-btn" data-tab="settings"><i class="fa-solid fa-gear mr-2"></i>설정</button>
+      </nav>
+    </div>
+  </header>
 
-    box.querySelectorAll(".tmdb-item").forEach(el => {
-      el.addEventListener("click", () => selectTmdb(results[+el.dataset.idx]));
-    });
-  } catch (e) {
-    box.innerHTML = `<div class="text-center py-4 text-red-500 text-sm font-medium">${esc(e.message)}</div>`;
-  }
-}
+  <main class="max-w-6xl mx-auto px-4 py-5">
 
-async function selectTmdb(item) {
-  const box = $("#tmdbResults");
-  box.innerHTML = `<div class="text-center py-4 text-slate-400 text-sm font-medium">
-    <i class="fa-solid fa-spinner fa-spin mr-2"></i>정보 가져오는 중...</div>`;
-  try {
-    const d = await tmdbDetail(item.tmdbId, item.mediaType);
-    State.selectedTmdb = d;
-    renderSelected(d);
+    <!-- ===== 목록 탭 ===== -->
+    <section id="tab-list">
+      <div class="flex gap-2 mb-3">
+        <div class="relative flex-1">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input type="text" id="searchInput" placeholder="제목으로 검색..."
+            class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-sm bg-white">
+        </div>
+        <button id="filterBtn" class="relative w-11 h-11 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition shrink-0" title="필터">
+          <i class="fa-solid fa-sliders"></i>
+          <span id="filterDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500"></span>
+        </button>
+        <button id="addBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+          <i class="fa-solid fa-plus mr-1"></i>등록
+        </button>
+      </div>
 
-    // 검색으로 선택한 제목으로 덮어쓰기
-    $("#fTitle").value = d.title;
-    if (d.type) $("#fType").value = d.type;
-    if (d.country) $("#fCountry").value = d.country;
+      <div class="flex items-center justify-between mb-4">
+        <button id="pendingBtn" class="px-3.5 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition">
+          <i class="fa-solid fa-circle-exclamation mr-1.5"></i>미등록 <span id="pendingCount">0</span>개
+        </button>
+        <span id="resultCount" class="text-sm font-medium text-slate-500"></span>
+      </div>
 
-    box.innerHTML = "";
-  } catch (e) {
-    box.innerHTML = `<div class="text-center py-4 text-red-500 text-sm font-medium">${esc(e.message)}</div>`;
-  }
-}
+      <div id="cardGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+      <div id="emptyState" class="hidden text-center py-16 text-slate-400">
+        <i class="fa-solid fa-film text-4xl mb-3"></i>
+        <p class="font-medium">결과가 없습니다</p>
+      </div>
+      <div id="loadMoreWrap" class="text-center mt-6 hidden">
+        <button id="loadMoreBtn" class="px-6 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-semibold hover:bg-slate-50 transition">
+          더 보기 <span id="loadMoreCount" class="text-slate-400 font-medium"></span>
+        </button>
+      </div>
+    </section>
 
-function renderSelected(d) {
-  $("#selPoster").src = d.poster || "";
-  $("#selPoster").style.display = d.poster ? "" : "none";
-  $("#selTitle").textContent = d.title || "";
-  $("#selMeta").textContent = [d.type, d.country, d.releaseYear,
-    d.totalSeasons ? `시즌 ${d.totalSeasons}개` : null].filter(Boolean).join(" · ");
-  $("#selGenres").innerHTML = (d.genres || []).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("");
+    <!-- ===== 통계 탭 ===== -->
+    <section id="tab-stats" class="hidden space-y-5"></section>
 
-  const castStr = (d.cast || []).slice(0, 5).map(c => c.name).join(", ");
-  $("#selCast").innerHTML = castStr
-    ? `<i class="fa-solid fa-users mr-1 text-slate-400"></i>${esc(castStr)}`
-    : "";
-  $("#selOverview").textContent = d.overview || "";
+    <!-- ===== 설정 탭 ===== -->
+    <section id="tab-settings" class="hidden space-y-5">
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-key mr-2 text-indigo-500"></i>TMDB API 키</h3>
+        <p class="text-sm text-slate-500 mb-3">themoviedb.org에서 발급받은 v3 API 키를 입력하세요.</p>
+        <div class="flex gap-2">
+          <input type="text" id="tmdbKeyInput" placeholder="TMDB API Key (v3)" class="flex-1 px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 text-sm">
+          <button id="saveTmdbKey" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">저장</button>
+        </div>
+        <div id="tmdbKeyStatus" class="text-sm mt-2 font-medium"></div>
+      </div>
 
-  $("#selectedInfo").classList.remove("hidden");
-  $("#tmdbSearchArea").classList.add("hidden");
-}
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-cloud mr-2 text-indigo-500"></i>Firebase 동기화</h3>
+        <p class="text-sm text-slate-500 mb-3">평소에는 자동 저장됩니다. 아래는 강제 저장·복구용입니다.</p>
+        <div class="flex flex-wrap gap-2">
+          <button id="pushBtn" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+            <i class="fa-solid fa-cloud-arrow-up mr-1"></i>서버에 저장
+          </button>
+          <button id="pullBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
+            <i class="fa-solid fa-cloud-arrow-down mr-1"></i>서버에서 불러오기
+          </button>
+        </div>
+        <div id="syncStatus" class="text-sm mt-2 font-medium"></div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i>TMDB 정보 일괄 채우기</h3>
+        <p class="text-sm text-slate-500 mb-3">포스터·장르·줄거리·출연진·평점·OTT 등을 자동으로 찾아 채웁니다.</p>
+        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mb-3">
+          <input type="checkbox" id="enrichOverwrite" class="w-4 h-4 rounded">
+          이미 채운 항목도 최신 정보로 갱신 (출연진·평점·OTT 등 새 정보 포함)
+        </label>
+        <button id="enrichBtn" class="px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+          <i class="fa-solid fa-download mr-1"></i>정보 채우기 시작
+        </button>
+        <div id="enrichStatus" class="text-sm mt-3 font-medium"></div>
+        <div id="enrichBar" class="hidden mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div id="enrichBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-database mr-2 text-indigo-500"></i>데이터 관리</h3>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button id="exportBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
+            <i class="fa-solid fa-file-export mr-1"></i>JSON 내보내기
+          </button>
+          <label class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 cursor-pointer">
+            <i class="fa-solid fa-file-import mr-1"></i>JSON 가져오기
+            <input type="file" id="importFile" accept=".json" class="hidden">
+          </label>
+          <button id="seedBtn" class="px-4 py-2.5 rounded-lg border border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50">
+            <i class="fa-solid fa-seedling mr-1"></i>노션 데이터 불러오기
+          </button>
+        </div>
+        <div id="dataStatus" class="text-sm mt-2 font-medium"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ===== 필터 팝업 ===== -->
+<div id="filterModal" class="hidden fixed inset-0 bg-black/50 z-40 overflow-y-auto p-4">
+  <div class="bg-white rounded-2xl max-w-md mx-auto my-8">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-sliders mr-2 text-indigo-500"></i>필터 · 정렬</h3>
+      <button id="closeFilter" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div><label class="form-label">구분</label><select id="filterType" class="form-input"><option value="">전체</option></select></div>
+      <div><label class="form-label">국가</label><select id="filterCountry" class="form-input"><option value="">전체</option></select></div>
+      <div><label class="form-label">OTT</label><select id="filterOtt" class="form-input"><option value="">전체</option></select></div>
+      <div><label class="form-label">기간(연도)</label><select id="filterYear" class="form-input"><option value="">전체</option></select></div>
+      <div><label class="form-label">장르</label><select id="filterGenre" class="form-input"><option value="">전체</option></select></div>
+      <div><label class="form-label">정렬</label>
+        <select id="sortBy" class="form-input">
+          <option value="date-desc">최근 본 순</option>
+          <option value="date-asc">오래된 순</option>
+          <option value="title">가나다순</option>
+          <option value="rating">별점 높은순</option>
+        </select>
+      </div>
+      <div id="filterPreview" class="text-sm font-semibold text-indigo-600 text-center pt-1"></div>
+    </div>
+    <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
+      <button id="resetFilter" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
+        <i class="fa-solid fa-rotate-left mr-1"></i>초기화
+      </button>
+      <div class="flex-1"></div>
+      <button id="applyFilterBtn" class="px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 등록/수정 모달 ===== -->
+<div id="editModal" class="hidden fixed inset-0 bg-black/50 z-40 overflow-y-auto p-4">
+  <div class="bg-white rounded-2xl max-w-2xl mx-auto my-8">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
+      <h3 id="modalTitle" class="font-semibold text-slate-800">새로 등록</h3>
+      <button id="closeModal" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="p-5 space-y-5">
+
+      <!-- TMDB 검색 -->
+      <div id="tmdbSearchArea">
+        <label class="form-label"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-indigo-500"></i>TMDB에서 정보 가져오기</label>
+        <div class="flex gap-2">
+          <input type="text" id="tmdbQuery" placeholder="영화/드라마 제목 입력" class="flex-1 px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 text-sm">
+          <button id="tmdbSearchBtn" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 whitespace-nowrap">
+            <i class="fa-solid fa-magnifying-glass mr-1"></i>검색
+          </button>
+        </div>
+        <div id="tmdbResults" class="mt-3 space-y-2 max-h-72 overflow-y-auto"></div>
+      </div>
+
+      <!-- 선택된 작품 -->
+      <div id="selectedInfo" class="hidden rounded-xl p-4 flex gap-4 border" style="background:linear-gradient(135deg,#eef2ff,#fdf4ff);border-color:#c7d2fe">
+        <img id="selPoster" class="w-20 rounded-lg bg-slate-200 object-cover self-start shadow-sm" alt="">
+        <div class="flex-1 min-w-0">
+          <div id="selTitle" class="font-bold text-slate-800"></div>
+          <div id="selMeta" class="text-sm text-slate-500 mt-1 font-medium"></div>
+          <div id="selGenres" class="flex flex-wrap gap-1 mt-2"></div>
+          <div id="selCast" class="text-xs text-slate-500 mt-2 font-medium"></div>
+          <div id="selOverview" class="text-xs text-slate-500 mt-2 leading-relaxed line-clamp-3"></div>
+          <button id="clearSelection" class="text-xs text-indigo-600 font-semibold mt-2 hover:underline">
+            <i class="fa-solid fa-rotate-left mr-1"></i>다시 검색 / 직접 입력
+          </button>
+        </div>
+      </div>
+
+      <!-- 사용자 입력 -->
+      <div id="manualFields" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label class="form-label">제목 <span class="text-red-500">*</span></label>
+          <input type="text" id="fTitle" class="form-input">
+        </div>
+        <div>
+          <label class="form-label"><i class="fa-solid fa-shapes mr-1 text-violet-400"></i>구분</label>
+          <select id="fType" class="form-input">
+            <option>영화</option><option>드라마</option><option>예능</option>
+            <option>애니</option><option>다큐</option><option>기타</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label"><i class="fa-solid fa-earth-asia mr-1 text-blue-400"></i>국가</label>
+          <input type="text" id="fCountry" class="form-input" placeholder="한국">
+        </div>
+
+        <!-- OTT + 영화관 -->
+        <div class="sm:col-span-2">
+          <label class="form-label"><i class="fa-solid fa-tv mr-1 text-emerald-400"></i>어디서 봤나요?</label>
+          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer mb-2 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 w-fit">
+            <input type="checkbox" id="fTheater" class="w-4 h-4 rounded"> 🎦 영화관에서 봤어요
+          </label>
+          <div id="ottWrap">
+            <select id="fOtt" class="form-input">
+              <option>넷플릭스</option><option>영화관</option><option>웨이브</option>
+              <option>티빙</option><option>쿠팡플레이</option><option>디즈니+</option>
+              <option>왓챠</option><option>애플TV+</option><option>기타</option>
+            </select>
+            <div id="ottHint" class="hidden text-xs font-semibold text-emerald-600 mt-1.5"></div>
+          </div>
+        </div>
+
+        <div>
+          <label class="form-label"><i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>시즌</label>
+          <!-- TMDB 시즌 목록이 있으면 드롭다운, 없으면 스테퍼 -->
+          <select id="fSeasonSelect" class="form-input hidden"></select>
+          <div id="fSeasonStepper" class="stepper">
+            <button type="button" class="step-btn" data-target="fSeason" data-d="-1"><i class="fa-solid fa-minus"></i></button>
+            <div class="step-val"><span id="fSeasonLabel">없음</span></div>
+            <button type="button" class="step-btn" data-target="fSeason" data-d="1"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <input type="hidden" id="fSeason" value="0">
+        </div>
+        <div>
+          <label class="form-label"><i class="fa-solid fa-rotate mr-1 text-cyan-400"></i>시청 횟수</label>
+          <div class="stepper">
+            <button type="button" class="step-btn" data-target="fCount" data-d="-1"><i class="fa-solid fa-minus"></i></button>
+            <div class="step-val"><span id="fCountLabel">1</span>회</div>
+            <button type="button" class="step-btn" data-target="fCount" data-d="1"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <input type="hidden" id="fCount" value="1">
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label"><i class="fa-solid fa-star mr-1 text-yellow-400"></i>내 별점</label>
+        <div id="starPicker" class="flex gap-1 items-center">
+          <button class="star-btn" data-v="1"><i class="fa-solid fa-star"></i></button>
+          <button class="star-btn" data-v="2"><i class="fa-solid fa-star"></i></button>
+          <button class="star-btn" data-v="3"><i class="fa-solid fa-star"></i></button>
+          <button class="star-btn" data-v="4"><i class="fa-solid fa-star"></i></button>
+          <button class="star-btn" data-v="5"><i class="fa-solid fa-star"></i></button>
+          <button id="clearStar" class="ml-2 text-xs text-slate-400 font-medium hover:text-slate-600">지우기</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="form-label"><i class="fa-solid fa-calendar-day mr-1 text-rose-400"></i>본 날짜 (시작)</label>
+          <input type="date" id="fStart" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">본 날짜 (종료)</label>
+          <input type="date" id="fEnd" class="form-input">
+          <p class="text-xs text-slate-400 mt-1">하루면 비워두면 시작일과 동일</p>
+        </div>
+      </div>
+
+      <div>
+        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer">
+          <input type="checkbox" id="rewatchToggle" class="w-4 h-4 rounded"> 재시청 기록 추가
+        </label>
+        <div id="rewatchFields" class="hidden grid grid-cols-2 gap-4 mt-3">
+          <div>
+            <label class="form-label">마지막 시청 (시작)</label>
+            <input type="date" id="fLastStart" class="form-input">
+          </div>
+          <div>
+            <label class="form-label">마지막 시청 (종료)</label>
+            <input type="date" id="fLastEnd" class="form-input">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label"><i class="fa-solid fa-comment-dots mr-1 text-indigo-400"></i>한줄평</label>
+        <textarea id="fReview" rows="3" class="form-input resize-none" placeholder="느낀 점을 적어보세요"></textarea>
+      </div>
+    </div>
+
+    <div class="flex gap-2 px-5 py-4 border-t border-slate-200 sticky bottom-0 bg-white rounded-b-2xl">
+      <button id="deleteBtn" class="hidden px-4 py-2.5 rounded-lg border border-red-300 text-red-600 text-sm font-semibold hover:bg-red-50">
+        <i class="fa-solid fa-trash mr-1"></i>삭제
+      </button>
+      <div class="flex-1"></div>
+      <button id="cancelBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">취소</button>
+      <button id="saveBtn" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold shadow-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 상세 모달 ===== -->
+<div id="detailModal" class="hidden fixed inset-0 bg-black/50 z-40 overflow-y-auto p-4">
+  <div id="detailContent" class="bg-white rounded-2xl max-w-lg mx-auto my-8 overflow-hidden"></div>
+</div>
+
+<div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl bg-slate-800 text-white text-sm font-semibold z-50 shadow-lg"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="seed-data.js"></script>
+<script src="core.js"></script>
+<script src="tmdb.js"></script>
+<script src="watchlog.js"></script>
+<script src="stats.js"></script>
+</body>
+</html>
