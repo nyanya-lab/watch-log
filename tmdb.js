@@ -333,7 +333,7 @@ function renderSelected(d) {
   if (d.voteAverage) chips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
   if (d.cert) chips.push(`<span class="badge badge-cert">${esc(d.cert)}</span>`);
   if (d.otts && d.otts.length) chips.push(`<span class="badge badge-ott">${esc(d.otts.join(", "))}</span>`);
-  (d.genres || []).forEach(g => chips.push(`<span class="badge badge-genre">${esc(g)}</span>`));
+  visibleGenres(d.genres).forEach(g => chips.push(`<span class="badge badge-genre">${esc(g)}</span>`));
   $("#selGenres").innerHTML = chips.join("");
 
   const castStr = (d.cast || []).slice(0, 5).map(c => c.name).join(", ");

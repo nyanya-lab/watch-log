@@ -112,6 +112,23 @@ function debounce(fn, ms) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
+/* ---------- 구분(type)과 겹치는 장르는 표시에서 숨김 ---------- */
+const TYPE_LABELS = ["영화", "드라마", "예능", "애니", "다큐", "기타"];
+function visibleGenres(genres) {
+  return (genres || []).filter(g => !TYPE_LABELS.includes(g));
+}
+
+/* ---------- OTT 표시용: 스트리밍 전체 목록(otts) + 내가 본 곳(ott) 유지 ---------- */
+function ottList(i) {
+  const list = [...(i.otts || [])];
+  // 영화관 등 TMDB 스트리밍 목록에 없는 "내가 본 곳"은 앞에 유지
+  if (i.ott && !list.includes(i.ott)) list.unshift(i.ott);
+  return list;
+}
+function ottBadges(i) {
+  return ottList(i).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join("");
+}
+
 /* ---------- OTT 옵션 세팅 (자동판별 후보 + 폴백) ---------- */
 const OTT_ALL = ["넷플릭스", "영화관", "웨이브", "티빙", "쿠팡플레이", "디즈니+", "왓챠", "애플TV+", "기타"];
 
@@ -165,9 +182,9 @@ function buildFilterOptions() {
   };
   fill("filterType", uniq(State.items.map(i => i.type)));
   fill("filterCountry", uniq(State.items.map(i => i.country)));
-  fill("filterOtt", uniq(State.items.map(i => i.ott)));
+  fill("filterOtt", uniq(State.items.flatMap(i => ottList(i))));
   fill("filterYear", uniq(State.items.map(i => (i.startDate || "").slice(0, 4))).reverse());
-  fill("filterGenre", uniq(State.items.flatMap(i => i.genres || [])));
+  fill("filterGenre", uniq(State.items.flatMap(i => visibleGenres(i.genres))));
 }
 
 function hasActiveFilter() {
@@ -183,9 +200,9 @@ function applyFilters() {
     if (F.q && !(i.title || "").toLowerCase().includes(F.q)) return false;
     if (F.type && i.type !== F.type) return false;
     if (F.country && i.country !== F.country) return false;
-    if (F.ott && i.ott !== F.ott) return false;
+    if (F.ott && !ottList(i).includes(F.ott)) return false;
     if (F.year && (i.startDate || "").slice(0, 4) !== F.year) return false;
-    if (F.genre && !(i.genres || []).includes(F.genre)) return false;
+    if (F.genre && !visibleGenres(i.genres).includes(F.genre)) return false;
     return true;
   });
 
@@ -247,7 +264,7 @@ function renderCards() {
         <div class="flex flex-wrap gap-1 mb-1.5">
           ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
           ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}
-          ${i.ott ? `<span class="badge badge-ott">${esc(i.ott)}</span>` : ""}
+          ${ottBadges(i)}
         </div>
         <div class="wl-meta text-slate-400">${fmtRange(i.startDate, i.endDate) || "날짜 없음"}</div>
       </div>
@@ -309,14 +326,14 @@ function openDetail(id) {
             ${i.season ? `<span class="badge badge-season">${esc(i.season)}</span>` : ""}
             ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
             ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}
-            ${i.ott ? `<span class="badge badge-ott">${esc(i.ott)}</span>` : ""}
+            ${ottBadges(i)}
           </div>
           ${infoChips.length ? `<div class="flex flex-wrap gap-1 mt-1.5">${infoChips.join("")}</div>` : ""}
         </div>
       </div>
 
-      ${(i.genres || []).length ? `<div class="flex flex-wrap gap-1 mb-3">
-        ${i.genres.map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}</div>` : ""}
+      ${visibleGenres(i.genres).length ? `<div class="flex flex-wrap gap-1 mb-3">
+        ${visibleGenres(i.genres).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}</div>` : ""}
 
       ${i.overview ? `<p class="text-sm text-slate-600 leading-relaxed mb-4">${esc(i.overview)}</p>` : ""}
 
@@ -539,6 +556,7 @@ function initSettings() {
   });
 
   $("#enrichBtn").addEventListener("click", runEnrichAll);
+  $("#refreshOttBtn").addEventListener("click", runRefreshOtts);
 
   $("#exportBtn").addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(State.items, null, 2)], { type: "application/json" });
@@ -643,4 +661,49 @@ async function runEnrichAll() {
   status.textContent = `완료 — 성공 ${ok}개, 실패 ${fail}개`;
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast(`정보 채우기 완료 (${ok}개)`, "success");
+}
+
+/* ---------- OTT(스트리밍) 정보만 갱신 ---------- */
+async function runRefreshOtts() {
+  if (_enriching) { toast("이미 진행 중입니다"); return; }
+  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const targets = State.items.filter(i => i.tmdbId);
+  if (!targets.length) { toast("갱신할 항목이 없습니다 (TMDB 연동된 항목만 대상)", "success"); return; }
+  if (!confirm(`${targets.length}개 항목의 OTT(스트리밍) 정보를 새로 조회합니다.`)) return;
+
+  _enriching = true;
+  const status = $("#enrichStatus");
+  const bar = $("#enrichBar");
+  const fill = $("#enrichBarFill");
+  bar.classList.remove("hidden");
+
+  let changed = 0, fail = 0;
+  for (let n = 0; n < targets.length; n++) {
+    const i = targets[n];
+    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
+    status.className = "text-sm mt-3 font-medium text-slate-600";
+    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
+
+    // 저장된 구분으로 movie/tv 추정, 비면 반대쪽도 시도 (애니 극장판 등 대비)
+    const primary = i.type === "영화" ? "movie" : "tv";
+    const other = primary === "movie" ? "tv" : "movie";
+    try {
+      let otts = await tmdbProviders(i.tmdbId, primary);
+      if (!otts.length) otts = await tmdbProviders(i.tmdbId, other);
+      const before = JSON.stringify(i.otts || []);
+      i.otts = otts;
+      if (JSON.stringify(otts) !== before) changed++;
+    } catch { fail++; }
+
+    if (n % 10 === 9) saveLocal(true);
+    await new Promise(r => setTimeout(r, 260));
+  }
+
+  saveLocal();
+  applyFilters();
+  _enriching = false;
+  status.textContent = `OTT 갱신 완료 — 변경 ${changed}개${fail ? `, 실패 ${fail}개` : ""}`;
+  status.className = "text-sm mt-3 font-medium text-emerald-600";
+  toast(`OTT 정보 갱신 완료`, "success");
 }

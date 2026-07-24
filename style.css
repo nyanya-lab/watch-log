@@ -1,5 +1,16 @@
 /* ===== 기본 ===== */
-body { -webkit-font-smoothing: antialiased; }
+body {
+  -webkit-font-smoothing: antialiased;
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+  color: #3f3b52;
+  background:
+    radial-gradient(1200px 600px at 100% -10%, #f5edff 0%, rgba(245,237,255,0) 55%),
+    radial-gradient(1000px 500px at -10% 0%, #ffeef6 0%, rgba(255,238,246,0) 50%),
+    linear-gradient(180deg, #fbfaff 0%, #fdfbff 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
 
 /* ===== 탭 버튼 ===== */
 .tab-btn {
@@ -86,29 +97,50 @@ textarea.form-input { height: auto; }
 
 /* ===== 카드 ===== */
 .wl-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: rgba(255,255,255,.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid #efeafc;
+  border-radius: 18px;
   overflow: hidden;
   cursor: pointer;
-  transition: box-shadow .18s, transform .18s, border-color .18s;
+  box-shadow: 0 2px 10px rgba(124,92,224,.06);
+  transition: box-shadow .2s, transform .2s, border-color .2s;
 }
 .wl-card:hover {
-  box-shadow: 0 6px 20px rgba(79,70,229,.18);
-  transform: translateY(-3px);
-  border-color: #a5b4fc;
+  box-shadow: 0 12px 28px rgba(139,92,246,.16);
+  transform: translateY(-4px);
+  border-color: #d6ccfb;
 }
-.wl-card.wl-pending { border-color: #fcd34d; background: #fffbeb; }
+.wl-card.wl-pending { border-color: #fde68a; background: #fffdf5; }
 
+.wl-poster-wrap { position: relative; }
 .wl-poster {
   aspect-ratio: 2/3; width: 100%;
-  object-fit: cover; background: #e2e8f0; display: block;
+  object-fit: cover; background: #efe9fb; display: block;
 }
 .wl-poster-empty {
   aspect-ratio: 2/3;
-  background: linear-gradient(135deg,#6366f1,#a855f7,#ec4899);
+  background: linear-gradient(135deg,#a78bfa,#c084fc,#f0abfc);
   display: flex; align-items: center; justify-content: center;
   color: #fff; font-size: 28px;
+}
+
+/* 포스터 위 오버레이 (평점=우상단, 시즌=좌상단) */
+.wl-vote {
+  position: absolute; top: 7px; right: 7px;
+  background: rgba(255,255,255,.92);
+  color: #c07806; font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 3px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+.wl-vote i { color: #f5b400; }
+.wl-season {
+  position: absolute; top: 7px; left: 7px;
+  background: rgba(76,63,115,.82);
+  color: #fff; font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px;
+  backdrop-filter: blur(2px);
 }
 
 /* 포스터 위 태그 */
@@ -144,15 +176,29 @@ textarea.form-input { height: auto; }
 /* ===== 배지 / 칩 ===== */
 .badge {
   display: inline-flex; align-items: center;
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: nowrap;
+  background: #f3f1fa;      /* 기본값 (색 미지정 배지) */
+  color: #5b5570;
 }
 button.badge { cursor: pointer; transition: opacity .12s, transform .1s; }
 button.badge:hover { opacity: .85; transform: translateY(-1px); }
+
+/* 종류별 파스텔 색상 (구분=보라·국가=파랑·OTT=초록·장르=회색·시즌=주황·
+   출연진=핑크·평점=노랑·등급=빨강·시간=청록) */
+.badge-type    { background:#f1e9ff; color:#7c3aed; }
+.badge-country { background:#e4efff; color:#2563eb; }
+.badge-ott     { background:#d9f7e8; color:#08916a; }
+.badge-genre   { background:#eef1f6; color:#526180; }
+.badge-season  { background:#ffedd9; color:#e0700f; }
+.badge-cast    { background:#fce6f1; color:#d43f88; }
+.badge-vote    { background:#fff2cf; color:#c07806; }
+.badge-cert    { background:#ffe3e3; color:#dc4444; }
+.badge-time    { background:#d7f5f7; color:#0b8ca3; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 4px;
@@ -171,13 +217,14 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 
 /* 통계 박스 */
 .stat-box {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: rgba(255,255,255,.85);
+  border: 1px solid #efeafc;
+  border-radius: 16px;
   padding: 14px 16px;
+  box-shadow: 0 2px 10px rgba(124,92,224,.06);
 }
-.stat-label { font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 4px; }
-.stat-value { font-size: 22px; font-weight: 700; color: #1e293b; }
+.stat-label { font-size: 12px; font-weight: 600; color: #8b84a3; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 700; color: #4c3f73; }
 
 /* ===== TMDB 검색 결과 ===== */
 .tmdb-item {
@@ -189,7 +236,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
   transition: background .12s, border-color .12s, transform .1s;
 }
 .tmdb-item:hover {
-  background: #eef2ff; border-color: #818cf8; transform: translateX(2px);
+  background: #f6f2ff; border-color: #c4b5fd; transform: translateX(2px);
 }
 .tmdb-item img {
   width: 46px; border-radius: 6px;
