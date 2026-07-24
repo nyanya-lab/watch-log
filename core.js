@@ -3,25 +3,40 @@
    ============================================ */
 
 /* ---------- 설정 ---------- */
-const APP_PASSWORD = "9066";        // 사이트 입장 비밀번호
-
 /* Watch LOG 전용 Realtime Database (단어장과 완전히 분리된 별도 프로젝트) */
 const FIREBASE_DB_URL = "https://nyanya-watchlog-default-rtdb.asia-southeast1.firebasedatabase.app";
 
-/* Firebase 규칙에서 watchlog 경로만 읽기·쓰기 허용됨 */
+/* 데이터가 저장되는 상위 경로. 실제 방 이름은 "동기화 비밀번호"가 된다.
+   → 비밀번호를 모르면 경로 자체를 모르므로 남이 데이터에 접근할 수 없음.
+   Firebase 규칙에서 watchlog/$room 만 읽기·쓰기 허용 (부모 목록 열거는 차단). */
 const SYNC_BRANCH = "watchlog";
-const SYNC_KEY = "data";            // 데이터가 저장되는 방 이름 (바꾸면 새 방이 됨)
+
+const LEGACY_KEY = "data";          // 예전 고정 경로 (/watchlog/data). 마이그레이션용으로만 참조.
 
 const AUTO_SYNC_DELAY = 2500;       // 자동 저장 대기시간(ms)
 /* --------------------------------------------- */
 
 const LS_KEY = "watchlog_items";
 const LS_TMDB = "watchlog_tmdb_key";
-const LS_AUTH = "watchlog_auth";
+const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서버 데이터 경로 (이 기기에만 저장, 깃에는 없음)
 const LS_MODIFIED = "watchlog_modified";
 const LS_BACKUP = "watchlog_items_backup";
 
-const DATA_URL = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${SYNC_KEY}.json`;
+/* 동기화 비밀번호 = 서버에서의 내 데이터 방 이름 */
+function getSyncPassword() {
+  return (localStorage.getItem(LS_SYNC_PW) || "").trim();
+}
+function hasSyncPassword() {
+  return getSyncPassword().length > 0;
+}
+/* 비밀번호가 없으면 null → 이 기기에만 저장(로컬 전용 모드) */
+function getDataUrl() {
+  const pw = getSyncPassword();
+  if (!pw) return null;
+  return `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${encodeURIComponent(pw)}.json`;
+}
+/* 예전 고정 경로 (/watchlog/data) — 최초 비밀번호 설정 시 데이터 이사용 */
+const LEGACY_URL = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${LEGACY_KEY}.json`;
 
 const State = {
   items: [],
@@ -84,7 +99,8 @@ function setSyncIcon(state) {
     pending: ["fa-pen",               "text-amber-500",   "저장 대기 중..."],
     saving:  ["fa-spinner fa-spin",   "text-indigo-500",  "서버 저장 중..."],
     saved:   ["fa-cloud",             "text-emerald-600", "서버에 저장됨"],
-    error:   ["fa-triangle-exclamation", "text-red-500",  "저장 실패 — 클릭해서 재시도"]
+    error:   ["fa-triangle-exclamation", "text-red-500",  "저장 실패 — 클릭해서 재시도"],
+    local:   ["fa-cloud-slash",       "text-slate-400",   "이 기기에만 저장 중 — 클릭해서 동기화 비밀번호 설정"]
   };
   const [icon, color, title] = map[state] || map.idle;
   btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
@@ -109,6 +125,10 @@ function saveLocal(skipCloud) {
   }
 
   if (skipCloud || !State.autoSync) return;
+
+  // 동기화 비밀번호가 없으면 서버로 안 보내고 이 기기에만 저장
+  if (!hasSyncPassword()) { setSyncIcon("local"); return; }
+
   setSyncIcon("pending");
   clearTimeout(_syncTimer);
   _syncTimer = setTimeout(autoPush, AUTO_SYNC_DELAY);
@@ -124,10 +144,12 @@ function loadLocal() {
 async function autoPush() {
   _syncTimer = null;
   if (State.syncing) return;
+  const url = getDataUrl();
+  if (!url) { setSyncIcon("local"); return; }   // 비밀번호 없음 → 로컬 전용
   State.syncing = true;
   setSyncIcon("saving");
   try {
-    const res = await fetch(DATA_URL, {
+    const res = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -151,10 +173,17 @@ async function autoPush() {
 async function pushToServer() {
   clearTimeout(_syncTimer);
   _syncTimer = null;
+  const url = getDataUrl();
+  if (!url) {
+    setSyncIcon("local");
+    toast("먼저 동기화 비밀번호를 설정하세요", "error");
+    openSyncPwModal();
+    return false;
+  }
   State.syncing = true;
   setSyncIcon("saving");
   try {
-    const res = await fetch(DATA_URL, {
+    const res = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -178,12 +207,18 @@ async function pushToServer() {
 }
 
 async function fetchServer() {
-  const res = await fetch(DATA_URL + "?t=" + Date.now());
+  const url = getDataUrl();
+  if (!url) return null;   // 비밀번호 없음 → 서버 조회 안 함
+  const res = await fetch(url + "?t=" + Date.now());
   if (!res.ok) throw new Error(describeHttp(res.status));
   return await res.json();   // null 이면 서버에 데이터 없음
 }
 
 async function pullFromServer(silent) {
+  if (!hasSyncPassword()) {
+    if (!silent) { toast("먼저 동기화 비밀번호를 설정하세요", "error"); openSyncPwModal(); }
+    return false;
+  }
   try {
     const d = await fetchServer();
     if (!d || !Array.isArray(d.items)) {
@@ -205,6 +240,9 @@ async function pullFromServer(silent) {
 
 /* 부팅 시 서버/로컬 중 최신본 자동 선택 */
 async function syncOnBoot() {
+  // 동기화 비밀번호가 없으면 서버를 건드리지 않고 이 기기 데이터만 사용
+  if (!hasSyncPassword()) { setSyncIcon("local"); return; }
+
   setSyncIcon("saving");
   try {
     const d = await fetchServer();
@@ -275,14 +313,16 @@ function describeHttp(status) {
 
 /* ---------- 연결 테스트 ---------- */
 async function testConnection() {
-  const out = { url: DATA_URL, read: "", write: "" };
+  const dataUrl = getDataUrl();
+  const out = { url: dataUrl || "(동기화 비밀번호 없음)", read: "", write: "" };
+  if (!dataUrl) { out.read = out.write = "동기화 비밀번호를 먼저 설정하세요"; return out; }
   try {
-    const r = await fetch(DATA_URL + "?t=" + Date.now());
+    const r = await fetch(dataUrl + "?t=" + Date.now());
     out.read = r.ok ? "성공" : describeHttp(r.status);
   } catch (e) { out.read = "네트워크 오류: " + e.message; }
 
   try {
-    const testUrl = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${SYNC_KEY}_test.json`;
+    const testUrl = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${encodeURIComponent(getSyncPassword())}_test.json`;
     const w = await fetch(testUrl, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -317,30 +357,90 @@ window.showStorage = function () {
   return { current: cur.length, backup: bak.length };
 };
 
-/* ---------- 로그인 ---------- */
-function initLogin() {
-  const doLogin = () => {
-    const v = $("#pwInput").value;
-    if (v === APP_PASSWORD) {
-      sessionStorage.setItem(LS_AUTH, "1");
-      $("#loginScreen").classList.add("hidden");
-      $("#app").classList.remove("hidden");
-      bootApp();
-    } else {
-      const err = $("#pwError");
-      err.textContent = "비밀번호가 올바르지 않습니다";
-      err.classList.remove("hidden");
-      $("#pwInput").value = "";
-    }
-  };
-  $("#loginBtn").addEventListener("click", doLogin);
-  $("#pwInput").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
-  $("#pwInput").focus();
+/* ---------- 동기화 비밀번호 ---------- */
+function openSyncPwModal() {
+  const m = $("#syncPwModal");
+  if (!m) return;
+  $("#syncPwInput").value = getSyncPassword();
+  m.classList.remove("hidden");
+  setTimeout(() => $("#syncPwInput").focus(), 50);
+}
+function closeSyncPwModal() {
+  $("#syncPwModal")?.classList.add("hidden");
+}
 
-  if (sessionStorage.getItem(LS_AUTH) === "1") {
-    $("#loginScreen").classList.add("hidden");
-    $("#app").classList.remove("hidden");
-    bootApp();
+/* 비밀번호를 저장하면 그게 곧 서버 데이터 경로가 됨 */
+async function saveSyncPw() {
+  const v = ($("#syncPwInput").value || "").trim();
+  if (!v) { toast("비밀번호를 입력하세요", "error"); return; }
+
+  const prev = getSyncPassword();
+  localStorage.setItem(LS_SYNC_PW, v);
+  closeSyncPwModal();
+
+  if (v === prev) { toast("동기화 비밀번호가 그대로입니다"); return; }
+
+  toast("동기화 비밀번호 저장됨 — 서버 확인 중...");
+  await firstSyncAfterPw();
+  applyFilters();
+  updateSyncPwStatus();
+}
+
+/* 비밀번호를 처음(또는 새로) 설정한 직후의 동기화 처리.
+   새 방이 비어 있으면 → 예전 고정 경로(/watchlog/data) 데이터를 옮길지 물어보고,
+   그것도 없으면 이 기기 데이터를 새 방에 올린다. */
+async function firstSyncAfterPw() {
+  const url = getDataUrl();
+  if (!url) { setSyncIcon("local"); return; }
+  setSyncIcon("saving");
+  try {
+    const d = await fetchServer();
+
+    // 새 방에 이미 데이터가 있음 → 평소 부팅 동기화 로직으로
+    if (d && Array.isArray(d.items)) { await syncOnBoot(); return; }
+
+    // 새 방이 비어 있음 → 예전 고정 경로에 데이터가 있는지 확인 (마이그레이션)
+    let legacy = null;
+    try {
+      const r = await fetch(LEGACY_URL + "?t=" + Date.now());
+      if (r.ok) legacy = await r.json();
+    } catch {}
+
+    if (legacy && Array.isArray(legacy.items) && legacy.items.length) {
+      const ok = confirm(
+        `기존 서버 데이터 ${legacy.items.length}개를 이 비밀번호(방)로 옮길까요?\n\n` +
+        `[확인] 예전 데이터를 이 비밀번호로 복사합니다.\n` +
+        `[취소] 이 기기의 현재 데이터(${State.items.length}개)를 올립니다.`
+      );
+      if (ok) {
+        State.items = legacy.items;
+        localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+        localStorage.setItem(LS_MODIFIED, legacy.updatedAt || new Date().toISOString());
+        await pushToServer();
+        toast(`기존 데이터 ${State.items.length}개를 옮겼습니다`, "success");
+        return;
+      }
+    }
+
+    // 이 기기 데이터를 새 방에 올림
+    if (State.items.length) { await autoPush(); toast(`이 기기 데이터 ${State.items.length}개를 올렸습니다`, "success"); }
+    else setSyncIcon("saved");
+  } catch (e) {
+    console.error("첫 동기화 실패", e);
+    setSyncIcon("error");
+    toast("서버 연결 실패 — 비밀번호/규칙을 확인하세요", "error");
+  }
+}
+
+function updateSyncPwStatus() {
+  const el = $("#syncPwStatus");
+  if (!el) return;
+  if (hasSyncPassword()) {
+    el.textContent = "동기화 비밀번호가 설정되어 있습니다 (다른 기기에서도 같은 비밀번호로 동기화됩니다)";
+    el.className = "text-sm mt-2 font-medium text-emerald-600";
+  } else {
+    el.textContent = "비밀번호가 없습니다. 지금은 이 기기에만 저장됩니다.";
+    el.className = "text-sm mt-2 font-medium text-amber-600";
   }
 }
 
@@ -358,6 +458,16 @@ function initTabs() {
     });
   });
 }
+
+/* 콘솔에서 비밀번호 설정용 (선택) */
+window.setSyncPassword = function (pw) {
+  if (!pw) { console.log("현재 비밀번호:", getSyncPassword() || "(없음)"); return; }
+  localStorage.setItem(LS_SYNC_PW, String(pw).trim());
+  console.log("동기화 비밀번호 설정됨. 새로고침하면 동기화됩니다.");
+};
+window.openSyncPwModal = openSyncPwModal;
+window.closeSyncPwModal = closeSyncPwModal;
+window.saveSyncPw = saveSyncPw;
 
 /* ---------- 부팅 ---------- */
 let _booted = false;
@@ -387,4 +497,4 @@ async function bootSync() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", initLogin);
+document.addEventListener("DOMContentLoaded", bootApp);

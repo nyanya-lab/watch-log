@@ -11,25 +11,8 @@
 </head>
 <body>
 
-<!-- ===== 로그인 화면 ===== -->
-<div id="loginScreen" class="fixed inset-0 flex items-center justify-center z-50" style="background:linear-gradient(135deg,#6366f1,#8b5cf6,#ec4899)">
-  <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm mx-4">
-    <div class="text-center mb-6">
-      <div class="text-5xl mb-3">🎬</div>
-      <h1 class="text-xl font-bold text-slate-800">냐냐's Watch LOG</h1>
-      <p class="text-sm text-slate-500 mt-2">비밀번호를 입력해주세요</p>
-    </div>
-    <input type="password" id="pwInput" placeholder="비밀번호"
-      class="w-full px-4 py-3 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-base mb-3">
-    <div id="pwError" class="hidden text-sm text-red-600 mb-3 text-center font-medium"></div>
-    <button id="loginBtn" class="w-full py-3 rounded-lg text-white font-semibold transition" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
-      <i class="fa-solid fa-unlock mr-2"></i>입장하기
-    </button>
-  </div>
-</div>
-
 <!-- ===== 메인 앱 ===== -->
-<div id="app" class="hidden">
+<div id="app">
 
   <!-- 헤더 -->
   <header class="border-b border-slate-200 sticky top-0 z-30" style="background:linear-gradient(135deg,#eef2ff,#faf5ff)">
@@ -105,6 +88,15 @@
           <button id="saveTmdbKey" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">저장</button>
         </div>
         <div id="tmdbKeyStatus" class="text-sm mt-2 font-medium"></div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-lock mr-2 text-indigo-500"></i>동기화 비밀번호</h3>
+        <p class="text-sm text-slate-500 mb-3">이 비밀번호가 곧 서버에서의 내 데이터 방이 됩니다. 다른 기기에서도 <b>같은 비밀번호</b>를 넣으면 동기화됩니다. 비밀번호는 이 기기에만 저장되고 코드(GitHub)에는 들어가지 않습니다.</p>
+        <button id="syncPwBtn" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+          <i class="fa-solid fa-key mr-1"></i>비밀번호 설정 / 변경
+        </button>
+        <div id="syncPwStatus" class="text-sm mt-2 font-medium"></div>
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
@@ -344,10 +336,50 @@
   <div id="detailContent" class="bg-white rounded-2xl max-w-lg mx-auto my-8 overflow-hidden"></div>
 </div>
 
+<!-- ===== 동기화 비밀번호 모달 ===== -->
+<div id="syncPwModal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-md">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-lock mr-2 text-indigo-500"></i>동기화 비밀번호</h3>
+      <button id="closeSyncPw" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 font-medium leading-relaxed">
+        이 비밀번호로 서버에서 내 데이터만 찾습니다. 코드에는 저장되지 않고 <b>이 기기에만</b> 저장돼요.
+        다른 기기에서도 <b>똑같은 비밀번호</b>를 넣어야 같은 데이터가 보입니다. 잊으면 데이터에 다시 접근하기 어려우니 어딘가에 적어두세요.
+      </div>
+      <div>
+        <label class="form-label">비밀번호 (아무 문자열이나 가능)</label>
+        <input type="password" id="syncPwInput" placeholder="예: nyanya-watch-2026"
+          class="w-full px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 text-sm font-mono">
+      </div>
+    </div>
+    <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
+      <div class="flex-1"></div>
+      <button id="cancelSyncPw" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">취소</button>
+      <button id="saveSyncPwBtn" class="px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">저장하고 동기화</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl bg-slate-800 text-white text-sm font-semibold z-50 shadow-lg"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- [개발 전용] localhost / file:// 로 열었을 때만 dev-local.js 를 불러온다.
+     그 파일은 .gitignore 에 있어 깃에 안 올라가고, 배포된 사이트에는 존재하지 않는다.
+     (없어도 조용히 무시되고 앱은 정상 동작 — 그때는 설정에서 비밀번호를 직접 넣으면 됨) -->
+<script>
+  (function () {
+    var h = location.hostname;
+    if (h === "localhost" || h === "127.0.0.1" || h === "") {
+      var s = document.createElement("script");
+      s.src = "dev-local.js";
+      s.onerror = function () { /* 파일이 없으면 조용히 넘어감 */ };
+      document.head.appendChild(s);
+    }
+  })();
+</script>
 <script src="seed-data.js"></script>
 <script src="core.js"></script>
 <script src="tmdb.js"></script>

@@ -512,6 +512,15 @@ function initSettings() {
     toast("API 키가 저장되었습니다", "success");
   });
 
+  /* 동기화 비밀번호 */
+  updateSyncPwStatus();
+  $("#syncPwBtn").addEventListener("click", openSyncPwModal);
+  $("#closeSyncPw").addEventListener("click", closeSyncPwModal);
+  $("#cancelSyncPw").addEventListener("click", closeSyncPwModal);
+  $("#saveSyncPwBtn").addEventListener("click", saveSyncPw);
+  $("#syncPwModal").addEventListener("click", e => { if (e.target.id === "syncPwModal") closeSyncPwModal(); });
+  $("#syncPwInput").addEventListener("keydown", e => { if (e.key === "Enter") saveSyncPw(); });
+
   $("#pushBtn").addEventListener("click", async () => {
     $("#syncStatus").textContent = "저장 중...";
     $("#syncStatus").className = "text-sm mt-2 font-medium text-slate-500";
