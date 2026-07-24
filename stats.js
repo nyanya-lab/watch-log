@@ -31,7 +31,7 @@ function renderStats() {
   const byType = countBy(items, i => i.type || "기타");
   const byCountry = countBy(items, i => i.country || "미상");
   const byOtt = countBy(items, i => i.ott || "기타");
-  const byGenre = countBy(items.flatMap(i => i.genres || []), g => g);
+  const byGenre = countBy(items.flatMap(i => visibleGenres(i.genres)), g => g);
   const byYear = countBy(items.filter(i => i.startDate), i => i.startDate.slice(0, 4));
 
   const rated = items.filter(i => i.rating);
@@ -96,14 +96,22 @@ function renderStats() {
 
     <!-- 별점 분포 -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-star mr-2 text-indigo-500"></i>별점 분포</h3>
+      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-heart mr-2 text-rose-400"></i>별점 분포</h3>
       <div style="height:220px"><canvas id="chartRating"></canvas></div>
     </div>
   `;
 
   /* --- 차트 그리기 --- */
+  // 차트 요소 클릭 → 해당 조건으로 목록 조회
+  const clickToFilter = (patchFn) => (evt, els, chart) => {
+    if (!els.length) return;
+    const label = chart.data.labels[els[0].index];
+    const patch = patchFn(label);
+    if (patch && typeof jumpToList === "function") jumpToList(patch);
+  };
   const commonOpts = {
     responsive: true, maintainAspectRatio: false,
+    onHover: (e, els) => { if (e.native) e.native.target.style.cursor = els.length ? "pointer" : "default"; },
     plugins: { legend: { labels: { font: { size: 12, weight: 500 } } } }
   };
 
@@ -114,7 +122,7 @@ function renderStats() {
       labels: years.map(y => y + "년"),
       datasets: [{ label: "작품 수", data: years.map(y => byYear[y]), backgroundColor: "#6366f1", borderRadius: 6 }]
     },
-    options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    options: { ...commonOpts, onClick: clickToFilter(l => ({ year: String(l).replace("년", "") })), plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // 장르 파이
@@ -123,7 +131,7 @@ function renderStats() {
     _charts.push(new Chart($("#chartGenre"), {
       type: "doughnut",
       data: { labels: gTop.labels, datasets: [{ data: gTop.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: "#fff" }] },
-      options: { ...commonOpts, plugins: { legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } } } }
+      options: { ...commonOpts, onClick: clickToFilter(l => ({ genre: l })), plugins: { legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } } } }
     }));
   }
 
@@ -132,7 +140,7 @@ function renderStats() {
   _charts.push(new Chart($("#chartType"), {
     type: "doughnut",
     data: { labels: tTop.labels, datasets: [{ data: tTop.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: "#fff" }] },
-    options: { ...commonOpts, plugins: { legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } } } }
+    options: { ...commonOpts, onClick: clickToFilter(l => ({ type: l })), plugins: { legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } } } }
   }));
 
   // 국가
@@ -140,7 +148,7 @@ function renderStats() {
   _charts.push(new Chart($("#chartCountry"), {
     type: "bar",
     data: { labels: cTop.labels, datasets: [{ data: cTop.values, backgroundColor: "#10b981", borderRadius: 6 }] },
-    options: { ...commonOpts, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    options: { ...commonOpts, onClick: clickToFilter(l => l === "미상" ? null : { country: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // OTT
@@ -148,15 +156,15 @@ function renderStats() {
   _charts.push(new Chart($("#chartOtt"), {
     type: "bar",
     data: { labels: oTop.labels, datasets: [{ data: oTop.values, backgroundColor: "#f59e0b", borderRadius: 6 }] },
-    options: { ...commonOpts, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    options: { ...commonOpts, onClick: clickToFilter(l => ({ ott: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // 별점
   const rCount = [1, 2, 3, 4, 5].map(n => items.filter(i => i.rating === n).length);
   _charts.push(new Chart($("#chartRating"), {
     type: "bar",
-    data: { labels: ["★1", "★2", "★3", "★4", "★5"], datasets: [{ data: rCount, backgroundColor: "#fbbf24", borderRadius: 6 }] },
-    options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    data: { labels: ["♥1", "♥2", "♥3", "♥4", "♥5"], datasets: [{ data: rCount, backgroundColor: "#f43f5e", borderRadius: 6 }] },
+    options: { ...commonOpts, onClick: clickToFilter(l => ({ rating: String(l).replace(/\D/g, "") })), plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // 히트맵

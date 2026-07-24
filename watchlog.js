@@ -3,7 +3,7 @@
    ============================================ */
 
 const Filters = {
-  q: "", type: "", country: "", ott: "", year: "", genre: "",
+  q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
   sort: "date-desc", pendingOnly: false
 };
 
@@ -39,7 +39,7 @@ function initWatchlog() {
     }));
 
   $("#resetFilter").addEventListener("click", () => {
-    Object.assign(Filters, { type: "", country: "", ott: "", year: "", genre: "", sort: "date-desc" });
+    Object.assign(Filters, { type: "", country: "", ott: "", year: "", genre: "", rating: "", sort: "date-desc" });
     ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre"].forEach(id => $("#" + id).value = "");
     $("#sortBy").value = "date-desc";
     applyFilters();
@@ -110,6 +110,16 @@ function updateStepperLabel(id) {
 function debounce(fn, ms) {
   let t;
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+/* ---------- 내 별점: 하트 아이콘 5개 ---------- */
+function hearts(n) {
+  n = n || 0;
+  let out = "";
+  for (let k = 1; k <= 5; k++) {
+    out += `<i class="fa-solid fa-heart wl-heart${k <= n ? " on" : ""}"></i>`;
+  }
+  return `<span class="wl-hearts">${out}</span>`;
 }
 
 /* ---------- 구분(type)과 겹치는 장르는 표시에서 숨김 ---------- */
@@ -189,7 +199,36 @@ function buildFilterOptions() {
 
 function hasActiveFilter() {
   return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
-            Filters.genre || Filters.sort !== "date-desc");
+            Filters.genre || Filters.rating || Filters.sort !== "date-desc");
+}
+
+/* 통계 차트 클릭 → 해당 조건으로 목록 탭 조회 */
+function jumpToList(patch) {
+  const backup = { ...Filters };
+  Object.assign(Filters,
+    { type: "", country: "", ott: "", year: "", genre: "", rating: "", pendingOnly: false },
+    patch);
+  applyFilters();
+
+  if (State.filtered.length === 0) {   // 조회 결과 없으면(예: '기타' 집계) 원복
+    Object.assign(Filters, backup);
+    applyFilters();
+    toast("조회할 항목이 없습니다");
+    return;
+  }
+
+  // 필터 모달 셀렉트 동기화
+  buildFilterOptions();
+  $("#filterType").value = Filters.type;
+  $("#filterCountry").value = Filters.country;
+  $("#filterOtt").value = Filters.ott;
+  $("#filterYear").value = Filters.year;
+  $("#filterGenre").value = Filters.genre;
+
+  // 목록 탭으로 전환
+  const listTab = document.querySelector('.tab-btn[data-tab="list"]');
+  if (listTab) listTab.click();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 /* ---------- 필터 적용 ---------- */
@@ -203,6 +242,7 @@ function applyFilters() {
     if (F.ott && !ottList(i).includes(F.ott)) return false;
     if (F.year && (i.startDate || "").slice(0, 4) !== F.year) return false;
     if (F.genre && !visibleGenres(i.genres).includes(F.genre)) return false;
+    if (F.rating && (i.rating || 0) !== +F.rating) return false;
     return true;
   });
 
@@ -259,13 +299,14 @@ function renderCards() {
         ${i.season ? `<span class="wl-season">${esc(i.season)}</span>` : ""}
       </div>
       <div class="wl-body">
-        <div class="wl-title">${esc(i.title)}</div>
-        ${i.rating ? `<div class="text-amber-500 text-sm font-semibold mb-1">${stars(i.rating)}</div>` : ""}
-        <div class="flex flex-wrap gap-1 mb-1.5">
-          ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
-          ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}
-          ${ottBadges(i)}
+        <div class="wl-title-row">
+          <span class="wl-title">${esc(i.title)}</span>
+          ${i.type ? `<span class="badge badge-type shrink-0">${esc(i.type)}</span>` : ""}
         </div>
+        ${i.rating ? `<div class="mb-1.5">${hearts(i.rating)}</div>` : ""}
+        ${visibleGenres(i.genres).length ? `<div class="flex flex-wrap gap-1 mb-1.5">
+          ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}
+        </div>` : ""}
         <div class="wl-meta text-slate-400">${fmtRange(i.startDate, i.endDate) || "날짜 없음"}</div>
       </div>
     </div>`).join("");
@@ -321,7 +362,7 @@ function openDetail(id) {
         <div class="flex-1 min-w-0 ${i.backdrop ? "pt-12" : ""}">
           <h4 class="text-lg font-bold text-slate-800 leading-snug">${esc(i.title)}</h4>
           ${i.originalTitle && i.originalTitle !== i.title ? `<div class="text-xs text-slate-400 font-medium">${esc(i.originalTitle)}</div>` : ""}
-          ${i.rating ? `<div class="text-amber-500 text-lg font-semibold mt-1">${stars(i.rating)}</div>` : ""}
+          ${i.rating ? `<div class="mt-1 text-lg">${hearts(i.rating)}</div>` : ""}
           <div class="flex flex-wrap gap-1 mt-2">
             ${i.season ? `<span class="badge badge-season">${esc(i.season)}</span>` : ""}
             ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
@@ -557,6 +598,8 @@ function initSettings() {
 
   $("#enrichBtn").addEventListener("click", runEnrichAll);
   $("#refreshOttBtn").addEventListener("click", runRefreshOtts);
+  $("#refreshRatingBtn").addEventListener("click", runRefreshRatings);
+  renderUpdInfo();
 
   $("#exportBtn").addEventListener("click", () => {
     const blob = new Blob([JSON.stringify(State.items, null, 2)], { type: "application/json" });
@@ -604,6 +647,29 @@ function updateKeyStatus() {
     el.textContent = "API 키가 없습니다. TMDB 검색이 동작하지 않습니다.";
     el.className = "text-sm mt-2 font-medium text-amber-600";
   }
+}
+
+/* ---------- 갱신 시각 기록/표시 ---------- */
+const LS_UPD = "watchlog_updated_at";
+function getUpd() { try { return JSON.parse(localStorage.getItem(LS_UPD) || "{}"); } catch { return {}; } }
+function markUpd(key) {
+  const o = getUpd();
+  o[key] = new Date().toISOString();
+  localStorage.setItem(LS_UPD, JSON.stringify(o));
+  renderUpdInfo();
+}
+function fmtUpd(iso) {
+  if (!iso) return "아직 실행 안 함";
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, "0");
+  return `최근: ${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function renderUpdInfo() {
+  const u = getUpd();
+  const set = (id, v) => { const el = $("#" + id); if (el) el.textContent = fmtUpd(v); };
+  set("updEnrich", u.enrich);
+  set("updOtt", u.ott);
+  set("updRating", u.rating);
 }
 
 /* ---------- 일괄 정보 채우기 ---------- */
@@ -658,6 +724,7 @@ async function runEnrichAll() {
   saveLocal();
   applyFilters();
   _enriching = false;
+  markUpd("enrich");
   status.textContent = `완료 — 성공 ${ok}개, 실패 ${fail}개`;
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast(`정보 채우기 완료 (${ok}개)`, "success");
@@ -703,7 +770,52 @@ async function runRefreshOtts() {
   saveLocal();
   applyFilters();
   _enriching = false;
+  markUpd("ott");
   status.textContent = `OTT 갱신 완료 — 변경 ${changed}개${fail ? `, 실패 ${fail}개` : ""}`;
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast(`OTT 정보 갱신 완료`, "success");
+}
+
+/* ---------- 평점(TMDB voteAverage)만 갱신 ---------- */
+async function runRefreshRatings() {
+  if (_enriching) { toast("이미 진행 중입니다"); return; }
+  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const targets = State.items.filter(i => i.tmdbId);
+  if (!targets.length) { toast("갱신할 항목이 없습니다 (TMDB 연동된 항목만 대상)", "success"); return; }
+  if (!confirm(`${targets.length}개 항목의 TMDB 평점을 새로 조회합니다.`)) return;
+
+  _enriching = true;
+  const status = $("#enrichStatus");
+  const bar = $("#enrichBar");
+  const fill = $("#enrichBarFill");
+  bar.classList.remove("hidden");
+
+  let changed = 0, fail = 0;
+  for (let n = 0; n < targets.length; n++) {
+    const i = targets[n];
+    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
+    status.className = "text-sm mt-3 font-medium text-slate-600";
+    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
+
+    const mediaType = i.type === "영화" ? "movie" : "tv";
+    try {
+      const d = await tmdbDetail(i.tmdbId, mediaType);
+      if (d && d.voteAverage != null && d.voteAverage !== i.voteAverage) {
+        i.voteAverage = d.voteAverage;
+        changed++;
+      }
+    } catch { fail++; }
+
+    if (n % 10 === 9) saveLocal(true);
+    await new Promise(r => setTimeout(r, 260));
+  }
+
+  saveLocal();
+  applyFilters();
+  _enriching = false;
+  markUpd("rating");
+  status.textContent = `평점 갱신 완료 — 변경 ${changed}개${fail ? `, 실패 ${fail}개` : ""}`;
+  status.className = "text-sm mt-3 font-medium text-emerald-600";
+  toast(`평점 갱신 완료`, "success");
 }

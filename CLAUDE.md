@@ -143,13 +143,19 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB 연동된 항목의 `otts`만
 `tmdbProviders`로 다시 조회 (구분으로 movie/tv 추정, 비면 반대쪽도 시도). OTT는 시간이 지나면 바뀌므로 별도 제공.
 
+평점만 갱신 (`runRefreshRatings`): `voteAverage`만 `tmdbDetail`로 다시 조회.
+각 갱신 버튼 옆에 최근 실행 시각 표시 (`LS_UPD`=`watchlog_updated_at`, `markUpd`/`renderUpdInfo`).
+설정 탭 순서: TMDB 일괄 채우기(맨 위) → API 키 → 동기화 비밀번호 → Firebase 동기화 → 데이터 관리.
+
 ## UI 특징
 
 - 헤더: 총 개수 배지(그라데이션) + 동기화 아이콘
 - 검색바: `[검색] [필터] [등록+]` 한 줄. 필터 적용 시 아이콘에 빨간 점
 - 필터: 모달 팝업 (구분/국가/OTT/연도/장르/정렬). 선택 즉시 결과 수 미리보기
 - 미등록 버튼: 토글식. 0개면 자동 숨김
-- 카드: 포스터 위 TMDB평점(우상단) + 시즌(좌상단) 오버레이
+- 카드 본문: 제목 옆 구분(보라) → 내 별점(하트) → 장르(최대 3개) → 날짜. 국가·OTT는 상세에서만.
+- 내 별점(`rating`)은 **하트 아이콘**(`hearts()` in watchlog.js). TMDB평점(`voteAverage`)은 포스터 우상단 유지.
+- 카드: 포스터 위 TMDB평점(우상단) + 시즌(좌상단) 오버레이 (`.wl-vote`/`.wl-season` in style.css)
 - 등록/수정 모달: TMDB 검색 → 선택 시 정보카드 표시 + 폼 자동 채움. 수정 시에도 기존 TMDB 정보 카드 표시됨
 - 시즌: TMDB 시즌 목록 있으면 드롭다운, 없으면 ± 스테퍼로 폴백
 - OTT: 영화관 체크박스 별도. 미체크 시 TMDB 자동판별 후보를 초록 힌트로 안내하되 직접 변경 가능
@@ -168,6 +174,10 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 연도별 막대 / GitHub 잔디 히트맵(연도 선택) / 장르 도넛 / 구분 도넛 / 국가 가로막대 / OTT 가로막대 / 별점 분포
 
 히트맵은 `startDate~endDate`와 `lastWatchStart~lastWatchEnd` 범위를 날짜 단위로 펼쳐서 집계.
+
+장르별 통계는 `visibleGenres` 적용(드라마 등 구분 중복 제외). 모든 차트는 클릭하면
+`jumpToList(patch)`로 해당 조건(연도/장르/구분/국가/OTT/별점) 필터를 걸고 목록 탭으로 이동
+(결과 0건이면 원복). 별점 필터는 `Filters.rating` (필터 모달엔 없고 차트 클릭 전용).
 
 ## 알려진 이슈 / 남은 작업
 

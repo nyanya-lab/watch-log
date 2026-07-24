@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260724">
+<link rel="stylesheet" href="style.css?v=20260724b">
 </head>
 <body>
 
@@ -82,6 +82,40 @@
     <!-- ===== 설정 탭 ===== -->
     <section id="tab-settings" class="hidden space-y-5">
       <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i>TMDB 정보 일괄 채우기</h3>
+        <p class="text-sm text-slate-500 mb-3">포스터·장르·줄거리·출연진·평점·OTT 등을 자동으로 찾아 채웁니다.</p>
+        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mb-3">
+          <input type="checkbox" id="enrichOverwrite" class="w-4 h-4 rounded">
+          이미 채운 항목도 최신 정보로 갱신 (출연진·평점·OTT 등 새 정보 포함)
+        </label>
+        <div class="space-y-2">
+          <div class="flex items-center gap-3 flex-wrap">
+            <button id="enrichBtn" class="px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shrink-0">
+              <i class="fa-solid fa-download mr-1"></i>정보 채우기 시작
+            </button>
+            <span id="updEnrich" class="text-xs font-medium text-slate-400"></span>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button id="refreshOttBtn" class="px-4 py-2.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 shrink-0">
+              <i class="fa-solid fa-tv mr-1"></i>OTT 정보만 갱신
+            </button>
+            <span id="updOtt" class="text-xs font-medium text-slate-400"></span>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button id="refreshRatingBtn" class="px-4 py-2.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 shrink-0">
+              <i class="fa-solid fa-star mr-1"></i>평점(TMDB)만 갱신
+            </button>
+            <span id="updRating" class="text-xs font-medium text-slate-400"></span>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">OTT·평점은 시간이 지나면 바뀝니다. 위 버튼으로 그 정보만 최신화할 수 있어요.</p>
+        <div id="enrichStatus" class="text-sm mt-3 font-medium"></div>
+        <div id="enrichBar" class="hidden mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div id="enrichBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
         <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-key mr-2 text-indigo-500"></i>TMDB API 키</h3>
         <p class="text-sm text-slate-500 mb-3">themoviedb.org에서 발급받은 v3 API 키를 입력하세요.</p>
         <div class="flex gap-2">
@@ -112,28 +146,6 @@
           </button>
         </div>
         <div id="syncStatus" class="text-sm mt-2 font-medium"></div>
-      </div>
-
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i>TMDB 정보 일괄 채우기</h3>
-        <p class="text-sm text-slate-500 mb-3">포스터·장르·줄거리·출연진·평점·OTT 등을 자동으로 찾아 채웁니다.</p>
-        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mb-3">
-          <input type="checkbox" id="enrichOverwrite" class="w-4 h-4 rounded">
-          이미 채운 항목도 최신 정보로 갱신 (출연진·평점·OTT 등 새 정보 포함)
-        </label>
-        <div class="flex flex-wrap gap-2">
-          <button id="enrichBtn" class="px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
-            <i class="fa-solid fa-download mr-1"></i>정보 채우기 시작
-          </button>
-          <button id="refreshOttBtn" class="px-4 py-2.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50">
-            <i class="fa-solid fa-tv mr-1"></i>OTT 정보만 갱신
-          </button>
-        </div>
-        <p class="text-xs text-slate-400 mt-2">OTT는 시간이 지나면 바뀝니다(내려가거나 추가됨). 위 버튼으로 스트리밍 정보만 최신화할 수 있어요.</p>
-        <div id="enrichStatus" class="text-sm mt-3 font-medium"></div>
-        <div id="enrichBar" class="hidden mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
-          <div id="enrichBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
-        </div>
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
@@ -387,10 +399,10 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260724"></script>
-<script src="core.js?v=20260724"></script>
-<script src="tmdb.js?v=20260724"></script>
-<script src="watchlog.js?v=20260724"></script>
-<script src="stats.js?v=20260724"></script>
+<script src="seed-data.js?v=20260724b"></script>
+<script src="core.js?v=20260724b"></script>
+<script src="tmdb.js?v=20260724b"></script>
+<script src="watchlog.js?v=20260724b"></script>
+<script src="stats.js?v=20260724b"></script>
 </body>
 </html>
