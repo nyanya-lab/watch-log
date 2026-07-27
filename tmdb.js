@@ -181,9 +181,14 @@ async function tmdbDetail(id, mediaType) {
 
   const companies = (d.production_companies || []).slice(0, 3).map(c => c.name);
 
+  // TMDB 공식 시리즈(컬렉션) — 제목이 달라도 같은 시리즈면 같은 id (영화만 제공)
+  const coll = d.belongs_to_collection || null;
+
   return {
     tmdbId: d.id,
     mediaType,
+    collectionId: coll ? coll.id : null,
+    collectionName: coll ? coll.name : "",
     title: d.title || d.name || "",
     originalTitle: d.original_title || d.original_name || "",
     poster: d.poster_path ? TMDB_IMG + d.poster_path : null,

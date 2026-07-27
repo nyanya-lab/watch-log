@@ -10,9 +10,9 @@ function destroyCharts() {
 }
 
 const PALETTE = [
-  "#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+  "#5f9235", "#10b981", "#f59e0b", "#ef4444", "#7bad48",
   "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6",
-  "#a855f7", "#0ea5e9", "#eab308", "#f43f5e", "#22c55e"
+  "#8fbf63", "#0ea5e9", "#eab308", "#f43f5e", "#22c55e"
 ];
 
 function renderStats() {
@@ -77,40 +77,23 @@ function renderStats() {
       <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${totalHours.toLocaleString()}<span class="text-base font-semibold text-slate-400">시간</span></div></div>
     </div>
 
-    <!-- 연도별 막대 -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-chart-column mr-2 text-indigo-500"></i>연도별 시청</h3>
-      <div style="height:260px"><canvas id="chartYear"></canvas></div>
-    </div>
-
-    <!-- 히트맵 -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-calendar-days mr-2 text-indigo-500"></i>시청 히트맵</h3>
-        <select id="heatYear" class="filter-select">
-          ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
-        </select>
-      </div>
-      <div id="heatmapArea" class="overflow-x-auto"></div>
-    </div>
-
     <!-- 월별 추이 -->
     <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-calendar-week mr-2 text-indigo-500"></i>월별 시청 (전체 기간)</h3>
+      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-calendar-week mr-2 text-lime-700"></i>월별 시청 (전체 기간)</h3>
       <div style="height:220px"><canvas id="chartMonth"></canvas></div>
     </div>
 
     <!-- 장르 + 구분 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-chart-simple mr-2 text-indigo-500"></i>장르별</h3>
-        <p class="text-xs text-slate-400 mb-3 font-medium">한 작품에 장르가 여러 개라 합계는 작품 수보다 큽니다</p>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-chart-pie mr-2 text-lime-700"></i>장르별</h3>
+        <p class="text-xs text-slate-400 mb-3 font-medium">한 작품이 장르를 여러 개 가지므로, 전체 장르 태그(${Object.values(byGenre).reduce((a, b) => a + b, 0)}개) 중 비율입니다</p>
         <div style="height:300px"><canvas id="chartGenre"></canvas></div>
         ${!Object.keys(byGenre).length ? `<p class="text-sm text-amber-600 font-medium text-center mt-3">
           TMDB 정보를 채우면 장르 통계가 표시됩니다</p>` : ""}
       </div>
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-shapes mr-2 text-indigo-500"></i>구분별</h3>
+        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-shapes mr-2 text-lime-700"></i>구분별</h3>
         <div style="height:280px"><canvas id="chartType"></canvas></div>
       </div>
     </div>
@@ -118,11 +101,11 @@ function renderStats() {
     <!-- 국가 + OTT -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-earth-asia mr-2 text-indigo-500"></i>국가별</h3>
+        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-earth-asia mr-2 text-lime-700"></i>국가별</h3>
         <div style="height:260px"><canvas id="chartCountry"></canvas></div>
       </div>
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-tv mr-2 text-indigo-500"></i>OTT별</h3>
+        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-tv mr-2 text-lime-700"></i>OTT별</h3>
         <div style="height:260px"><canvas id="chartOtt"></canvas></div>
       </div>
     </div>
@@ -148,6 +131,23 @@ function renderStats() {
       <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-heart mr-2 text-rose-400"></i>별점 분포</h3>
       <div style="height:220px"><canvas id="chartRating"></canvas></div>
     </div>
+
+    <!-- 연도별 막대 -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-chart-column mr-2 text-lime-700"></i>연도별 시청</h3>
+      <div style="height:260px"><canvas id="chartYear"></canvas></div>
+    </div>
+
+    <!-- 히트맵 -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-calendar-days mr-2 text-lime-700"></i>시청 히트맵</h3>
+        <select id="heatYear" class="filter-select">
+          ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
+        </select>
+      </div>
+      <div id="heatmapArea" class="overflow-x-auto"></div>
+    </div>
   `;
 
   /* --- 차트 그리기 --- */
@@ -169,29 +169,31 @@ function renderStats() {
     type: "bar",
     data: {
       labels: years.map(y => y + "년"),
-      datasets: [{ label: "작품 수", data: years.map(y => byYear[y]), backgroundColor: "#6366f1", borderRadius: 6 }]
+      datasets: [{ label: "작품 수", data: years.map(y => byYear[y]), backgroundColor: "#5f9235", borderRadius: 6 }]
     },
     options: { ...commonOpts, onClick: clickToFilter(l => ({ year: String(l).replace("년", "") })), plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // 장르 파이
-  // 장르는 한 작품이 여러 개를 가지므로 도넛(전체의 비율)이 아니라 가로 막대로 표시한다.
+  // 장르 도넛. 한 작품이 장르를 여러 개 가지므로 분모는 "작품 수"가 아니라 "전체 장르 태그 수".
+  // 그래야 조각 비율의 합이 100%가 되어 원형 차트가 성립한다.
   const gTop = topN(byGenre, 12);
   if (gTop.labels.length) {
-    const gLabels = gTop.labels.filter(l => l !== "기타");
-    const gValues = gLabels.map(l => byGenre[l]);
+    const gTotal = gTop.values.reduce((a, b) => a + b, 0);
     _charts.push(new Chart($("#chartGenre"), {
-      type: "bar",
-      data: { labels: gLabels, datasets: [{ data: gValues, backgroundColor: "#8b5cf6", borderRadius: 6 }] },
+      type: "doughnut",
+      data: { labels: gTop.labels, datasets: [{ data: gTop.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: "#fff" }] },
       options: {
         ...commonOpts,
-        onClick: clickToFilter(l => ({ genre: l })),
-        indexAxis: "y",
+        onClick: clickToFilter(l => (l === "기타" ? null : { genre: l })),
         plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => `${c.parsed.x}개 작품` } }
-        },
-        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+          legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              label: (c) => `${c.label} ${c.parsed}개 (${(c.parsed / gTotal * 100).toFixed(1)}%)`
+            }
+          }
+        }
       }
     }));
   }
@@ -221,11 +223,12 @@ function renderStats() {
   }));
 
   // 별점
-  const rCount = [1, 2, 3, 4, 5].map(n => items.filter(i => i.rating === n).length);
+  // 소수 별점(4.5 등)은 올림해서 해당 구간에 넣는다 (예: 4.5 → ♥5 구간)
+  const rCount = [1, 2, 3, 4, 5].map(n => items.filter(i => i.rating && Math.ceil(i.rating) === n).length);
   _charts.push(new Chart($("#chartRating"), {
     type: "bar",
     data: { labels: ["♥1", "♥2", "♥3", "♥4", "♥5"], datasets: [{ data: rCount, backgroundColor: "#f43f5e", borderRadius: 6 }] },
-    options: { ...commonOpts, onClick: clickToFilter(l => ({ rating: String(l).replace(/\D/g, "") })), plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // 월별 추이
@@ -234,7 +237,7 @@ function renderStats() {
     type: "bar",
     data: {
       labels: monthLabelsShort,
-      datasets: [{ data: monthLabelsShort.map((_, idx) => byMonth[idx + 1] || 0), backgroundColor: "#8b5cf6", borderRadius: 6 }]
+      datasets: [{ data: monthLabelsShort.map((_, idx) => byMonth[idx + 1] || 0), backgroundColor: "#7bad48", borderRadius: 6 }]
     },
     options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));

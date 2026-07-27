@@ -446,8 +446,14 @@ function updateSyncPwStatus() {
 
 /* ---------- 탭 ---------- */
 function initTabs() {
+  // 탭마다 스크롤 위치를 기억해서, 돌아오면 보던 자리 그대로 (통계 ↔ 목록)
+  const scrollPos = { list: 0, stats: 0, settings: 0 };
+  let curTab = "list";
+
   $$(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
+      scrollPos[curTab] = window.scrollY;      // 떠나는 탭 위치 저장
+
       $$(".tab-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       const tab = btn.dataset.tab;
@@ -455,6 +461,10 @@ function initTabs() {
         $("#tab-" + t).classList.toggle("hidden", t !== tab);
       });
       if (tab === "stats") renderStats();
+      curTab = tab;
+
+      // 렌더 끝난 뒤 이전 위치로 복원
+      requestAnimationFrame(() => window.scrollTo(0, scrollPos[tab] || 0));
     });
   });
 }

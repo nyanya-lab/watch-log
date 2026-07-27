@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260727c">
+<link rel="stylesheet" href="style.css?v=20260727d">
 </head>
 <body>
 
@@ -16,13 +16,13 @@
 <div id="app">
 
   <!-- 헤더 -->
-  <header class="border-b border-slate-200 sticky top-0 z-30" style="background:linear-gradient(135deg,#eef2ff,#faf5ff)">
+  <header class="border-b border-slate-200 sticky top-0 z-30" style="background:linear-gradient(135deg,#eff7e6,#f4faee)">
     <div class="max-w-6xl mx-auto px-4">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center gap-3">
           <span class="text-2xl">🎬</span>
           <h1 class="text-lg font-bold text-slate-800">냐냐's Watch LOG</h1>
-          <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-bold shadow-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+          <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-bold shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
             <i class="fa-solid fa-film text-xs"></i><span id="totalCount">0</span>
           </span>
         </div>
@@ -46,13 +46,16 @@
         <div class="relative flex-1">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
           <input type="text" id="searchInput" placeholder="제목 · 원제 · 배우 · 감독 검색..."
-            class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-sm bg-white">
+            class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:border-lime-600 focus:ring-2 focus:ring-lime-100 outline-none text-sm bg-white">
         </div>
-        <button id="filterBtn" class="relative w-11 h-11 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition shrink-0" title="필터">
+        <button id="filterBtn" class="relative w-11 h-11 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-lime-50 hover:text-lime-700 transition shrink-0" title="필터">
           <i class="fa-solid fa-sliders"></i>
           <span id="filterDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500"></span>
         </button>
-        <button id="addBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+        <button id="clearFilterBtn" class="hidden w-11 h-11 rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition shrink-0" title="필터 모두 해제">
+          <i class="fa-solid fa-filter-circle-xmark"></i>
+        </button>
+        <button id="addBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
           <i class="fa-solid fa-plus mr-1"></i>등록
         </button>
       </div>
@@ -82,7 +85,7 @@
     <!-- ===== 설정 탭 ===== -->
     <section id="tab-settings" class="hidden space-y-5">
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-500"></i>TMDB 정보 일괄 채우기</h3>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-lime-700"></i>TMDB 정보 일괄 채우기</h3>
         <p class="text-sm text-slate-500 mb-3">포스터·장르·줄거리·출연진·평점·OTT 등을 자동으로 찾아 채웁니다.</p>
         <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mb-3">
           <input type="checkbox" id="enrichOverwrite" class="w-4 h-4 rounded">
@@ -107,8 +110,15 @@
             </button>
             <span id="updRating" class="text-xs font-medium text-slate-400"></span>
           </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button id="refreshCollectionBtn" class="px-4 py-2.5 rounded-lg border border-emerald-300 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 shrink-0">
+              <i class="fa-solid fa-layer-group mr-1"></i>시리즈 정보 가져오기
+            </button>
+            <span id="updCollection" class="text-xs font-medium text-slate-400"></span>
+          </div>
         </div>
-        <p class="text-xs text-slate-400 mt-2">OTT·평점은 시간이 지나면 바뀝니다. 위 버튼으로 그 정보만 최신화할 수 있어요.</p>
+        <p class="text-xs text-slate-400 mt-2">OTT·평점은 시간이 지나면 바뀝니다. 위 버튼으로 그 정보만 최신화할 수 있어요.<br>
+          <b>시리즈 정보</b>를 가져오면 해리포터·반지의제왕처럼 제목이 다른 시리즈도 카드 하나로 묶여 보입니다.</p>
         <div id="enrichStatus" class="text-sm mt-3 font-medium"></div>
         <div id="enrichBar" class="hidden mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
           <div id="enrichBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
@@ -116,29 +126,29 @@
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-key mr-2 text-indigo-500"></i>TMDB API 키</h3>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-key mr-2 text-lime-700"></i>TMDB API 키</h3>
         <p class="text-sm text-slate-500 mb-3">themoviedb.org에서 발급받은 v3 API 키를 입력하세요.</p>
         <div class="flex gap-2">
-          <input type="text" id="tmdbKeyInput" placeholder="TMDB API Key (v3)" class="flex-1 px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 text-sm">
-          <button id="saveTmdbKey" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">저장</button>
+          <input type="text" id="tmdbKeyInput" placeholder="TMDB API Key (v3)" class="flex-1 px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-lime-600 text-sm">
+          <button id="saveTmdbKey" class="px-4 py-2.5 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800">저장</button>
         </div>
         <div id="tmdbKeyStatus" class="text-sm mt-2 font-medium"></div>
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-lock mr-2 text-indigo-500"></i>동기화 비밀번호</h3>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-lock mr-2 text-lime-700"></i>동기화 비밀번호</h3>
         <p class="text-sm text-slate-500 mb-3">이 비밀번호가 곧 서버에서의 내 데이터 방이 됩니다. 다른 기기에서도 <b>같은 비밀번호</b>를 넣으면 동기화됩니다. 비밀번호는 이 기기에만 저장되고 코드(GitHub)에는 들어가지 않습니다.</p>
-        <button id="syncPwBtn" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+        <button id="syncPwBtn" class="px-4 py-2.5 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800">
           <i class="fa-solid fa-key mr-1"></i>비밀번호 설정 / 변경
         </button>
         <div id="syncPwStatus" class="text-sm mt-2 font-medium"></div>
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-cloud mr-2 text-indigo-500"></i>Firebase 동기화</h3>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-cloud mr-2 text-lime-700"></i>Firebase 동기화</h3>
         <p class="text-sm text-slate-500 mb-3">평소에는 자동 저장됩니다. 아래는 강제 저장·복구용입니다.</p>
         <div class="flex flex-wrap gap-2">
-          <button id="pushBtn" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+          <button id="pushBtn" class="px-4 py-2.5 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800">
             <i class="fa-solid fa-cloud-arrow-up mr-1"></i>서버에 저장
           </button>
           <button id="pullBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
@@ -149,7 +159,7 @@
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-database mr-2 text-indigo-500"></i>데이터 관리</h3>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-database mr-2 text-lime-700"></i>데이터 관리</h3>
         <div class="flex flex-wrap gap-2 mt-3">
           <button id="exportBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
             <i class="fa-solid fa-file-export mr-1"></i>JSON 내보내기
@@ -172,7 +182,7 @@
 <div id="filterModal" class="hidden fixed inset-0 bg-black/50 z-40 overflow-y-auto p-4">
   <div class="bg-white rounded-2xl max-w-md mx-auto my-8">
     <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-sliders mr-2 text-indigo-500"></i>필터 · 정렬</h3>
+      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-sliders mr-2 text-lime-700"></i>필터 · 정렬</h3>
       <button id="closeFilter" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="p-5 space-y-4">
@@ -200,14 +210,14 @@
           <option value="rating">별점 높은순</option>
         </select>
       </div>
-      <div id="filterPreview" class="text-sm font-semibold text-indigo-600 text-center pt-1"></div>
+      <div id="filterPreview" class="text-sm font-semibold text-lime-700 text-center pt-1"></div>
     </div>
     <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
       <button id="resetFilter" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
         <i class="fa-solid fa-rotate-left mr-1"></i>초기화
       </button>
       <div class="flex-1"></div>
-      <button id="applyFilterBtn" class="px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">확인</button>
+      <button id="applyFilterBtn" class="px-5 py-2.5 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800">확인</button>
     </div>
   </div>
 </div>
@@ -223,10 +233,10 @@
 
       <!-- TMDB 검색 -->
       <div id="tmdbSearchArea">
-        <label class="form-label"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-indigo-500"></i>TMDB에서 정보 가져오기</label>
+        <label class="form-label"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-lime-700"></i>TMDB에서 정보 가져오기</label>
         <div class="flex gap-2">
-          <input type="text" id="tmdbQuery" placeholder="영화/드라마 제목 입력" class="flex-1 px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 text-sm">
-          <button id="tmdbSearchBtn" class="px-4 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 whitespace-nowrap">
+          <input type="text" id="tmdbQuery" placeholder="영화/드라마 제목 입력" class="flex-1 px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-lime-600 text-sm">
+          <button id="tmdbSearchBtn" class="px-4 py-2.5 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800 whitespace-nowrap">
             <i class="fa-solid fa-magnifying-glass mr-1"></i>검색
           </button>
         </div>
@@ -234,7 +244,7 @@
       </div>
 
       <!-- 선택된 작품 -->
-      <div id="selectedInfo" class="hidden rounded-xl p-4 flex gap-4 border" style="background:linear-gradient(135deg,#eef2ff,#fdf4ff);border-color:#c7d2fe">
+      <div id="selectedInfo" class="hidden rounded-xl p-4 flex gap-4 border" style="background:linear-gradient(135deg,#eff7e6,#f2faf0);border-color:#cfe3b6">
         <img id="selPoster" class="w-20 rounded-lg bg-slate-200 object-cover self-start shadow-sm" alt="">
         <div class="flex-1 min-w-0">
           <div id="selTitle" class="font-bold text-slate-800"></div>
@@ -242,7 +252,7 @@
           <div id="selGenres" class="flex flex-wrap gap-1 mt-2"></div>
           <div id="selCast" class="text-xs text-slate-500 mt-2 font-medium"></div>
           <div id="selOverview" class="text-xs text-slate-500 mt-2 leading-relaxed line-clamp-3"></div>
-          <button id="clearSelection" class="text-xs text-indigo-600 font-semibold mt-2 hover:underline">
+          <button id="clearSelection" class="text-xs text-lime-700 font-semibold mt-2 hover:underline">
             <i class="fa-solid fa-rotate-left mr-1"></i>다시 검색 / 직접 입력
           </button>
         </div>
@@ -266,18 +276,14 @@
           <input type="text" id="fCountry" class="form-input" placeholder="한국">
         </div>
 
-        <!-- OTT + 영화관 -->
+        <!-- 어디서 봤나요 — 스트리밍 목록은 TMDB가 자동으로 채우므로 영화관/기타만 직접 기록 -->
         <div class="sm:col-span-2">
           <label class="form-label"><i class="fa-solid fa-tv mr-1 text-emerald-400"></i>어디서 봤나요?</label>
-          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer mb-2 px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 w-fit">
-            <input type="checkbox" id="fTheater" class="w-4 h-4 rounded"> 🎦 영화관에서 봤어요
+          <label class="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 w-fit">
+            <input type="checkbox" id="fTheater" class="w-4 h-4 rounded"><i class="fa-solid fa-film text-slate-400"></i> 영화관에서 봤어요
           </label>
-          <div id="ottWrap">
-            <select id="fOtt" class="form-input">
-              <option>넷플릭스</option><option>영화관</option><option>웨이브</option>
-              <option>티빙</option><option>쿠팡플레이</option><option>디즈니+</option>
-              <option>왓챠</option><option>애플TV+</option><option>기타</option>
-            </select>
+          <div id="ottWrap" class="mt-2">
+            <input type="text" id="fOtt" class="form-input" placeholder="기타 (직접 입력 — 비워도 됩니다)">
             <div id="ottHint" class="hidden text-xs font-semibold text-emerald-600 mt-1.5"></div>
           </div>
         </div>
@@ -305,14 +311,14 @@
       </div>
 
       <div>
-        <label class="form-label"><i class="fa-solid fa-star mr-1 text-yellow-400"></i>내 별점</label>
-        <div id="starPicker" class="flex gap-1 items-center">
-          <button class="star-btn" data-v="1"><i class="fa-solid fa-star"></i></button>
-          <button class="star-btn" data-v="2"><i class="fa-solid fa-star"></i></button>
-          <button class="star-btn" data-v="3"><i class="fa-solid fa-star"></i></button>
-          <button class="star-btn" data-v="4"><i class="fa-solid fa-star"></i></button>
-          <button class="star-btn" data-v="5"><i class="fa-solid fa-star"></i></button>
-          <button id="clearStar" class="ml-2 text-xs text-slate-400 font-medium hover:text-slate-600">지우기</button>
+        <label class="form-label"><i class="fa-solid fa-heart mr-1 text-rose-400"></i>내 별점 <span class="text-slate-400 font-medium">(5점 만점 · 소수점 가능)</span></label>
+        <div class="flex items-center gap-2">
+          <div class="relative w-32">
+            <i class="fa-solid fa-heart absolute left-3 top-1/2 -translate-y-1/2 text-rose-400 text-sm"></i>
+            <input type="number" id="fRating" class="form-input pl-9" min="0" max="5" step="0.1" placeholder="예: 4.5">
+          </div>
+          <span class="text-sm font-semibold text-slate-400">/ 5</span>
+          <button id="clearStar" class="ml-1 text-xs text-slate-400 font-medium hover:text-slate-600">지우기</button>
         </div>
       </div>
 
@@ -345,7 +351,7 @@
       </div>
 
       <div>
-        <label class="form-label"><i class="fa-solid fa-comment-dots mr-1 text-indigo-400"></i>한줄평</label>
+        <label class="form-label"><i class="fa-solid fa-comment-dots mr-1 text-lime-600"></i>한줄평</label>
         <textarea id="fReview" rows="3" class="form-input resize-none" placeholder="느낀 점을 적어보세요"></textarea>
       </div>
     </div>
@@ -356,7 +362,7 @@
       </button>
       <div class="flex-1"></div>
       <button id="cancelBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">취소</button>
-      <button id="saveBtn" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold shadow-sm" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">저장</button>
+      <button id="saveBtn" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">저장</button>
     </div>
   </div>
 </div>
@@ -370,7 +376,7 @@
 <div id="syncPwModal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl w-full max-w-md">
     <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-lock mr-2 text-indigo-500"></i>동기화 비밀번호</h3>
+      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-lock mr-2 text-lime-700"></i>동기화 비밀번호</h3>
       <button id="closeSyncPw" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="p-5 space-y-4">
@@ -381,13 +387,13 @@
       <div>
         <label class="form-label">비밀번호 (아무 문자열이나 가능)</label>
         <input type="password" id="syncPwInput" placeholder="예: nyanya-watch-2026"
-          class="w-full px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-indigo-500 text-sm font-mono">
+          class="w-full px-3 py-2.5 rounded-lg border border-slate-300 outline-none focus:border-lime-600 text-sm font-mono">
       </div>
     </div>
     <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
       <div class="flex-1"></div>
       <button id="cancelSyncPw" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">취소</button>
-      <button id="saveSyncPwBtn" class="px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">저장하고 동기화</button>
+      <button id="saveSyncPwBtn" class="px-5 py-2.5 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800">저장하고 동기화</button>
     </div>
   </div>
 </div>
@@ -410,10 +416,10 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260727c"></script>
-<script src="core.js?v=20260727c"></script>
-<script src="tmdb.js?v=20260727c"></script>
-<script src="watchlog.js?v=20260727c"></script>
-<script src="stats.js?v=20260727c"></script>
+<script src="seed-data.js?v=20260727d"></script>
+<script src="core.js?v=20260727d"></script>
+<script src="tmdb.js?v=20260727d"></script>
+<script src="watchlog.js?v=20260727d"></script>
+<script src="stats.js?v=20260727d"></script>
 </body>
 </html>

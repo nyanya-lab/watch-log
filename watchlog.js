@@ -4,6 +4,7 @@
 
 const Filters = {
   q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
+  person: "",                       // 배우/감독 (배지 클릭 전용)
   sort: "date-desc", pendingOnly: false
 };
 
@@ -22,6 +23,7 @@ function initWatchlog() {
 
   /* 필터 팝업 */
   $("#filterBtn").addEventListener("click", openFilterModal);
+  $("#clearFilterBtn").addEventListener("click", () => { clearAllFilters(); toast("필터를 해제했습니다"); });
   $("#closeFilter").addEventListener("click", closeFilterModal);
   $("#applyFilterBtn").addEventListener("click", closeFilterModal);
   $("#filterModal").addEventListener("click", e => { if (e.target.id === "filterModal") closeFilterModal(); });
@@ -55,11 +57,8 @@ function initWatchlog() {
 
   $("#loadMoreBtn").addEventListener("click", () => { State.page++; renderCards(); });
 
-  /* 별점 */
-  $$("#starPicker .star-btn").forEach(btn => {
-    btn.addEventListener("click", () => setStars(+btn.dataset.v));
-  });
-  $("#clearStar").addEventListener("click", () => setStars(0));
+  /* 별점 (숫자 입력, 5점 만점 소수 가능) */
+  $("#clearStar").addEventListener("click", () => { $("#fRating").value = ""; });
 
   /* 스테퍼 */
   $$(".step-btn").forEach(btn => {
@@ -76,20 +75,15 @@ function initWatchlog() {
     });
   });
 
-  /* 영화관 체크박스 */
+  /* 영화관 체크박스 — 체크하면 기타 입력칸은 잠근다 */
   $("#fTheater").addEventListener("change", e => {
     const on = e.target.checked;
     const ottWrap = $("#ottWrap");
     if (on) {
-      $("#fOtt").value = "영화관";
+      $("#fOtt").value = "";
       ottWrap.classList.add("opacity-40", "pointer-events-none");
-      $("#ottHint").classList.add("hidden");
     } else {
       ottWrap.classList.remove("opacity-40", "pointer-events-none");
-      if ($("#fOtt").value === "영화관") $("#fOtt").value = "넷플릭스";
-      // TMDB OTT 후보 재적용
-      const d = State.selectedTmdb;
-      if (d && d.otts && d.otts.length) setOttOptions(d.otts, d.otts[0]);
     }
   });
 
@@ -129,6 +123,10 @@ function matchesQuery(i, q) {
    (자동 매칭 과정에서 속편들이 1편과 같은 tmdbId를 물고 온 경우가 있어
     — 예: 반지의 제왕 3부작이 모두 tmdbId 122 — 그대로 묶으면 다른 작품이 합쳐진다) */
 function groupKeyOf(i) {
+  // 1순위: TMDB 공식 시리즈(컬렉션) — 제목이 전혀 달라도 같은 시리즈면 묶인다
+  //        (해리포터 5편, 반지의 제왕 3부작 등). 정보 채우기를 돌려야 채워짐.
+  if (i.collectionId) return "c" + i.collectionId;
+  // 2순위: 같은 작품의 시즌들 (tmdbId + 제목)
   return i.tmdbId ? "t" + i.tmdbId + "|" + (i.title || "").trim() : "one:" + i.id;
 }
 function groupItems(list) {
@@ -147,21 +145,27 @@ function groupItems(list) {
 /* 상세용: 같은 작품의 모든 시즌을 시즌번호 순으로 */
 function seasonsOf(item) {
   const key = groupKeyOf(item);
-  const all = item.tmdbId
+  const all = (item.tmdbId || item.collectionId)
     ? State.items.filter(x => groupKeyOf(x) === key)
     : [item];
   const num = (x) => parseInt(String(x.season || "").replace(/\D/g, "")) || 0;
-  return all.slice().sort((a, b) => num(a) - num(b) || (a.startDate || "").localeCompare(b.startDate || ""));
+  // 시즌번호 → 개봉/방영일 → 본 날짜 순 (시리즈는 시즌번호가 없을 수 있어 개봉일로 정렬)
+  return all.slice().sort((a, b) =>
+    num(a) - num(b) ||
+    (a.releaseDate || "").localeCompare(b.releaseDate || "") ||
+    (a.startDate || "").localeCompare(b.startDate || ""));
 }
 
-/* ---------- 내 별점: 하트 아이콘 5개 ---------- */
-function hearts(n) {
-  n = n || 0;
-  let out = "";
-  for (let k = 1; k <= 5; k++) {
-    out += `<i class="fa-solid fa-heart wl-heart${k <= n ? " on" : ""}"></i>`;
-  }
-  return `<span class="wl-hearts">${out}</span>`;
+/* ---------- 내 별점: 하트 하나 + 숫자 (5점 만점, 소수점 가능) ---------- */
+function fmtRating(n) {
+  const v = Number(n);
+  if (!v) return "";
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+}
+function hearts(n, big) {
+  const v = fmtRating(n);
+  if (!v) return "";
+  return `<span class="wl-hearts${big ? " lg" : ""}"><i class="fa-solid fa-heart"></i>${v}</span>`;
 }
 
 /* ---------- 장르 표시 처리 ----------
@@ -225,15 +229,13 @@ function ottBadges(i) {
 /* ---------- OTT 옵션 세팅 (자동판별 후보 + 폴백) ---------- */
 const OTT_ALL = ["넷플릭스", "영화관", "웨이브", "티빙", "쿠팡플레이", "디즈니+", "왓챠", "애플TV+", "기타"];
 
+/* 스트리밍 목록은 TMDB가 자동으로 채우므로(otts) 힌트만 보여준다.
+   직접 기록하는 건 영화관 체크 또는 기타 입력뿐. */
 function setOttOptions(candidates, selected) {
-  const sel = $("#fOtt");
   const hint = $("#ottHint");
-  // 후보 + 전체를 합쳐서 항상 모든 선택지 유지
-  const merged = [...new Set([...(candidates || []), ...OTT_ALL])];
-  sel.innerHTML = merged.map(o => `<option ${o === selected ? "selected" : ""}>${o}</option>`).join("");
-
+  if (!hint) return;
   if (candidates && candidates.length) {
-    hint.textContent = `TMDB 자동판별: ${candidates.join(", ")} (원하면 직접 변경)`;
+    hint.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>TMDB 자동판별: ${esc(candidates.join(", "))} — 따로 입력 안 해도 됩니다`;
     hint.classList.remove("hidden");
   } else {
     hint.classList.add("hidden");
@@ -282,14 +284,28 @@ function buildFilterOptions() {
 
 function hasActiveFilter() {
   return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
-            Filters.genre || Filters.rating || Filters.sort !== "date-desc");
+            Filters.genre || Filters.rating || Filters.person ||
+            Filters.q || Filters.pendingOnly || Filters.sort !== "date-desc");
+}
+
+/* 모든 필터 해제 (검색어·미등록 토글 포함) */
+function clearAllFilters() {
+  Object.assign(Filters, {
+    q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
+    person: "", sort: "date-desc", pendingOnly: false
+  });
+  const s = $("#searchInput"); if (s) s.value = "";
+  ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"]
+    .forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
+  const sb = $("#sortBy"); if (sb) sb.value = "date-desc";
+  applyFilters();
 }
 
 /* 통계 차트 클릭 → 해당 조건으로 목록 탭 조회 */
 function jumpToList(patch) {
   const backup = { ...Filters };
   Object.assign(Filters,
-    { type: "", country: "", ott: "", year: "", genre: "", rating: "", pendingOnly: false },
+    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false },
     patch);
   applyFilters();
 
@@ -312,8 +328,17 @@ function jumpToList(patch) {
   // 목록 탭으로 전환
   const listTab = document.querySelector('.tab-btn[data-tab="list"]');
   if (listTab) listTab.click();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  // 탭 전환의 스크롤 복원(rAF) 뒤에 실행되도록 한 프레임 미룬다 — 새 조회 결과는 맨 위부터 보여준다
+  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
+
+/* 배우·감독 배지 클릭 → 그 사람 작품만 조회 */
+function filterByPerson(name) {
+  $("#detailModal").classList.add("hidden");
+  jumpToList({ person: name });
+  toast(`${name} 작품 보는 중`);
+}
+window.filterByPerson = filterByPerson;
 
 /* ---------- 필터 적용 ---------- */
 function applyFilters() {
@@ -327,6 +352,7 @@ function applyFilters() {
     if (F.year && (i.startDate || "").slice(0, 4) !== F.year) return false;
     if (F.genre && !visibleGenres(i.genres).includes(F.genre)) return false;
     if (F.rating && (i.rating || 0) !== +F.rating) return false;
+    if (F.person && !(i.director === F.person || (i.cast || []).some(c => c.name === F.person))) return false;
     return true;
   });
 
@@ -363,7 +389,9 @@ function renderHeaderCount() {
   }
   pb.classList.toggle("hidden", pending === 0 && !Filters.pendingOnly);
 
-  $("#filterDot").classList.toggle("hidden", !hasActiveFilter());
+  const active = hasActiveFilter();
+  $("#filterDot").classList.toggle("hidden", !active);
+  $("#clearFilterBtn").classList.toggle("hidden", !active);   // 필터 걸렸을 때만 초기화 버튼 노출
   const shown = (State.groups || []).length;
   $("#resultCount").textContent =
     State.filtered.length === total ? "" : `${shown}개 표시`;
@@ -411,6 +439,9 @@ function renderCards() {
           ${visibleGenres(i.genres).slice(0, 3).map(g2 => `<span class="badge badge-genre">${esc(g2)}</span>`).join("")}
         </div>` : ""}
         <div class="wl-meta">${dates || "날짜 없음"}</div>
+        ${(i.releaseDate || i.releaseYear) ? `<div class="wl-meta" style="opacity:.8">
+          <i class="fa-solid fa-clapperboard mr-1"></i>${i.type === "영화" ? "개봉" : "방영"} ${i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear}
+        </div>` : ""}
       </div>
     </div>`;
   }).join("");
@@ -472,20 +503,40 @@ function openDetail(id) {
        </div>
        ${reviewBox(i)}`;
 
+  /* 관람등급: 숫자만 저장돼 있어(15, 12, 19...) 회차와 헷갈리므로 "15세"로 풀어서 제목 옆에 표시 */
+  const certLabel = (c) => {
+    if (!c) return "";
+    const s = String(c).trim();
+    if (/^\d+$/.test(s)) return s + "세";
+    if (/^all$/i.test(s)) return "전체";
+    return s;
+  };
+
   const infoChips = [];
   if (i.voteAverage) infoChips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>`);
-  if (i.cert) infoChips.push(`<span class="badge badge-cert">${esc(i.cert)}</span>`);
   if (i.runtime) infoChips.push(`<span class="badge badge-time"><i class="fa-solid fa-clock mr-1"></i>${i.runtime}분</span>`);
-  if (i.totalEpisodes) infoChips.push(`<span class="badge badge-time">${i.totalEpisodes}화</span>`);
+  if (i.totalEpisodes) infoChips.push(`<span class="badge badge-time"><i class="fa-solid fa-list-ol mr-1"></i>총 ${i.totalEpisodes}화</span>`);
+
+  /* 배우·감독 배지는 클릭하면 그 사람 작품만 조회된다 */
+  const personBadge = (name, cls, title) =>
+    `<span class="badge ${cls} badge-link" title="${esc(title || "")}클릭하면 이 사람 작품만 봅니다"
+       onclick="filterByPerson('${esc(name).replace(/'/g, "\\'")}')">${esc(name)}</span>`;
+
+  const directorHtml = i.director
+    ? `<div class="text-xs font-medium text-slate-500 mt-2 flex items-center gap-1.5 flex-wrap">
+         <i class="fa-solid fa-clapperboard text-slate-400"></i>감독
+         ${personBadge(i.director, "badge-genre")}
+       </div>` : "";
 
   const castHtml = (i.cast || []).length
     ? `<div class="mt-4 border-t border-slate-100 pt-4">
          <div class="text-xs font-semibold text-slate-500 mb-2"><i class="fa-solid fa-users mr-1 text-pink-400"></i>출연진</div>
          <div class="flex flex-wrap gap-1.5">
-           ${i.cast.map(c => `<span class="badge badge-cast" title="${esc(c.character)}">${esc(c.name)}</span>`).join("")}
+           ${i.cast.map(c => personBadge(c.name, "badge-cast", c.character ? c.character + " · " : "")).join("")}
          </div>
-         ${i.director ? `<div class="text-xs font-medium text-slate-500 mt-2"><i class="fa-solid fa-clapperboard mr-1 text-slate-400"></i>감독 · ${esc(i.director)}</div>` : ""}
-       </div>` : (i.director ? `<div class="mt-4 border-t border-slate-100 pt-4 text-xs font-medium text-slate-500"><i class="fa-solid fa-clapperboard mr-1"></i>감독 · ${esc(i.director)}</div>` : "");
+         ${directorHtml}
+       </div>`
+    : (i.director ? `<div class="mt-4 border-t border-slate-100 pt-4">${directorHtml}</div>` : "");
 
   const header = i.backdrop
     ? `<div class="relative h-32 bg-cover bg-center" style="background-image:url('${i.backdrop}')">
@@ -507,9 +558,12 @@ function openDetail(id) {
           ? `<img src="${i.poster}" class="w-28 rounded-lg object-cover self-start shadow-md" alt="">`
           : `<div class="w-28 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
         <div class="flex-1 min-w-0 ${i.backdrop ? "pt-12" : ""}">
-          <h4 class="text-lg font-bold text-slate-800 leading-snug">${esc(i.title)}</h4>
+          <h4 class="text-lg font-bold text-slate-800 leading-snug">
+            ${esc(i.title)}
+            ${i.cert ? `<span class="badge badge-cert align-middle ml-1">${esc(certLabel(i.cert))}</span>` : ""}
+          </h4>
           ${i.originalTitle && i.originalTitle !== i.title ? `<div class="text-xs text-slate-400 font-medium">${esc(i.originalTitle)}</div>` : ""}
-          ${(!multiSeason && i.rating) ? `<div class="mt-1 text-lg">${hearts(i.rating)}</div>` : ""}
+          ${(!multiSeason && i.rating) ? `<div class="mt-1">${hearts(i.rating, true)}</div>` : ""}
           <div class="flex flex-wrap gap-1 mt-2">
             ${multiSeason
               ? `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>시즌 ${seasons.length}개</span>`
@@ -541,18 +595,18 @@ function openDetail(id) {
     <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
       <div class="flex-1"></div>
       ${multiSeason ? "" : `<button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
-        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
         <i class="fa-solid fa-pen mr-1"></i>수정</button>`}
     </div>`;
 
   $("#detailModal").classList.remove("hidden");
 }
 
-/* ---------- 별점 ---------- */
-let _stars = 0;
-function setStars(n) {
-  _stars = n;
-  $$("#starPicker .star-btn").forEach(b => b.classList.toggle("on", +b.dataset.v <= n));
+/* ---------- 별점 (숫자 입력) ---------- */
+function readRating() {
+  const v = parseFloat($("#fRating").value);
+  if (!isFinite(v) || v <= 0) return null;
+  return Math.min(5, Math.round(v * 10) / 10);   // 5점 만점, 소수 첫째자리까지
 }
 
 /* ---------- 등록/수정 모달 ---------- */
@@ -576,15 +630,15 @@ function openEdit(id) {
     $("#fTitle").value = i.title || "";
     $("#fType").value = i.type || "영화";
     $("#fCountry").value = i.country || "";
-    $("#fOtt").value = i.ott || "넷플릭스";
     $("#fTheater").checked = (i.ott === "영화관");
+    $("#fOtt").value = (i.ott === "영화관") ? "" : (i.ott || "");
     if (i.ott === "영화관") $("#ottWrap").classList.add("opacity-40", "pointer-events-none");
     $("#fCount").value = i.watchCount || 1;
     $("#fSeason").value = parseInt(String(i.season || "").replace(/\D/g, "")) || 0;
     $("#fStart").value = i.startDate || "";
     $("#fEnd").value = i.endDate || "";
     $("#fReview").value = i.review || "";
-    setStars(i.rating || 0);
+    $("#fRating").value = i.rating || "";
 
     const hasRe = !!i.lastWatchStart;
     $("#rewatchToggle").checked = hasRe;
@@ -616,7 +670,7 @@ function openEdit(id) {
     $("#fOtt").value = "넷플릭스";
     $("#fCount").value = 1;
     $("#fSeason").value = 0;
-    setStars(0);
+    $("#fRating").value = "";
     $("#rewatchToggle").checked = false;
     $("#rewatchFields").classList.add("hidden");
     $("#deleteBtn").classList.add("hidden");
@@ -643,7 +697,7 @@ function saveItem() {
   const lastS = useRe ? ($("#fLastStart").value || null) : null;
   const lastE = useRe ? ($("#fLastEnd").value || lastS) : null;
   const seasonNum = parseInt($("#fSeason").value) || 0;
-  const ott = $("#fTheater").checked ? "영화관" : $("#fOtt").value;
+  const ott = $("#fTheater").checked ? "영화관" : ($("#fOtt").value.trim() || null);
 
   const base = {
     title,
@@ -652,7 +706,7 @@ function saveItem() {
     ott,
     season: seasonNum > 0 ? "S" + seasonNum : null,
     watchCount: parseInt($("#fCount").value) || 1,
-    rating: _stars || null,
+    rating: readRating(),
     startDate: start,
     endDate: end,
     lastWatchStart: lastS,
@@ -669,7 +723,8 @@ function saveItem() {
       cast: t.cast || [], director: t.director || "",
       runtime: t.runtime, totalEpisodes: t.totalEpisodes, totalSeasons: t.totalSeasons,
       cert: t.cert, voteAverage: t.voteAverage, companies: t.companies || [],
-      originalTitle: t.originalTitle, otts: t.otts || []
+      originalTitle: t.originalTitle, otts: t.otts || [],
+      collectionId: t.collectionId || null, collectionName: t.collectionName || ""
     });
   }
 
@@ -740,6 +795,7 @@ function initSettings() {
   $("#enrichBtn").addEventListener("click", runEnrichAll);
   $("#refreshOttBtn").addEventListener("click", runRefreshOtts);
   $("#refreshRatingBtn").addEventListener("click", runRefreshRatings);
+  $("#refreshCollectionBtn").addEventListener("click", runRefreshCollections);
   renderUpdInfo();
 
   $("#exportBtn").addEventListener("click", () => {
@@ -811,6 +867,7 @@ function renderUpdInfo() {
   set("updEnrich", u.enrich);
   set("updOtt", u.ott);
   set("updRating", u.rating);
+  set("updCollection", u.collection);
 }
 
 /* ---------- 일괄 정보 채우기 ---------- */
@@ -848,8 +905,14 @@ async function runEnrichAll() {
           totalEpisodes: d.totalEpisodes, totalSeasons: d.totalSeasons,
           cert: d.cert, voteAverage: d.voteAverage, companies: d.companies,
           originalTitle: d.originalTitle, otts: d.otts || [],
+          collectionId: d.collectionId || null, collectionName: d.collectionName || "",
           country: i.country || d.country
         });
+        // 시즌 정보가 없으면 제목에서 자동 추출 (예: "킹덤 시즌2", "S2", "2기")
+        if (!i.season) {
+          const m = String(i.title).match(/(?:시즌|season|s|파트|part)\s*(\d+)|(\d+)\s*기/i);
+          if (m) i.season = "S" + (m[1] || m[2]);
+        }
         // OTT가 비어있고 영화관이 아니면 자동판별 첫번째 적용
         if ((!i.ott || i.ott === "기타") && i.ott !== "영화관" && d.otts && d.otts.length) {
           i.ott = d.otts[0];
@@ -915,6 +978,50 @@ async function runRefreshOtts() {
   status.textContent = `OTT 갱신 완료 — 변경 ${changed}개${fail ? `, 실패 ${fail}개` : ""}`;
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast(`OTT 정보 갱신 완료`, "success");
+}
+
+/* ---------- 시리즈(TMDB 컬렉션) 정보만 가져오기 ----------
+   제목이 달라도 같은 시리즈면 묶이도록 collectionId를 채운다. 영화에만 존재. */
+async function runRefreshCollections() {
+  if (_enriching) { toast("이미 진행 중입니다"); return; }
+  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const targets = State.items.filter(i => i.tmdbId);
+  if (!targets.length) { toast("갱신할 항목이 없습니다", "success"); return; }
+  if (!confirm(`${targets.length}개 항목의 시리즈(컬렉션) 정보를 가져옵니다.`)) return;
+
+  _enriching = true;
+  const status = $("#enrichStatus");
+  const bar = $("#enrichBar");
+  const fill = $("#enrichBarFill");
+  bar.classList.remove("hidden");
+
+  let found = 0, fail = 0;
+  for (let n = 0; n < targets.length; n++) {
+    const i = targets[n];
+    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
+    status.className = "text-sm mt-3 font-medium text-slate-600";
+    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
+
+    const mediaType = i.type === "영화" ? "movie" : "tv";
+    try {
+      const d = await tmdbDetail(i.tmdbId, mediaType);
+      i.collectionId = d.collectionId || null;
+      i.collectionName = d.collectionName || "";
+      if (i.collectionId) found++;
+    } catch { fail++; }
+
+    if (n % 10 === 9) saveLocal(true);
+    await new Promise(r => setTimeout(r, 260));
+  }
+
+  saveLocal();
+  applyFilters();
+  _enriching = false;
+  markUpd("collection");
+  status.textContent = `시리즈 정보 완료 — ${found}개 작품이 시리즈에 속함${fail ? `, 실패 ${fail}개` : ""}`;
+  status.className = "text-sm mt-3 font-medium text-emerald-600";
+  toast("시리즈 정보 가져오기 완료", "success");
 }
 
 /* ---------- 평점(TMDB voteAverage)만 갱신 ---------- */
