@@ -6,12 +6,31 @@ const Filters = {
   q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
   person: "",                       // 배우/감독 (배지 클릭 전용)
   sort: "date-desc", pendingOnly: false,
-  noSeasonOnly: false               // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
+  noSeasonOnly: false,              // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
+  dupOnly: false                    // 제목이 다른데 tmdbId가 같은 항목만 (매칭 오류 의심)
 };
 
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
 function needsSeason(i) {
   return !i.season && (i.totalSeasons || 0) > 1;
+}
+
+/* 제목이 다른데 tmdbId가 같은 항목 = 자동 매칭 오류 의심.
+   (속편이 1편 정보를 물고 오면 포스터·장르·평점이 전부 1편 것이 된다)
+   시즌은 원래 같은 tmdbId를 공유하므로, 제목이 서로 다른 경우만 잡는다. */
+function dupTmdbIdSet() {
+  const titlesById = new Map();
+  State.items.forEach(i => {
+    if (!i.tmdbId) return;
+    if (!titlesById.has(i.tmdbId)) titlesById.set(i.tmdbId, new Set());
+    titlesById.get(i.tmdbId).add((i.title || "").trim());
+  });
+  const dup = new Set();
+  titlesById.forEach((titles, id) => { if (titles.size > 1) dup.add(id); });
+  return dup;
+}
+function isDupTmdb(i) {
+  return !!(i.tmdbId && State._dupIds && State._dupIds.has(i.tmdbId));
 }
 
 function initWatchlog() {
@@ -59,6 +78,7 @@ function initWatchlog() {
   $("#pendingBtn").addEventListener("click", () => {
     Filters.pendingOnly = !Filters.pendingOnly;
     Filters.noSeasonOnly = false;
+    Filters.dupOnly = false;
     applyFilters();
   });
 
@@ -66,6 +86,15 @@ function initWatchlog() {
   $("#noSeasonBtn").addEventListener("click", () => {
     Filters.noSeasonOnly = !Filters.noSeasonOnly;
     Filters.pendingOnly = false;
+    Filters.dupOnly = false;
+    applyFilters();
+  });
+
+  /* 매칭 확인(중복 tmdbId) 토글 */
+  $("#dupBtn").addEventListener("click", () => {
+    Filters.dupOnly = !Filters.dupOnly;
+    Filters.pendingOnly = false;
+    Filters.noSeasonOnly = false;
     applyFilters();
   });
 
@@ -299,7 +328,7 @@ function buildFilterOptions() {
 function hasActiveFilter() {
   return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
             Filters.genre || Filters.rating || Filters.person ||
-            Filters.q || Filters.pendingOnly || Filters.noSeasonOnly ||
+            Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.dupOnly ||
             Filters.sort !== "date-desc");
 }
 
@@ -307,7 +336,7 @@ function hasActiveFilter() {
 function clearAllFilters() {
   Object.assign(Filters, {
     q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
-    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false
+    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, dupOnly: false
   });
   const s = $("#searchInput"); if (s) s.value = "";
   ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"]
@@ -320,7 +349,7 @@ function clearAllFilters() {
 function jumpToList(patch) {
   const backup = { ...Filters };
   Object.assign(Filters,
-    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false },
+    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, dupOnly: false },
     patch);
   applyFilters();
 
@@ -358,9 +387,11 @@ window.filterByPerson = filterByPerson;
 /* ---------- 필터 적용 ---------- */
 function applyFilters() {
   const F = Filters;
+  State._dupIds = dupTmdbIdSet();     // 매 조회마다 한 번만 계산
   let list = State.items.filter(i => {
     if (F.pendingOnly && i.tmdbId) return false;
     if (F.noSeasonOnly && !needsSeason(i)) return false;
+    if (F.dupOnly && !isDupTmdb(i)) return false;
     if (F.q && !matchesQuery(i, F.q)) return false;
     if (F.type && i.type !== F.type) return false;
     if (F.country && i.country !== F.country) return false;
@@ -417,6 +448,22 @@ function renderHeaderCount() {
       nb.innerHTML = `<i class="fa-solid fa-layer-group mr-1.5"></i>시즌 미기록 ${noSeason}개`;
     }
     nb.classList.toggle("hidden", noSeason === 0 && !Filters.noSeasonOnly);
+  }
+
+  // 매칭 확인 버튼 (제목 다른데 tmdbId 같음 — 0개면 숨김)
+  const dupIds = dupTmdbIdSet();
+  const dupCount = State.items.filter(i => i.tmdbId && dupIds.has(i.tmdbId)).length;
+  const db = $("#dupBtn");
+  if (db) {
+    if (Filters.dupOnly) {
+      db.className = "px-3.5 py-2 rounded-lg border border-rose-500 bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition";
+      db.innerHTML = `<i class="fa-solid fa-xmark mr-1.5"></i>매칭 확인 ${dupCount}개 보는 중`;
+    } else {
+      db.className = "px-3.5 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition";
+      db.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1.5"></i>매칭 확인 ${dupCount}개`;
+    }
+    db.title = "제목이 다른데 TMDB 작품이 같음 — 자동 매칭 오류 의심";
+    db.classList.toggle("hidden", dupCount === 0 && !Filters.dupOnly);
   }
 
   const active = hasActiveFilter();
