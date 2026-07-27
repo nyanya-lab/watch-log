@@ -125,9 +125,12 @@ textarea.form-input { height: auto; }
   color: #fff; font-size: 28px;
 }
 
-/* 포스터 위 오버레이 (평점=우상단, 시즌=좌상단) */
-.wl-vote {
+/* 포스터 위 오버레이 (우상단=TMDB평점+내 하트 세로 스택, 좌상단=시즌) */
+.wl-tr {
   position: absolute; top: 7px; right: 7px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+.wl-vote {
   background: rgba(255,255,255,.92);
   color: #c07806; font-size: 11px; font-weight: 700;
   padding: 2px 7px; border-radius: 999px;
@@ -135,6 +138,13 @@ textarea.form-input { height: auto; }
   box-shadow: 0 1px 4px rgba(0,0,0,.15);
 }
 .wl-vote i { color: #f5b400; }
+.wl-myrate {
+  background: rgba(255,255,255,.92);
+  padding: 2px 7px; border-radius: 999px;
+  display: inline-flex; align-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+.wl-myrate .wl-hearts { font-size: 10px; gap: 1px; }
 .wl-season {
   position: absolute; top: 7px; left: 7px;
   background: rgba(76,63,115,.82);
@@ -164,10 +174,10 @@ textarea.form-input { height: auto; }
   padding: 3px 7px; border-radius: 6px;
 }
 
-.wl-body { padding: 10px 12px 12px; }
+.wl-body { padding: 9px 12px 11px; }
 .wl-title-row {
   display: flex; align-items: flex-start; gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 .wl-title {
   flex: 1; min-width: 0;
@@ -176,10 +186,14 @@ textarea.form-input { height: auto; }
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.wl-genres {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-bottom: 5px;
+}
 .wl-meta { font-size: 11px; font-weight: 500; color: #8b84a3; }
 
 /* 내 별점 하트 */
-.wl-hearts { display: inline-flex; gap: 2px; font-size: 13px; }
+.wl-hearts { display: inline-flex; gap: 2px; font-size: 13px; line-height: 1; }
 .wl-heart { color: #f3d9e4; }
 .wl-heart.on { color: #f43f5e; }
 

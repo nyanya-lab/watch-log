@@ -295,7 +295,10 @@ function renderCards() {
         ${i.poster
           ? `<img class="wl-poster" src="${i.poster}" alt="" loading="lazy">`
           : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
-        ${i.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${i.voteAverage}</span>` : ""}
+        <div class="wl-tr">
+          ${i.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${i.voteAverage}</span>` : ""}
+          ${i.rating ? `<span class="wl-myrate">${hearts(i.rating)}</span>` : ""}
+        </div>
         ${i.season ? `<span class="wl-season">${esc(i.season)}</span>` : ""}
       </div>
       <div class="wl-body">
@@ -303,11 +306,10 @@ function renderCards() {
           <span class="wl-title">${esc(i.title)}</span>
           ${i.type ? `<span class="badge badge-type shrink-0">${esc(i.type)}</span>` : ""}
         </div>
-        ${i.rating ? `<div class="mb-1.5">${hearts(i.rating)}</div>` : ""}
-        ${visibleGenres(i.genres).length ? `<div class="flex flex-wrap gap-1 mb-1.5">
+        ${visibleGenres(i.genres).length ? `<div class="wl-genres">
           ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}
         </div>` : ""}
-        <div class="wl-meta text-slate-400">${fmtRange(i.startDate, i.endDate) || "날짜 없음"}</div>
+        <div class="wl-meta">${fmtRange(i.startDate, i.endDate) || "날짜 없음"}</div>
       </div>
     </div>`).join("");
 
@@ -385,8 +387,8 @@ function openDetail(id) {
           <span class="font-semibold text-slate-700">${fmtRange(i.lastWatchStart, i.lastWatchEnd)}</span></div>` : ""}
         <div class="flex justify-between"><span class="text-slate-500 font-medium">시청 횟수</span>
           <span class="font-semibold text-slate-700">${i.watchCount || 1}회</span></div>
-        ${i.releaseDate ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">${i.type === "영화" ? "개봉일" : "첫 방영일"}</span>
-          <span class="font-semibold text-slate-700">${fmtDate(i.releaseDate)}</span></div>` : ""}
+        ${(i.releaseDate || i.releaseYear) ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">${i.type === "영화" ? "개봉일" : "첫 방영일"}</span>
+          <span class="font-semibold text-slate-700">${i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear}</span></div>` : ""}
         ${(i.companies || []).length ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">제작사</span>
           <span class="font-semibold text-slate-700 text-right">${esc(i.companies.join(", "))}</span></div>` : ""}
       </div>

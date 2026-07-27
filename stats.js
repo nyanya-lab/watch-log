@@ -33,6 +33,16 @@ function renderStats() {
   const byOtt = countBy(items, i => i.ott || "기타");
   const byGenre = countBy(items.flatMap(i => visibleGenres(i.genres)), g => g);
   const byYear = countBy(items.filter(i => i.startDate), i => i.startDate.slice(0, 4));
+  const byActor = countBy(items.flatMap(i => (i.cast || []).map(c => c.name)), n => n);
+  const byDirector = countBy(items.map(i => i.director).filter(Boolean), d => d);
+
+  // 월별(1~12월) — 처음 본 날 + 마지막 시청 시작월 집계
+  const byMonth = {};
+  items.forEach(i => {
+    [i.startDate, i.lastWatchStart].forEach(d => {
+      if (d) { const m = +d.slice(5, 7); if (m) byMonth[m] = (byMonth[m] || 0) + 1; }
+    });
+  });
 
   const rated = items.filter(i => i.rating);
   const avgRating = rated.length ? (rated.reduce((s, i) => s + i.rating, 0) / rated.length).toFixed(2) : "-";
@@ -41,14 +51,27 @@ function renderStats() {
 
   const years = Object.keys(byYear).sort();
   const currentYear = new Date().getFullYear();
+  const thisYearCount = items.filter(i =>
+    (i.startDate || "").slice(0, 4) == currentYear ||
+    (i.lastWatchStart || "").slice(0, 4) == currentYear).length;
+
+  // 예상 시청시간: 영화=상영시간, TV=회당×총화수 (있을 때만)
+  const totalMin = items.reduce((s, i) => {
+    const rt = i.runtime || 0;
+    if (!rt) return s;
+    return s + (i.type === "영화" ? rt : rt * (i.totalEpisodes || 1));
+  }, 0);
+  const totalHours = Math.round(totalMin / 60);
 
   wrap.innerHTML = `
     <!-- 요약 -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
       <div class="stat-box"><div class="stat-label">총 작품</div><div class="stat-value">${items.length}</div></div>
+      <div class="stat-box"><div class="stat-label">${currentYear}년 시청</div><div class="stat-value">${thisYearCount}</div></div>
       <div class="stat-box"><div class="stat-label">총 시청 횟수</div><div class="stat-value">${totalWatch}</div></div>
-      <div class="stat-box"><div class="stat-label">평균 별점</div><div class="stat-value">${avgRating}</div></div>
       <div class="stat-box"><div class="stat-label">재시청 작품</div><div class="stat-value">${rewatched}</div></div>
+      <div class="stat-box"><div class="stat-label">평균 별점</div><div class="stat-value">${avgRating}</div></div>
+      <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${totalHours.toLocaleString()}<span class="text-base font-semibold text-slate-400">시간</span></div></div>
     </div>
 
     <!-- 연도별 막대 -->
@@ -66,6 +89,12 @@ function renderStats() {
         </select>
       </div>
       <div id="heatmapArea" class="overflow-x-auto"></div>
+    </div>
+
+    <!-- 월별 추이 -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-calendar-week mr-2 text-indigo-500"></i>월별 시청 (전체 기간)</h3>
+      <div style="height:220px"><canvas id="chartMonth"></canvas></div>
     </div>
 
     <!-- 장르 + 구분 -->
@@ -91,6 +120,22 @@ function renderStats() {
       <div class="bg-white rounded-xl border border-slate-200 p-5">
         <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-tv mr-2 text-indigo-500"></i>OTT별</h3>
         <div style="height:260px"><canvas id="chartOtt"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 배우 + 감독 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-user mr-2 text-pink-400"></i>많이 본 배우 TOP 10</h3>
+        ${Object.keys(byActor).length
+          ? `<div style="height:300px"><canvas id="chartActor"></canvas></div>`
+          : `<p class="text-sm text-amber-600 font-medium text-center py-8">TMDB 정보를 채우면 출연진 통계가 표시됩니다</p>`}
+      </div>
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-clapperboard mr-2 text-slate-500"></i>많이 본 감독 TOP 10</h3>
+        ${Object.keys(byDirector).length
+          ? `<div style="height:300px"><canvas id="chartDirector"></canvas></div>`
+          : `<p class="text-sm text-amber-600 font-medium text-center py-8">TMDB 정보를 채우면 감독 통계가 표시됩니다</p>`}
       </div>
     </div>
 
@@ -166,6 +211,42 @@ function renderStats() {
     data: { labels: ["♥1", "♥2", "♥3", "♥4", "♥5"], datasets: [{ data: rCount, backgroundColor: "#f43f5e", borderRadius: 6 }] },
     options: { ...commonOpts, onClick: clickToFilter(l => ({ rating: String(l).replace(/\D/g, "") })), plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
+
+  // 월별 추이
+  const monthLabelsShort = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
+  _charts.push(new Chart($("#chartMonth"), {
+    type: "bar",
+    data: {
+      labels: monthLabelsShort,
+      datasets: [{ data: monthLabelsShort.map((_, idx) => byMonth[idx + 1] || 0), backgroundColor: "#8b5cf6", borderRadius: 6 }]
+    },
+    options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  }));
+
+  // 배우 TOP 10
+  const aTop = topN(byActor, 10);
+  if ($("#chartActor") && aTop.labels.length) {
+    // '기타' 집계는 배우 차트에서 제외
+    const aLabels = aTop.labels.filter(l => l !== "기타");
+    const aValues = aLabels.map(l => byActor[l]);
+    _charts.push(new Chart($("#chartActor"), {
+      type: "bar",
+      data: { labels: aLabels, datasets: [{ data: aValues, backgroundColor: "#ec4899", borderRadius: 6 }] },
+      options: { ...commonOpts, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    }));
+  }
+
+  // 감독 TOP 10
+  const dTop = topN(byDirector, 10);
+  if ($("#chartDirector") && dTop.labels.length) {
+    const dLabels = dTop.labels.filter(l => l !== "기타");
+    const dValues = dLabels.map(l => byDirector[l]);
+    _charts.push(new Chart($("#chartDirector"), {
+      type: "bar",
+      data: { labels: dLabels, datasets: [{ data: dValues, backgroundColor: "#64748b", borderRadius: 6 }] },
+      options: { ...commonOpts, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    }));
+  }
 
   // 히트맵
   const heatSel = $("#heatYear");
