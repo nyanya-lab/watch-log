@@ -44,6 +44,9 @@ function renderStats() {
     });
   });
 
+  // 시즌 묶음 기준 작품 수 (표시 전용 그룹핑 — watchlog.js의 groupItems 사용)
+  const totalWorks = (typeof groupItems === "function") ? groupItems(items).length : items.length;
+
   const rated = items.filter(i => i.rating);
   const avgRating = rated.length ? (rated.reduce((s, i) => s + i.rating, 0) / rated.length).toFixed(2) : "-";
   const totalWatch = items.reduce((s, i) => s + (i.watchCount || 1), 0);
@@ -66,9 +69,9 @@ function renderStats() {
   wrap.innerHTML = `
     <!-- 요약 -->
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-      <div class="stat-box"><div class="stat-label">총 작품</div><div class="stat-value">${items.length}</div></div>
+      <div class="stat-box"><div class="stat-label">총 작품 <span class="text-slate-400">(시즌 묶음)</span></div><div class="stat-value">${totalWorks}</div></div>
+      <div class="stat-box"><div class="stat-label">시청 기록 <span class="text-slate-400">(시즌별)</span></div><div class="stat-value">${items.length}</div></div>
       <div class="stat-box"><div class="stat-label">${currentYear}년 시청</div><div class="stat-value">${thisYearCount}</div></div>
-      <div class="stat-box"><div class="stat-label">총 시청 횟수</div><div class="stat-value">${totalWatch}</div></div>
       <div class="stat-box"><div class="stat-label">재시청 작품</div><div class="stat-value">${rewatched}</div></div>
       <div class="stat-box"><div class="stat-label">평균 별점</div><div class="stat-value">${avgRating}</div></div>
       <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${totalHours.toLocaleString()}<span class="text-base font-semibold text-slate-400">시간</span></div></div>

@@ -112,6 +112,38 @@ function debounce(fn, ms) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
+/* ---------- 시즌 묶기 (표시 전용 — 저장 데이터는 그대로) ----------
+   같은 tmdbId를 한 카드로 묶는다. TMDB 미등록(tmdbId 없음)은 각각 개별 유지.
+   목록 정렬은 applyFilters에서 이미 끝난 상태이므로 첫 등장 항목이 대표가 된다. */
+/* tmdbId가 같아도 제목이 다르면 묶지 않는다.
+   (자동 매칭 과정에서 속편들이 1편과 같은 tmdbId를 물고 온 경우가 있어
+    — 예: 반지의 제왕 3부작이 모두 tmdbId 122 — 그대로 묶으면 다른 작품이 합쳐진다) */
+function groupKeyOf(i) {
+  return i.tmdbId ? "t" + i.tmdbId + "|" + (i.title || "").trim() : "one:" + i.id;
+}
+function groupItems(list) {
+  const map = new Map();
+  list.forEach(i => {
+    const k = groupKeyOf(i);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(i);
+  });
+  return [...map.values()].map(items => ({
+    key: groupKeyOf(items[0]),
+    main: items[0],          // 대표(정렬 기준상 가장 앞 = 보통 가장 최근 시청)
+    items
+  }));
+}
+/* 상세용: 같은 작품의 모든 시즌을 시즌번호 순으로 */
+function seasonsOf(item) {
+  const key = groupKeyOf(item);
+  const all = item.tmdbId
+    ? State.items.filter(x => groupKeyOf(x) === key)
+    : [item];
+  const num = (x) => parseInt(String(x.season || "").replace(/\D/g, "")) || 0;
+  return all.slice().sort((a, b) => num(a) - num(b) || (a.startDate || "").localeCompare(b.startDate || ""));
+}
+
 /* ---------- 내 별점: 하트 아이콘 5개 ---------- */
 function hearts(n) {
   n = n || 0;
@@ -253,6 +285,7 @@ function applyFilters() {
   else if (F.sort === "rating") list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
 
   State.filtered = list;
+  State.groups = groupItems(list);   // 시즌 묶기(표시 전용)
   State.page = 1;
   renderHeaderCount();
   renderCards();
@@ -261,9 +294,11 @@ function applyFilters() {
 /* ---------- 헤더 / 카운트 ---------- */
 function renderHeaderCount() {
   const total = State.items.length;
+  const totalWorks = groupItems(State.items).length;   // 시즌 묶은 작품 수
   const pending = State.items.filter(i => !i.tmdbId).length;
 
-  $("#totalCount").textContent = total;
+  $("#totalCount").textContent = totalWorks;
+  $("#totalBadge").title = `작품 ${totalWorks}개 · 시청 기록 ${total}개(시즌 포함)`;
   $("#totalBadge").classList.remove("hidden");
 
   const pb = $("#pendingBtn");
@@ -277,19 +312,31 @@ function renderHeaderCount() {
   pb.classList.toggle("hidden", pending === 0 && !Filters.pendingOnly);
 
   $("#filterDot").classList.toggle("hidden", !hasActiveFilter());
+  const shown = (State.groups || []).length;
   $("#resultCount").textContent =
-    State.filtered.length === total ? "" : `${State.filtered.length}개 표시`;
+    State.filtered.length === total ? "" : `${shown}개 표시`;
 }
 
 /* ---------- 카드 렌더 ---------- */
 function renderCards() {
   const grid = $("#cardGrid");
-  const list = State.filtered;
-  const show = list.slice(0, State.page * State.perPage);
+  const groups = State.groups || [];
+  const show = groups.slice(0, State.page * State.perPage);
 
-  $("#emptyState").classList.toggle("hidden", list.length > 0);
+  $("#emptyState").classList.toggle("hidden", groups.length > 0);
 
-  grid.innerHTML = show.map(i => `
+  grid.innerHTML = show.map(g => {
+    const i = g.main;                    // 대표 항목 (TMDB 정보·포스터는 시즌 공통)
+    const multi = g.items.length > 1;    // 시즌이 여러 개로 묶인 카드
+    // 묶인 카드는 시즌 전체를 아우르는 날짜 범위로 표시
+    const dates = multi
+      ? (() => {
+          const ss = g.items.map(x => x.startDate).filter(Boolean).sort();
+          const ee = g.items.map(x => x.endDate || x.startDate).filter(Boolean).sort();
+          return ss.length ? fmtRange(ss[0], ee[ee.length - 1]) : "";
+        })()
+      : fmtRange(i.startDate, i.endDate);
+    return `
     <div class="wl-card ${!i.tmdbId ? "wl-pending" : ""}" data-id="${i.id}">
       <div class="wl-poster-wrap">
         ${i.poster
@@ -299,7 +346,9 @@ function renderCards() {
           ${i.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${i.voteAverage}</span>` : ""}
           ${i.rating ? `<span class="wl-myrate">${hearts(i.rating)}</span>` : ""}
         </div>
-        ${i.season ? `<span class="wl-season">${esc(i.season)}</span>` : ""}
+        ${multi
+          ? `<span class="wl-season wl-season-multi"><i class="fa-solid fa-layer-group mr-1"></i>시즌 ${g.items.length}</span>`
+          : (i.season ? `<span class="wl-season">${esc(i.season)}</span>` : "")}
       </div>
       <div class="wl-body">
         <div class="wl-title-row">
@@ -307,17 +356,18 @@ function renderCards() {
           ${i.type ? `<span class="badge badge-type shrink-0">${esc(i.type)}</span>` : ""}
         </div>
         ${visibleGenres(i.genres).length ? `<div class="wl-genres">
-          ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}
+          ${visibleGenres(i.genres).slice(0, 3).map(g2 => `<span class="badge badge-genre">${esc(g2)}</span>`).join("")}
         </div>` : ""}
-        <div class="wl-meta">${fmtRange(i.startDate, i.endDate) || "날짜 없음"}</div>
+        <div class="wl-meta">${dates || "날짜 없음"}</div>
       </div>
-    </div>`).join("");
+    </div>`;
+  }).join("");
 
   grid.querySelectorAll(".wl-card").forEach(el => {
     el.addEventListener("click", () => openDetail(el.dataset.id));
   });
 
-  const remain = list.length - show.length;
+  const remain = groups.length - show.length;
   $("#loadMoreWrap").classList.toggle("hidden", remain <= 0);
   $("#loadMoreCount").textContent = remain > 0 ? `(${remain}개 남음)` : "";
 }
@@ -326,6 +376,49 @@ function renderCards() {
 function openDetail(id) {
   const i = State.items.find(x => x.id === id);
   if (!i) return;
+
+  /* 같은 작품(tmdbId)의 시즌들 — 표시만 묶고 기록은 시즌별로 각각 보여준다 */
+  const seasons = seasonsOf(i);
+  const multiSeason = seasons.length > 1;
+
+  const reviewBox = (s) => s.review
+    ? `<div class="mt-2 p-3 rounded-lg border" style="background:linear-gradient(135deg,#fef9c3,#fce7f3);border-color:#fde68a">
+         <div class="text-xs font-semibold text-slate-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i>한줄평</div>
+         <div class="text-sm text-slate-700 leading-relaxed">${esc(s.review)}</div></div>`
+    : "";
+
+  const recordRows = (s) => `
+    <div class="flex justify-between"><span class="text-slate-500 font-medium">처음 본 날</span>
+      <span class="font-semibold text-slate-700">${fmtRange(s.startDate, s.endDate) || "-"}</span></div>
+    ${s.lastWatchStart ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">마지막 시청</span>
+      <span class="font-semibold text-slate-700">${fmtRange(s.lastWatchStart, s.lastWatchEnd)}</span></div>` : ""}
+    <div class="flex justify-between"><span class="text-slate-500 font-medium">시청 횟수</span>
+      <span class="font-semibold text-slate-700">${s.watchCount || 1}회</span></div>`;
+
+  const recordsHtml = multiSeason
+    ? `<div class="border-t border-slate-100 pt-4">
+         <div class="text-xs font-semibold text-slate-500 mb-2"><i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>시즌별 시청 기록</div>
+         <div class="space-y-3">
+           ${seasons.map(s => `
+             <div class="wl-season-row">
+               <div class="flex items-center justify-between gap-2 mb-2">
+                 <span class="badge badge-season">${esc(s.season || "시즌 없음")}</span>
+                 <div class="flex items-center gap-2">
+                   ${s.rating ? hearts(s.rating) : ""}
+                   <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${s.id}')"
+                     class="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-white">
+                     <i class="fa-solid fa-pen mr-1"></i>수정</button>
+                 </div>
+               </div>
+               <div class="space-y-1.5 text-sm">${recordRows(s)}</div>
+               ${reviewBox(s)}
+             </div>`).join("")}
+         </div>
+       </div>`
+    : `<div class="space-y-2 text-sm border-t border-slate-100 pt-4">
+         ${recordRows(i)}
+       </div>
+       ${reviewBox(i)}`;
 
   const infoChips = [];
   if (i.voteAverage) infoChips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>`);
@@ -364,9 +457,11 @@ function openDetail(id) {
         <div class="flex-1 min-w-0 ${i.backdrop ? "pt-12" : ""}">
           <h4 class="text-lg font-bold text-slate-800 leading-snug">${esc(i.title)}</h4>
           ${i.originalTitle && i.originalTitle !== i.title ? `<div class="text-xs text-slate-400 font-medium">${esc(i.originalTitle)}</div>` : ""}
-          ${i.rating ? `<div class="mt-1 text-lg">${hearts(i.rating)}</div>` : ""}
+          ${(!multiSeason && i.rating) ? `<div class="mt-1 text-lg">${hearts(i.rating)}</div>` : ""}
           <div class="flex flex-wrap gap-1 mt-2">
-            ${i.season ? `<span class="badge badge-season">${esc(i.season)}</span>` : ""}
+            ${multiSeason
+              ? `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>시즌 ${seasons.length}개</span>`
+              : (i.season ? `<span class="badge badge-season">${esc(i.season)}</span>` : "")}
             ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
             ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}
             ${ottBadges(i)}
@@ -380,13 +475,9 @@ function openDetail(id) {
 
       ${i.overview ? `<p class="text-sm text-slate-600 leading-relaxed mb-4">${esc(i.overview)}</p>` : ""}
 
-      <div class="space-y-2 text-sm border-t border-slate-100 pt-4">
-        <div class="flex justify-between"><span class="text-slate-500 font-medium">처음 본 날</span>
-          <span class="font-semibold text-slate-700">${fmtRange(i.startDate, i.endDate) || "-"}</span></div>
-        ${i.lastWatchStart ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">마지막 시청</span>
-          <span class="font-semibold text-slate-700">${fmtRange(i.lastWatchStart, i.lastWatchEnd)}</span></div>` : ""}
-        <div class="flex justify-between"><span class="text-slate-500 font-medium">시청 횟수</span>
-          <span class="font-semibold text-slate-700">${i.watchCount || 1}회</span></div>
+      ${recordsHtml}
+
+      <div class="space-y-2 text-sm border-t border-slate-100 pt-4 mt-4">
         ${(i.releaseDate || i.releaseYear) ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">${i.type === "영화" ? "개봉일" : "첫 방영일"}</span>
           <span class="font-semibold text-slate-700">${i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear}</span></div>` : ""}
         ${(i.companies || []).length ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">제작사</span>
@@ -394,16 +485,12 @@ function openDetail(id) {
       </div>
 
       ${castHtml}
-
-      ${i.review ? `<div class="mt-4 p-3 rounded-lg border" style="background:linear-gradient(135deg,#fef9c3,#fce7f3);border-color:#fde68a">
-        <div class="text-xs font-semibold text-slate-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i>한줄평</div>
-        <div class="text-sm text-slate-700 leading-relaxed">${esc(i.review)}</div></div>` : ""}
     </div>
     <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
       <div class="flex-1"></div>
-      <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
+      ${multiSeason ? "" : `<button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
         class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
-        <i class="fa-solid fa-pen mr-1"></i>수정</button>
+        <i class="fa-solid fa-pen mr-1"></i>수정</button>`}
     </div>`;
 
   $("#detailModal").classList.remove("hidden");

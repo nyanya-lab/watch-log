@@ -152,6 +152,16 @@ textarea.form-input { height: auto; }
   padding: 2px 8px; border-radius: 999px;
   backdrop-filter: blur(2px);
 }
+/* 여러 시즌이 하나로 묶인 카드 */
+.wl-season-multi { background: rgba(224,112,15,.9); }
+
+/* 상세 모달의 시즌별 기록 블록 */
+.wl-season-row {
+  border: 1px solid #efeafc;
+  background: #faf8ff;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
 
 /* 포스터 위 태그 */
 .wl-rating-tag {
