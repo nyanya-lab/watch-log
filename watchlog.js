@@ -168,9 +168,11 @@ function hearts(n) {
    TMDB가 ko-KR로 줘도 TV 전용 장르 일부는 영어로 온다 → 한글로 바꿔서 보여준다.
    저장 데이터(genres)는 건드리지 않고 표시할 때만 변환. */
 const GENRE_KO = {
-  "Action & Adventure": "액션/모험",
-  "Sci-Fi & Fantasy": "SF/판타지",
-  "War & Politics": "전쟁/정치",
+  // TV 전용 합본 장르는 둘로 쪼개서 영화 쪽 장르와 같은 항목으로 합류시킨다.
+  // (영화는 액션/모험을 따로 주므로, 합본을 그대로 두면 같은 액션물이 매체에 따라 갈린다)
+  "Action & Adventure": ["액션", "모험"],
+  "Sci-Fi & Fantasy": ["SF", "판타지"],
+  "War & Politics": ["전쟁", "정치"],
   "Kids": "어린이",
   "Reality": "리얼리티",
   "Talk": "토크",
@@ -196,12 +198,17 @@ const GENRE_KO = {
   "War": "전쟁",
   "Science Fiction": "SF"
 };
-function koGenre(g) { return GENRE_KO[g] || g; }
+/* 항상 배열로 반환 (합본 장르는 여러 개로 쪼개짐) */
+function koGenre(g) {
+  const v = GENRE_KO[g];
+  if (!v) return [g];
+  return Array.isArray(v) ? v : [v];
+}
 
 /* 구분(type)과 겹치는 장르는 표시에서 숨김 */
 const TYPE_LABELS = ["영화", "드라마", "예능", "애니", "다큐", "기타"];
 function visibleGenres(genres) {
-  return [...new Set((genres || []).map(koGenre))].filter(g => !TYPE_LABELS.includes(g));
+  return [...new Set((genres || []).flatMap(koGenre))].filter(g => !TYPE_LABELS.includes(g));
 }
 
 /* ---------- OTT 표시용: 스트리밍 전체 목록(otts) + 내가 본 곳(ott) 유지 ---------- */
