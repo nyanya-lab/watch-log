@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260727a">
+<link rel="stylesheet" href="style.css?v=20260727b">
 </head>
 <body>
 
@@ -45,7 +45,7 @@
       <div class="flex gap-2 mb-3">
         <div class="relative flex-1">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-          <input type="text" id="searchInput" placeholder="제목으로 검색..."
+          <input type="text" id="searchInput" placeholder="제목 · 원제 · 배우 · 감독 검색..."
             class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none text-sm bg-white">
         </div>
         <button id="filterBtn" class="relative w-11 h-11 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 transition shrink-0" title="필터">
@@ -181,6 +181,17 @@
       <div><label class="form-label">OTT</label><select id="filterOtt" class="form-input"><option value="">전체</option></select></div>
       <div><label class="form-label">기간(연도)</label><select id="filterYear" class="form-input"><option value="">전체</option></select></div>
       <div><label class="form-label">장르</label><select id="filterGenre" class="form-input"><option value="">전체</option></select></div>
+      <div><label class="form-label">내 별점</label>
+        <select id="filterRating" class="form-input">
+          <option value="">전체</option>
+          <option value="5">♥♥♥♥♥ (5)</option>
+          <option value="4">♥♥♥♥ (4)</option>
+          <option value="3">♥♥♥ (3)</option>
+          <option value="2">♥♥ (2)</option>
+          <option value="1">♥ (1)</option>
+          <option value="0">별점 없음</option>
+        </select>
+      </div>
       <div><label class="form-label">정렬</label>
         <select id="sortBy" class="form-input">
           <option value="date-desc">최근 본 순</option>
@@ -399,10 +410,10 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260727a"></script>
-<script src="core.js?v=20260727a"></script>
-<script src="tmdb.js?v=20260727a"></script>
-<script src="watchlog.js?v=20260727a"></script>
-<script src="stats.js?v=20260727a"></script>
+<script src="seed-data.js?v=20260727b"></script>
+<script src="core.js?v=20260727b"></script>
+<script src="tmdb.js?v=20260727b"></script>
+<script src="watchlog.js?v=20260727b"></script>
+<script src="stats.js?v=20260727b"></script>
 </body>
 </html>

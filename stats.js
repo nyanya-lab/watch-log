@@ -103,8 +103,9 @@ function renderStats() {
     <!-- 장르 + 구분 -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-chart-pie mr-2 text-indigo-500"></i>장르별</h3>
-        <div style="height:280px"><canvas id="chartGenre"></canvas></div>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-chart-simple mr-2 text-indigo-500"></i>장르별</h3>
+        <p class="text-xs text-slate-400 mb-3 font-medium">한 작품에 장르가 여러 개라 합계는 작품 수보다 큽니다</p>
+        <div style="height:300px"><canvas id="chartGenre"></canvas></div>
         ${!Object.keys(byGenre).length ? `<p class="text-sm text-amber-600 font-medium text-center mt-3">
           TMDB 정보를 채우면 장르 통계가 표시됩니다</p>` : ""}
       </div>
@@ -174,12 +175,24 @@ function renderStats() {
   }));
 
   // 장르 파이
+  // 장르는 한 작품이 여러 개를 가지므로 도넛(전체의 비율)이 아니라 가로 막대로 표시한다.
   const gTop = topN(byGenre, 12);
   if (gTop.labels.length) {
+    const gLabels = gTop.labels.filter(l => l !== "기타");
+    const gValues = gLabels.map(l => byGenre[l]);
     _charts.push(new Chart($("#chartGenre"), {
-      type: "doughnut",
-      data: { labels: gTop.labels, datasets: [{ data: gTop.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: "#fff" }] },
-      options: { ...commonOpts, onClick: clickToFilter(l => ({ genre: l })), plugins: { legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } } } }
+      type: "bar",
+      data: { labels: gLabels, datasets: [{ data: gValues, backgroundColor: "#8b5cf6", borderRadius: 6 }] },
+      options: {
+        ...commonOpts,
+        onClick: clickToFilter(l => ({ genre: l })),
+        indexAxis: "y",
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (c) => `${c.parsed.x}개 작품` } }
+        },
+        scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+      }
     }));
   }
 

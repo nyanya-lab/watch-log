@@ -26,13 +26,14 @@ function initWatchlog() {
   $("#applyFilterBtn").addEventListener("click", closeFilterModal);
   $("#filterModal").addEventListener("click", e => { if (e.target.id === "filterModal") closeFilterModal(); });
 
-  ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "sortBy"]
+  ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating", "sortBy"]
     .forEach(id => $("#" + id).addEventListener("change", () => {
       Filters.type = $("#filterType").value;
       Filters.country = $("#filterCountry").value;
       Filters.ott = $("#filterOtt").value;
       Filters.year = $("#filterYear").value;
       Filters.genre = $("#filterGenre").value;
+      Filters.rating = $("#filterRating").value;
       Filters.sort = $("#sortBy").value;
       applyFilters();
       $("#filterPreview").textContent = `${State.filtered.length}개 표시`;
@@ -40,7 +41,7 @@ function initWatchlog() {
 
   $("#resetFilter").addEventListener("click", () => {
     Object.assign(Filters, { type: "", country: "", ott: "", year: "", genre: "", rating: "", sort: "date-desc" });
-    ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre"].forEach(id => $("#" + id).value = "");
+    ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"].forEach(id => $("#" + id).value = "");
     $("#sortBy").value = "date-desc";
     applyFilters();
     $("#filterPreview").textContent = `${State.filtered.length}개 표시`;
@@ -112,6 +113,15 @@ function debounce(fn, ms) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
 }
 
+/* ---------- 검색 매칭: 제목 + 원제 + 배우 + 감독 ---------- */
+function matchesQuery(i, q) {
+  if (!q) return true;
+  if ((i.title || "").toLowerCase().includes(q)) return true;
+  if ((i.originalTitle || "").toLowerCase().includes(q)) return true;
+  if ((i.director || "").toLowerCase().includes(q)) return true;
+  return (i.cast || []).some(c => (c.name || "").toLowerCase().includes(q));
+}
+
 /* ---------- 시즌 묶기 (표시 전용 — 저장 데이터는 그대로) ----------
    같은 tmdbId를 한 카드로 묶는다. TMDB 미등록(tmdbId 없음)은 각각 개별 유지.
    목록 정렬은 applyFilters에서 이미 끝난 상태이므로 첫 등장 항목이 대표가 된다. */
@@ -154,10 +164,44 @@ function hearts(n) {
   return `<span class="wl-hearts">${out}</span>`;
 }
 
-/* ---------- 구분(type)과 겹치는 장르는 표시에서 숨김 ---------- */
+/* ---------- 장르 표시 처리 ----------
+   TMDB가 ko-KR로 줘도 TV 전용 장르 일부는 영어로 온다 → 한글로 바꿔서 보여준다.
+   저장 데이터(genres)는 건드리지 않고 표시할 때만 변환. */
+const GENRE_KO = {
+  "Action & Adventure": "액션/모험",
+  "Sci-Fi & Fantasy": "SF/판타지",
+  "War & Politics": "전쟁/정치",
+  "Kids": "어린이",
+  "Reality": "리얼리티",
+  "Talk": "토크",
+  "News": "뉴스",
+  "Soap": "연속극",
+  "Western": "서부",
+  "TV Movie": "TV영화",
+  "Documentary": "다큐멘터리",
+  "Animation": "애니메이션",
+  "Comedy": "코미디",
+  "Drama": "드라마",
+  "Action": "액션",
+  "Adventure": "모험",
+  "Fantasy": "판타지",
+  "Horror": "공포",
+  "Mystery": "미스터리",
+  "Romance": "로맨스",
+  "Thriller": "스릴러",
+  "Crime": "범죄",
+  "Family": "가족",
+  "History": "역사",
+  "Music": "음악",
+  "War": "전쟁",
+  "Science Fiction": "SF"
+};
+function koGenre(g) { return GENRE_KO[g] || g; }
+
+/* 구분(type)과 겹치는 장르는 표시에서 숨김 */
 const TYPE_LABELS = ["영화", "드라마", "예능", "애니", "다큐", "기타"];
 function visibleGenres(genres) {
-  return (genres || []).filter(g => !TYPE_LABELS.includes(g));
+  return [...new Set((genres || []).map(koGenre))].filter(g => !TYPE_LABELS.includes(g));
 }
 
 /* ---------- OTT 표시용: 스트리밍 전체 목록(otts) + 내가 본 곳(ott) 유지 ---------- */
@@ -256,6 +300,7 @@ function jumpToList(patch) {
   $("#filterOtt").value = Filters.ott;
   $("#filterYear").value = Filters.year;
   $("#filterGenre").value = Filters.genre;
+  $("#filterRating").value = Filters.rating;
 
   // 목록 탭으로 전환
   const listTab = document.querySelector('.tab-btn[data-tab="list"]');
@@ -268,7 +313,7 @@ function applyFilters() {
   const F = Filters;
   let list = State.items.filter(i => {
     if (F.pendingOnly && i.tmdbId) return false;
-    if (F.q && !(i.title || "").toLowerCase().includes(F.q)) return false;
+    if (F.q && !matchesQuery(i, F.q)) return false;
     if (F.type && i.type !== F.type) return false;
     if (F.country && i.country !== F.country) return false;
     if (F.ott && !ottList(i).includes(F.ott)) return false;
