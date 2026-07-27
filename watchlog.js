@@ -8,7 +8,8 @@ const Filters = {
   sort: "date-desc", pendingOnly: false,
   noSeasonOnly: false,              // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
   dupOnly: false,                   // 제목이 다른데 tmdbId가 같은 항목만 (매칭 오류 의심)
-  group: ""                         // 시리즈 모아보기에서 고른 그룹 키
+  group: "",                        // 시리즈 모아보기에서 고른 그룹 키
+  seriesView: false                 // 목록 자리에 시리즈 카드를 보여주는 모드
 };
 
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
@@ -51,11 +52,8 @@ function initWatchlog() {
   $("#filterBtn").addEventListener("click", openFilterModal);
   $("#clearFilterBtn").addEventListener("click", () => { clearAllFilters(); toast("필터를 해제했습니다"); });
 
-  /* 시리즈 모아보기 */
-  $("#seriesBtn").addEventListener("click", openSeriesModal);
-  $("#closeSeries").addEventListener("click", closeSeriesModal);
-  $("#seriesModal").addEventListener("click", e => { if (e.target.id === "seriesModal") closeSeriesModal(); });
-  $("#seriesSearch").addEventListener("input", debounce(() => renderSeriesList($("#seriesSearch").value), 180));
+  /* 시리즈 보기 토글 */
+  $("#seriesBtn").addEventListener("click", toggleSeriesView);
   $("#closeFilter").addEventListener("click", closeFilterModal);
   $("#applyFilterBtn").addEventListener("click", closeFilterModal);
   $("#filterModal").addEventListener("click", e => { if (e.target.id === "filterModal") closeFilterModal(); });
@@ -336,6 +334,7 @@ function hasActiveFilter() {
   return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
             Filters.genre || Filters.rating || Filters.person ||
             Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.dupOnly || Filters.group ||
+            Filters.seriesView ||
             Filters.sort !== "date-desc");
 }
 
@@ -343,7 +342,7 @@ function hasActiveFilter() {
 function clearAllFilters() {
   Object.assign(Filters, {
     q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
-    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: ""
+    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: "", seriesView: false, seriesView: false
   });
   const s = $("#searchInput"); if (s) s.value = "";
   ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"]
@@ -356,7 +355,7 @@ function clearAllFilters() {
 function jumpToList(patch) {
   const backup = { ...Filters };
   Object.assign(Filters,
-    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: "" },
+    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: "", seriesView: false },
     patch);
   applyFilters();
 
@@ -386,89 +385,87 @@ function jumpToList(patch) {
 /* ---------- 시리즈 모아보기 ----------
    목록은 기록 단위로 평면이고, 묶어보는 건 여기서만 한다.
    2편 이상인 그룹(= TMDB 컬렉션 시리즈, 또는 같은 작품의 여러 시즌)만 보여준다. */
-function seriesGroups() {
-  return groupItems(State.items)
+
+/* 시리즈 보기 토글 — 목록 자리에 시리즈 카드를 그린다 (모달 아님) */
+function toggleSeriesView() {
+  Filters.seriesView = !Filters.seriesView;
+  Filters.group = "";                 // 시리즈 목록으로 돌아갈 땐 개별 시리즈 조회 해제
+  State.page = 1;
+  applyFilters();
+}
+
+/* 시리즈 카드 렌더 — renderCards에서 시리즈 보기일 때 호출.
+   현재 필터·검색이 걸린 결과를 기준으로 묶으므로 검색창으로 시리즈도 걸러진다. */
+function renderSeriesCards() {
+  const grid = $("#cardGrid");
+  const all = groupItems(State.filtered)
     .filter(g => g.items.length > 1)
     .map(g => {
       const withPoster = g.items.find(x => x.poster) || g.main;
-      // 이름: TMDB 컬렉션명 > 공통 제목
-      const name = g.items.find(x => x.collectionName)?.collectionName || g.main.title;
+      const name = (g.items.find(x => x.collectionName) || {}).collectionName || g.main.title;
       const years = g.items.map(x => x.releaseYear).filter(Boolean).sort();
       return {
-        key: g.key,
-        name,
-        items: g.items,
-        poster: withPoster.poster,
+        key: g.key, name, items: g.items, poster: withPoster.poster,
         isCollection: !!g.main.collectionId,
         yearRange: years.length ? (years[0] === years[years.length - 1] ? years[0] : `${years[0]}~${years[years.length - 1]}`) : ""
       };
     })
     .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, "ko"));
-}
+  const list = all;
 
-function openSeriesModal() {
-  $("#seriesSearch").value = "";
-  renderSeriesList("");
-  $("#seriesModal").classList.remove("hidden");
-  setTimeout(() => $("#seriesSearch").focus(), 50);
-}
-function closeSeriesModal() { $("#seriesModal").classList.add("hidden"); }
-
-function renderSeriesList(q) {
-  const all = seriesGroups();
-  const needle = (q || "").trim().toLowerCase();
-  const list = needle
-    ? all.filter(s => s.name.toLowerCase().includes(needle) ||
-                      s.items.some(x => (x.title || "").toLowerCase().includes(needle)))
-    : all;
-
-  // 컬렉션 정보가 아직 없으면 안내 (시즌 묶음만 잡힘)
+  // 컬렉션 정보가 아직 없으면 안내 (같은 제목의 시즌만 잡힘)
   const hint = $("#seriesHint");
-  const hasCollection = all.some(s => s.isCollection);
-  if (!hasCollection) {
+  if (!all.some(s => s.isCollection)) {
     hint.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>설정 → <b>"시리즈 정보 가져오기"</b>를 누르면
-      해리포터·트와일라잇처럼 제목이 다른 시리즈도 여기에 묶여서 나옵니다.`;
+      해리포터·트와일라잇처럼 제목이 다른 시리즈도 함께 묶여서 나옵니다.`;
     hint.classList.remove("hidden");
   } else {
     hint.classList.add("hidden");
   }
 
-  const box = $("#seriesList");
-  if (!list.length) {
-    box.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-medium">
-      <i class="fa-solid fa-layer-group text-2xl mb-2 block"></i>${needle ? "검색 결과가 없습니다" : "묶인 시리즈가 없습니다"}</div>`;
-    return;
-  }
+  const show = list.slice(0, State.page * State.perPage);
+  $("#emptyState").classList.toggle("hidden", list.length > 0);
 
-  box.innerHTML = list.map(s => `
-    <div class="wl-series-row" data-key="${esc(s.key)}">
-      ${s.poster
-        ? `<img src="${s.poster}" alt="" loading="lazy">`
-        : `<div class="wl-series-noposter"><i class="fa-solid fa-film"></i></div>`}
-      <div class="flex-1 min-w-0">
-        <div class="font-semibold text-sm text-slate-800 truncate">${esc(s.name)}</div>
-        <div class="text-xs font-medium text-slate-500 mt-0.5">
-          ${s.items.length}편 기록${s.yearRange ? ` · ${s.yearRange}` : ""}
-        </div>
-        <div class="flex flex-wrap gap-1 mt-1.5">
-          ${s.items.slice(0, 4).map(x => `<span class="badge badge-genre">${esc(x.season || x.title)}</span>`).join("")}
-          ${s.items.length > 4 ? `<span class="badge badge-genre">+${s.items.length - 4}</span>` : ""}
-        </div>
+  grid.innerHTML = show.map(s => `
+    <div class="wl-card wl-series-card" data-key="${esc(s.key)}">
+      <div class="wl-poster-wrap">
+        ${s.poster
+          ? `<img class="wl-poster" src="${s.poster}" alt="" loading="lazy">`
+          : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
+        <span class="wl-season wl-season-multi"><i class="fa-solid fa-layer-group mr-1"></i>${s.items.length}편</span>
       </div>
-      <i class="fa-solid fa-chevron-right text-slate-300"></i>
+      <div class="wl-body">
+        <div class="wl-title-row"><span class="wl-title">${esc(s.name)}</span></div>
+        <div class="wl-genres">
+          ${s.items.slice(0, 3).map(x => `<span class="badge badge-season">${esc(x.season || x.releaseYear || x.title)}</span>`).join("")}
+          ${s.items.length > 3 ? `<span class="badge badge-genre">+${s.items.length - 3}</span>` : ""}
+        </div>
+        <div class="wl-meta">${s.yearRange || ""}</div>
+      </div>
     </div>`).join("");
 
-  box.querySelectorAll(".wl-series-row").forEach(el => {
+  grid.querySelectorAll(".wl-series-card").forEach(el => {
     el.addEventListener("click", () => filterBySeries(el.dataset.key));
   });
+
+  const remain = list.length - show.length;
+  $("#loadMoreWrap").classList.toggle("hidden", remain <= 0);
+  $("#loadMoreCount").textContent = remain > 0 ? `(${remain}개 남음)` : "";
+  $("#resultCount").textContent = `시리즈 ${list.length}개`;
 }
 
-/* 시리즈 선택 → 목록에서 그 시리즈 기록만 조회 */
+/* 시리즈 카드 선택 → 그 시리즈의 기록만 목록에 조회 */
 function filterBySeries(key) {
-  closeSeriesModal();
-  const g = seriesGroups().find(s => s.key === key);
-  jumpToList({ group: key });
-  if (g) toast(`${g.name} · ${g.items.length}편 보는 중`);
+  Filters.seriesView = false;
+  Filters.group = key;
+  State.page = 1;
+  applyFilters();
+  const g = groupItems(State.items).find(x => x.key === key);
+  if (g) {
+    const name = (g.items.find(x => x.collectionName) || {}).collectionName || g.main.title;
+    toast(`${name} · ${g.items.length}편 보는 중`);
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 window.filterBySeries = filterBySeries;
 
@@ -563,6 +560,15 @@ function renderHeaderCount() {
     db.classList.toggle("hidden", dupCount === 0 && !Filters.dupOnly);
   }
 
+  // 시리즈 보기 버튼 활성 표시
+  const sb = $("#seriesBtn");
+  if (sb) {
+    sb.className = Filters.seriesView
+      ? "w-11 h-11 rounded-lg border border-amber-500 bg-amber-500 text-white transition shrink-0"
+      : "w-11 h-11 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-amber-50 hover:text-amber-600 transition shrink-0";
+    sb.title = Filters.seriesView ? "전체 목록으로 돌아가기" : "시리즈만 모아보기";
+  }
+
   const active = hasActiveFilter();
   $("#filterDot").classList.toggle("hidden", !active);
   $("#clearFilterBtn").classList.toggle("hidden", !active);   // 필터 걸렸을 때만 초기화 버튼 노출
@@ -572,6 +578,9 @@ function renderHeaderCount() {
 
 /* ---------- 카드 렌더 ---------- */
 function renderCards() {
+  if (Filters.seriesView) return renderSeriesCards();
+  $("#seriesHint").classList.add("hidden");
+
   const grid = $("#cardGrid");
   const list = State.filtered;                        // 기록 하나 = 카드 하나 (묶지 않음)
   const show = list.slice(0, State.page * State.perPage);

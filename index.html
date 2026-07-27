@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260727g">
+<link rel="stylesheet" href="style.css?v=20260727h">
 </head>
 <body>
 
@@ -77,6 +77,8 @@
         </div>
         <span id="resultCount" class="text-sm font-medium text-slate-500"></span>
       </div>
+
+      <div id="seriesHint" class="hidden text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3"></div>
 
       <div id="cardGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
       <div id="emptyState" class="hidden text-center py-16 text-slate-400">
@@ -383,25 +385,6 @@
   <div id="detailContent" class="bg-white rounded-2xl max-w-lg mx-auto my-8 overflow-hidden"></div>
 </div>
 
-<!-- ===== 시리즈 모아보기 모달 ===== -->
-<div id="seriesModal" class="hidden fixed inset-0 bg-black/50 z-40 overflow-y-auto p-4">
-  <div class="bg-white rounded-2xl max-w-lg mx-auto my-8">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
-      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-layer-group mr-2 text-amber-500"></i>시리즈 모아보기</h3>
-      <button id="closeSeries" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="p-5">
-      <div class="relative mb-3">
-        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-        <input type="text" id="seriesSearch" placeholder="시리즈 이름으로 검색..."
-          class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:border-lime-600 focus:ring-2 focus:ring-lime-100 outline-none text-sm">
-      </div>
-      <div id="seriesHint" class="hidden text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3"></div>
-      <div id="seriesList" class="space-y-2 max-h-[60vh] overflow-y-auto"></div>
-    </div>
-  </div>
-</div>
-
 <!-- ===== 동기화 비밀번호 모달 ===== -->
 <div id="syncPwModal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl w-full max-w-md">
@@ -446,10 +429,10 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260727g"></script>
-<script src="core.js?v=20260727g"></script>
-<script src="tmdb.js?v=20260727g"></script>
-<script src="watchlog.js?v=20260727g"></script>
-<script src="stats.js?v=20260727g"></script>
+<script src="seed-data.js?v=20260727h"></script>
+<script src="core.js?v=20260727h"></script>
+<script src="tmdb.js?v=20260727h"></script>
+<script src="watchlog.js?v=20260727h"></script>
+<script src="stats.js?v=20260727h"></script>
 </body>
 </html>

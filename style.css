@@ -155,28 +155,14 @@ textarea.form-input { height: auto; }
 /* 여러 시즌이 하나로 묶인 카드 */
 .wl-season-multi { background: rgba(224,112,15,.9); }
 
-/* 시리즈 모아보기 행 */
-.wl-series-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px;
-  border: 1px solid #e4eddb;
-  border-radius: 14px;
-  background: #fff;
-  cursor: pointer;
-  transition: background .12s, border-color .12s, transform .1s;
-}
-.wl-series-row:hover {
-  background: #f8fbf4; border-color: #c2dba6; transform: translateX(2px);
-}
-.wl-series-row img {
-  width: 46px; border-radius: 8px;
-  background: #e9f0e1; object-fit: cover; align-self: flex-start;
-}
-.wl-series-noposter {
-  width: 46px; height: 69px; border-radius: 8px;
-  background: #e9f0e1; color: #a8b89e;
-  display: flex; align-items: center; justify-content: center;
-  align-self: flex-start;
+/* 시리즈 카드 (시리즈 보기 모드) — 여러 편이 겹쳐 보이도록 */
+.wl-series-card { border-color: #f5d9a8; }
+.wl-series-card:hover { border-color: #eab764; box-shadow: 0 12px 28px rgba(224,112,15,.16); }
+.wl-series-card .wl-poster-wrap::after {
+  content: "";
+  position: absolute; right: -4px; top: 8px; bottom: 8px; width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: rgba(224,112,15,.35);
 }
 
 /* 상세 모달의 시즌별 기록 블록 */
