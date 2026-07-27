@@ -69,8 +69,8 @@ function renderStats() {
   wrap.innerHTML = `
     <!-- 요약 -->
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-      <div class="stat-box"><div class="stat-label">총 작품 <span class="text-slate-400">(시즌 묶음)</span></div><div class="stat-value">${totalWorks}</div></div>
-      <div class="stat-box"><div class="stat-label">시청 기록 <span class="text-slate-400">(시즌별)</span></div><div class="stat-value">${items.length}</div></div>
+      <div class="stat-box"><div class="stat-label">시청 기록 <span class="text-slate-400">(편·시즌별)</span></div><div class="stat-value">${items.length}</div></div>
+      <div class="stat-box"><div class="stat-label">작품 수 <span class="text-slate-400">(시리즈 묶음)</span></div><div class="stat-value">${totalWorks}</div></div>
       <div class="stat-box"><div class="stat-label">${currentYear}년 시청</div><div class="stat-value">${thisYearCount}</div></div>
       <div class="stat-box"><div class="stat-label">재시청 작품</div><div class="stat-value">${rewatched}</div></div>
       <div class="stat-box"><div class="stat-label">평균 별점</div><div class="stat-value">${avgRating}</div></div>

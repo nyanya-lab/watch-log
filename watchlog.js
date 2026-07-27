@@ -7,7 +7,8 @@ const Filters = {
   person: "",                       // 배우/감독 (배지 클릭 전용)
   sort: "date-desc", pendingOnly: false,
   noSeasonOnly: false,              // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
-  dupOnly: false                    // 제목이 다른데 tmdbId가 같은 항목만 (매칭 오류 의심)
+  dupOnly: false,                   // 제목이 다른데 tmdbId가 같은 항목만 (매칭 오류 의심)
+  group: ""                         // 시리즈 모아보기에서 고른 그룹 키
 };
 
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
@@ -49,6 +50,12 @@ function initWatchlog() {
   /* 필터 팝업 */
   $("#filterBtn").addEventListener("click", openFilterModal);
   $("#clearFilterBtn").addEventListener("click", () => { clearAllFilters(); toast("필터를 해제했습니다"); });
+
+  /* 시리즈 모아보기 */
+  $("#seriesBtn").addEventListener("click", openSeriesModal);
+  $("#closeSeries").addEventListener("click", closeSeriesModal);
+  $("#seriesModal").addEventListener("click", e => { if (e.target.id === "seriesModal") closeSeriesModal(); });
+  $("#seriesSearch").addEventListener("input", debounce(() => renderSeriesList($("#seriesSearch").value), 180));
   $("#closeFilter").addEventListener("click", closeFilterModal);
   $("#applyFilterBtn").addEventListener("click", closeFilterModal);
   $("#filterModal").addEventListener("click", e => { if (e.target.id === "filterModal") closeFilterModal(); });
@@ -328,7 +335,7 @@ function buildFilterOptions() {
 function hasActiveFilter() {
   return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
             Filters.genre || Filters.rating || Filters.person ||
-            Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.dupOnly ||
+            Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.dupOnly || Filters.group ||
             Filters.sort !== "date-desc");
 }
 
@@ -336,7 +343,7 @@ function hasActiveFilter() {
 function clearAllFilters() {
   Object.assign(Filters, {
     q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
-    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, dupOnly: false
+    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: ""
   });
   const s = $("#searchInput"); if (s) s.value = "";
   ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"]
@@ -349,7 +356,7 @@ function clearAllFilters() {
 function jumpToList(patch) {
   const backup = { ...Filters };
   Object.assign(Filters,
-    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, dupOnly: false },
+    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: "" },
     patch);
   applyFilters();
 
@@ -376,6 +383,95 @@ function jumpToList(patch) {
   requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
 }
 
+/* ---------- 시리즈 모아보기 ----------
+   목록은 기록 단위로 평면이고, 묶어보는 건 여기서만 한다.
+   2편 이상인 그룹(= TMDB 컬렉션 시리즈, 또는 같은 작품의 여러 시즌)만 보여준다. */
+function seriesGroups() {
+  return groupItems(State.items)
+    .filter(g => g.items.length > 1)
+    .map(g => {
+      const withPoster = g.items.find(x => x.poster) || g.main;
+      // 이름: TMDB 컬렉션명 > 공통 제목
+      const name = g.items.find(x => x.collectionName)?.collectionName || g.main.title;
+      const years = g.items.map(x => x.releaseYear).filter(Boolean).sort();
+      return {
+        key: g.key,
+        name,
+        items: g.items,
+        poster: withPoster.poster,
+        isCollection: !!g.main.collectionId,
+        yearRange: years.length ? (years[0] === years[years.length - 1] ? years[0] : `${years[0]}~${years[years.length - 1]}`) : ""
+      };
+    })
+    .sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name, "ko"));
+}
+
+function openSeriesModal() {
+  $("#seriesSearch").value = "";
+  renderSeriesList("");
+  $("#seriesModal").classList.remove("hidden");
+  setTimeout(() => $("#seriesSearch").focus(), 50);
+}
+function closeSeriesModal() { $("#seriesModal").classList.add("hidden"); }
+
+function renderSeriesList(q) {
+  const all = seriesGroups();
+  const needle = (q || "").trim().toLowerCase();
+  const list = needle
+    ? all.filter(s => s.name.toLowerCase().includes(needle) ||
+                      s.items.some(x => (x.title || "").toLowerCase().includes(needle)))
+    : all;
+
+  // 컬렉션 정보가 아직 없으면 안내 (시즌 묶음만 잡힘)
+  const hint = $("#seriesHint");
+  const hasCollection = all.some(s => s.isCollection);
+  if (!hasCollection) {
+    hint.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>설정 → <b>"시리즈 정보 가져오기"</b>를 누르면
+      해리포터·트와일라잇처럼 제목이 다른 시리즈도 여기에 묶여서 나옵니다.`;
+    hint.classList.remove("hidden");
+  } else {
+    hint.classList.add("hidden");
+  }
+
+  const box = $("#seriesList");
+  if (!list.length) {
+    box.innerHTML = `<div class="text-center py-10 text-slate-400 text-sm font-medium">
+      <i class="fa-solid fa-layer-group text-2xl mb-2 block"></i>${needle ? "검색 결과가 없습니다" : "묶인 시리즈가 없습니다"}</div>`;
+    return;
+  }
+
+  box.innerHTML = list.map(s => `
+    <div class="wl-series-row" data-key="${esc(s.key)}">
+      ${s.poster
+        ? `<img src="${s.poster}" alt="" loading="lazy">`
+        : `<div class="wl-series-noposter"><i class="fa-solid fa-film"></i></div>`}
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-sm text-slate-800 truncate">${esc(s.name)}</div>
+        <div class="text-xs font-medium text-slate-500 mt-0.5">
+          ${s.items.length}편 기록${s.yearRange ? ` · ${s.yearRange}` : ""}
+        </div>
+        <div class="flex flex-wrap gap-1 mt-1.5">
+          ${s.items.slice(0, 4).map(x => `<span class="badge badge-genre">${esc(x.season || x.title)}</span>`).join("")}
+          ${s.items.length > 4 ? `<span class="badge badge-genre">+${s.items.length - 4}</span>` : ""}
+        </div>
+      </div>
+      <i class="fa-solid fa-chevron-right text-slate-300"></i>
+    </div>`).join("");
+
+  box.querySelectorAll(".wl-series-row").forEach(el => {
+    el.addEventListener("click", () => filterBySeries(el.dataset.key));
+  });
+}
+
+/* 시리즈 선택 → 목록에서 그 시리즈 기록만 조회 */
+function filterBySeries(key) {
+  closeSeriesModal();
+  const g = seriesGroups().find(s => s.key === key);
+  jumpToList({ group: key });
+  if (g) toast(`${g.name} · ${g.items.length}편 보는 중`);
+}
+window.filterBySeries = filterBySeries;
+
 /* 배우·감독 배지 클릭 → 그 사람 작품만 조회 */
 function filterByPerson(name) {
   $("#detailModal").classList.add("hidden");
@@ -392,6 +488,7 @@ function applyFilters() {
     if (F.pendingOnly && i.tmdbId) return false;
     if (F.noSeasonOnly && !needsSeason(i)) return false;
     if (F.dupOnly && !isDupTmdb(i)) return false;
+    if (F.group && groupKeyOf(i) !== F.group) return false;
     if (F.q && !matchesQuery(i, F.q)) return false;
     if (F.type && i.type !== F.type) return false;
     if (F.country && i.country !== F.country) return false;
@@ -419,11 +516,11 @@ function applyFilters() {
 /* ---------- 헤더 / 카운트 ---------- */
 function renderHeaderCount() {
   const total = State.items.length;
-  const totalWorks = groupItems(State.items).length;   // 시즌 묶은 작품 수
+  const totalWorks = groupItems(State.items).length;   // 시리즈·시즌 묶은 작품 수 (참고용)
   const pending = State.items.filter(i => !i.tmdbId).length;
 
-  $("#totalCount").textContent = totalWorks;
-  $("#totalBadge").title = `작품 ${totalWorks}개 · 시청 기록 ${total}개(시즌 포함)`;
+  $("#totalCount").textContent = total;
+  $("#totalBadge").title = `시청 기록 ${total}개 · 시리즈로 묶으면 ${totalWorks}개 작품`;
   $("#totalBadge").classList.remove("hidden");
 
   const pb = $("#pendingBtn");
@@ -469,31 +566,19 @@ function renderHeaderCount() {
   const active = hasActiveFilter();
   $("#filterDot").classList.toggle("hidden", !active);
   $("#clearFilterBtn").classList.toggle("hidden", !active);   // 필터 걸렸을 때만 초기화 버튼 노출
-  const shown = (State.groups || []).length;
   $("#resultCount").textContent =
-    State.filtered.length === total ? "" : `${shown}개 표시`;
+    State.filtered.length === total ? "" : `${State.filtered.length}개 표시`;
 }
 
 /* ---------- 카드 렌더 ---------- */
 function renderCards() {
   const grid = $("#cardGrid");
-  const groups = State.groups || [];
-  const show = groups.slice(0, State.page * State.perPage);
+  const list = State.filtered;                        // 기록 하나 = 카드 하나 (묶지 않음)
+  const show = list.slice(0, State.page * State.perPage);
 
-  $("#emptyState").classList.toggle("hidden", groups.length > 0);
+  $("#emptyState").classList.toggle("hidden", list.length > 0);
 
-  grid.innerHTML = show.map(g => {
-    const i = g.main;                    // 대표 항목 (TMDB 정보·포스터는 시즌 공통)
-    const multi = g.items.length > 1;    // 시즌이 여러 개로 묶인 카드
-    // 묶인 카드는 시즌 전체를 아우르는 날짜 범위로 표시
-    const dates = multi
-      ? (() => {
-          const ss = g.items.map(x => x.startDate).filter(Boolean).sort();
-          const ee = g.items.map(x => x.endDate || x.startDate).filter(Boolean).sort();
-          return ss.length ? fmtRange(ss[0], ee[ee.length - 1]) : "";
-        })()
-      : fmtRange(i.startDate, i.endDate);
-    return `
+  grid.innerHTML = show.map(i => `
     <div class="wl-card ${!i.tmdbId ? "wl-pending" : ""}" data-id="${i.id}">
       <div class="wl-poster-wrap">
         ${i.poster
@@ -503,9 +588,7 @@ function renderCards() {
           ${i.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${i.voteAverage}</span>` : ""}
           ${i.rating ? `<span class="wl-myrate">${hearts(i.rating)}</span>` : ""}
         </div>
-        ${multi
-          ? `<span class="wl-season wl-season-multi"><i class="fa-solid fa-layer-group mr-1"></i>시즌 ${g.items.length}</span>`
-          : (i.season ? `<span class="wl-season">${esc(i.season)}</span>` : "")}
+        ${i.season ? `<span class="wl-season">${esc(i.season)}</span>` : ""}
       </div>
       <div class="wl-body">
         <div class="wl-title-row">
@@ -513,21 +596,20 @@ function renderCards() {
           ${i.type ? `<span class="badge badge-type shrink-0">${esc(i.type)}</span>` : ""}
         </div>
         ${visibleGenres(i.genres).length ? `<div class="wl-genres">
-          ${visibleGenres(i.genres).slice(0, 3).map(g2 => `<span class="badge badge-genre">${esc(g2)}</span>`).join("")}
+          ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}
         </div>` : ""}
-        <div class="wl-meta">${dates || "날짜 없음"}</div>
+        <div class="wl-meta">${fmtRange(i.startDate, i.endDate) || "날짜 없음"}</div>
         ${(i.releaseDate || i.releaseYear) ? `<div class="wl-meta" style="opacity:.8">
           <i class="fa-solid fa-clapperboard mr-1"></i>${i.type === "영화" ? "개봉" : "방영"} ${i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear}
         </div>` : ""}
       </div>
-    </div>`;
-  }).join("");
+    </div>`).join("");
 
   grid.querySelectorAll(".wl-card").forEach(el => {
     el.addEventListener("click", () => openDetail(el.dataset.id));
   });
 
-  const remain = groups.length - show.length;
+  const remain = list.length - show.length;
   $("#loadMoreWrap").classList.toggle("hidden", remain <= 0);
   $("#loadMoreCount").textContent = remain > 0 ? `(${remain}개 남음)` : "";
 }
@@ -537,9 +619,11 @@ function openDetail(id) {
   const i = State.items.find(x => x.id === id);
   if (!i) return;
 
-  /* 같은 작품(tmdbId)의 시즌들 — 표시만 묶고 기록은 시즌별로 각각 보여준다 */
+  /* 목록은 기록 단위로 분리되어 있으므로 상세도 이 기록 하나만 보여준다.
+     같은 시리즈의 다른 편은 아래 "이 시리즈의 다른 편"에서 이동할 수 있다. */
   const seasons = seasonsOf(i);
-  const multiSeason = seasons.length > 1;
+  const siblings = seasons.filter(s => s.id !== i.id);
+  const multiSeason = false;
 
   const reviewBox = (s) => s.review
     ? `<div class="mt-2 p-3 rounded-lg border" style="background:linear-gradient(135deg,#fef9c3,#fce7f3);border-color:#fde68a">
@@ -668,6 +752,17 @@ function openDetail(id) {
       </div>
 
       ${castHtml}
+
+      ${siblings.length ? `<div class="mt-4 border-t border-slate-100 pt-4">
+        <div class="text-xs font-semibold text-slate-500 mb-2">
+          <i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>이 시리즈의 다른 편 ${siblings.length}개
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          ${siblings.map(s => `<span class="badge badge-season badge-link" onclick="openDetail('${s.id}')">
+            ${esc(s.season || s.title)}${s.releaseYear ? ` <span class="opacity-70 ml-1">${s.releaseYear}</span>` : ""}
+          </span>`).join("")}
+        </div>
+      </div>` : ""}
     </div>
     <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
       <div class="flex-1"></div>
