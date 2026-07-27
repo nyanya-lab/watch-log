@@ -5,8 +5,14 @@
 const Filters = {
   q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
   person: "",                       // 배우/감독 (배지 클릭 전용)
-  sort: "date-desc", pendingOnly: false
+  sort: "date-desc", pendingOnly: false,
+  noSeasonOnly: false               // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
 };
+
+/* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
+function needsSeason(i) {
+  return !i.season && (i.totalSeasons || 0) > 1;
+}
 
 function initWatchlog() {
   $("#addBtn").addEventListener("click", () => openEdit(null));
@@ -52,6 +58,14 @@ function initWatchlog() {
   /* 미등록 토글 */
   $("#pendingBtn").addEventListener("click", () => {
     Filters.pendingOnly = !Filters.pendingOnly;
+    Filters.noSeasonOnly = false;
+    applyFilters();
+  });
+
+  /* 시즌 미기록 토글 */
+  $("#noSeasonBtn").addEventListener("click", () => {
+    Filters.noSeasonOnly = !Filters.noSeasonOnly;
+    Filters.pendingOnly = false;
     applyFilters();
   });
 
@@ -285,14 +299,15 @@ function buildFilterOptions() {
 function hasActiveFilter() {
   return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
             Filters.genre || Filters.rating || Filters.person ||
-            Filters.q || Filters.pendingOnly || Filters.sort !== "date-desc");
+            Filters.q || Filters.pendingOnly || Filters.noSeasonOnly ||
+            Filters.sort !== "date-desc");
 }
 
 /* 모든 필터 해제 (검색어·미등록 토글 포함) */
 function clearAllFilters() {
   Object.assign(Filters, {
     q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
-    person: "", sort: "date-desc", pendingOnly: false
+    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false
   });
   const s = $("#searchInput"); if (s) s.value = "";
   ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"]
@@ -305,7 +320,7 @@ function clearAllFilters() {
 function jumpToList(patch) {
   const backup = { ...Filters };
   Object.assign(Filters,
-    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false },
+    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false },
     patch);
   applyFilters();
 
@@ -345,6 +360,7 @@ function applyFilters() {
   const F = Filters;
   let list = State.items.filter(i => {
     if (F.pendingOnly && i.tmdbId) return false;
+    if (F.noSeasonOnly && !needsSeason(i)) return false;
     if (F.q && !matchesQuery(i, F.q)) return false;
     if (F.type && i.type !== F.type) return false;
     if (F.country && i.country !== F.country) return false;
@@ -388,6 +404,20 @@ function renderHeaderCount() {
     pb.innerHTML = `<i class="fa-solid fa-circle-exclamation mr-1.5"></i>미등록 ${pending}개`;
   }
   pb.classList.toggle("hidden", pending === 0 && !Filters.pendingOnly);
+
+  // 시즌 미기록 버튼 (0개면 숨김)
+  const noSeason = State.items.filter(needsSeason).length;
+  const nb = $("#noSeasonBtn");
+  if (nb) {
+    if (Filters.noSeasonOnly) {
+      nb.className = "px-3.5 py-2 rounded-lg border border-orange-500 bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition";
+      nb.innerHTML = `<i class="fa-solid fa-xmark mr-1.5"></i>시즌 미기록 ${noSeason}개 보는 중`;
+    } else {
+      nb.className = "px-3.5 py-2 rounded-lg border border-orange-300 bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition";
+      nb.innerHTML = `<i class="fa-solid fa-layer-group mr-1.5"></i>시즌 미기록 ${noSeason}개`;
+    }
+    nb.classList.toggle("hidden", noSeason === 0 && !Filters.noSeasonOnly);
+  }
 
   const active = hasActiveFilter();
   $("#filterDot").classList.toggle("hidden", !active);
