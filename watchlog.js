@@ -31,7 +31,17 @@ function dupTmdbIdSet() {
   titlesById.forEach((titles, id) => { if (titles.size > 1) dup.add(id); });
   return dup;
 }
+/* 내가 적은 시즌 번호와 TMDB가 말하는 편 번호가 어긋난 항목.
+   속편을 1편의 tmdbId로 등록해두면 이렇게 갈린다 (예: 범죄도시2를 S2로 적었는데 TMDB는 1편이라고 답함).
+   → 포스터·장르·평점·러닝타임이 전부 1편 것이므로 재매칭이 필요하다. */
+function seriesNoMismatch(i) {
+  if (!i.seriesNo || !i.season) return false;
+  const mine = parseInt(String(i.season).replace(/\D/g, ""));
+  return !!mine && mine !== i.seriesNo;
+}
+
 function isDupTmdb(i) {
+  if (seriesNoMismatch(i)) return true;
   return !!(i.tmdbId && State._dupIds && State._dupIds.has(i.tmdbId));
 }
 
@@ -204,11 +214,13 @@ function seasonsOf(item) {
     (a.startDate || "").localeCompare(b.startDate || ""));
 }
 
-/* 좌상단 배지에 쓸 라벨. 영화 시리즈 편 번호도 시즌과 같은 `S1` 형식으로 통일한다.
-   `seriesNo`(TMDB 컬렉션 기준 몇 번째 편)를 우선 — 사용자가 직접 적어둔 시즌 값보다 정확하다. */
+/* 좌상단 배지에 쓸 라벨. 시즌·시리즈 편 번호를 모두 `S1` 형식으로 통일한다.
+   **직접 적은 `season`이 우선**이고 `seriesNo`(TMDB 컬렉션 순번)는 빈칸을 채울 때만 쓴다.
+   속편이 1편의 tmdbId를 물고 있으면 TMDB는 그 기록을 1편이라고 답하기 때문에,
+   seriesNo를 우선하면 사용자가 S3으로 적어둔 기록이 S1로 덮여버린다. */
 function seriesLabel(i) {
-  if (i.seriesNo) return "S" + i.seriesNo;
   if (i.season) return esc(i.season);
+  if (i.seriesNo) return "S" + i.seriesNo;
   return "";
 }
 
@@ -554,7 +566,8 @@ function renderHeaderCount() {
 
   // 매칭 확인 버튼 (제목 다른데 tmdbId 같음 — 0개면 숨김)
   const dupIds = dupTmdbIdSet();
-  const dupCount = State.items.filter(i => i.tmdbId && dupIds.has(i.tmdbId)).length;
+  const dupCount = State.items.filter(i =>
+    seriesNoMismatch(i) || (i.tmdbId && dupIds.has(i.tmdbId))).length;
   const db = $("#dupBtn");
   if (db) {
     if (Filters.dupOnly) {
@@ -744,7 +757,7 @@ function openDetail(id) {
           ${(!multiSeason && i.rating) ? `<div class="mt-1">${hearts(i.rating, true)}</div>` : ""}
           <div class="flex flex-wrap gap-1 mt-2">
             ${seriesLabel(i) ? `<span class="badge badge-season">
-              ${i.seriesNo ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
+              ${i.collectionId ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
             </span>` : ""}
             ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
             ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}

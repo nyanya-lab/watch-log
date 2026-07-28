@@ -162,7 +162,10 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 - 미등록 버튼: 토글식. 0개면 자동 숨김 (`tmdbId` 없는 항목)
 - **시즌 미기록 버튼**: `totalSeasons>1`인데 `season`이 빈 항목 (`needsSeason`). 미등록과 별개 —
   TMDB 정보는 있는데 몇 번째 시즌인지만 안 적은 경우. 토글식, 0개면 숨김.
-- **매칭 확인 버튼**: 제목이 서로 다른데 `tmdbId`가 같은 항목 (`dupTmdbIdSet`/`isDupTmdb`).
+- **매칭 확인 버튼**(`isDupTmdb`): 두 종류를 잡는다.
+  ① `seriesNoMismatch` — 내가 적은 시즌 번호와 TMDB 편 번호가 어긋남(예: 범죄도시2를 S2로 적었는데
+     tmdbId는 1편 것이라 TMDB가 S1이라고 답함). 제목이 같아서 ②로는 안 잡히는 케이스.
+  ② 제목이 서로 다른데 `tmdbId`가 같은 항목 (`dupTmdbIdSet`).
   자동 매칭이 속편에 1편 정보를 물려놨을 때 잡힌다. 시즌은 원래 tmdbId를 공유하므로 제목이 다른 경우만 센다.
   `State._dupIds`에 `applyFilters`마다 한 번 계산. 토글식, 0개면 숨김.
   → 이 세 버튼(미등록/시즌 미기록/매칭 확인)은 서로 배타적으로 토글된다.
@@ -175,8 +178,8 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
   - 같은 버튼이 `/collection/{id}`도 조회해(`tmdbCollection`, 컬렉션당 1회 캐시) 개봉일 순으로
     **몇 번째 편**인지 `seriesNo`/`seriesTotal`에 채운다.
   - `seriesLabel(i)`: 시즌·시리즈 편 번호를 **모두 `S1` 형식으로 통일**해서 표시한다.
-    `seriesNo`가 있으면 `S{seriesNo}`, 없으면 `season` 값. seriesNo가 우선(TMDB 기준이라 더 정확).
-    사용자가 영화 시리즈 순서를 원래 시즌 칸에 S1/S2로 적어왔기 때문에 이 표기로 맞춘 것.
+    **직접 적은 `season`이 우선**, `seriesNo`는 빈칸을 채울 때만. 속편이 1편의 tmdbId를 물고 있으면
+    TMDB는 그 기록을 1편이라 답하므로, seriesNo를 우선하면 사용자가 S3으로 적은 게 S1로 덮인다.
   - 2순위 = `tmdbId` + `title` (같은 작품의 여러 시즌). 제목까지 보는 이유: 자동 매칭이 속편에
     1편 tmdbId를 물려놓는 사고가 있어서 tmdbId만으론 다른 작품이 합쳐진다.
   - 시리즈 카드 클릭 → `Filters.group`으로 그 시리즈 기록만 평면 조회 (`filterBySeries`).
