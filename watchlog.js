@@ -196,12 +196,21 @@ function seasonsOf(item) {
   const all = (item.tmdbId || item.collectionId)
     ? State.items.filter(x => groupKeyOf(x) === key)
     : [item];
-  const num = (x) => parseInt(String(x.season || "").replace(/\D/g, "")) || 0;
-  // 시즌번호 → 개봉/방영일 → 본 날짜 순 (시리즈는 시즌번호가 없을 수 있어 개봉일로 정렬)
+  const num = (x) => x.seriesNo || parseInt(String(x.season || "").replace(/\D/g, "")) || 0;
+  // 시리즈 편번호(또는 시즌번호) → 개봉/방영일 → 본 날짜 순
   return all.slice().sort((a, b) =>
     num(a) - num(b) ||
     (a.releaseDate || "").localeCompare(b.releaseDate || "") ||
     (a.startDate || "").localeCompare(b.startDate || ""));
+}
+
+/* 좌상단 배지에 쓸 라벨.
+   `seriesNo`(TMDB 컬렉션 기준 몇 번째 편)가 있으면 그것을 우선한다 — 영화엔 시즌 개념이 없고,
+   예전에 시리즈 순서를 시즌 칸(S1/S2)에 적어둔 기록이 있어서 그대로 두면 영화에 "S1"이 뜬다. */
+function seriesLabel(i) {
+  if (i.seriesNo) return `${i.seriesNo}편`;
+  if (i.season) return esc(i.season);
+  return "";
 }
 
 /* ---------- 내 별점: 하트 하나 + 숫자 (5점 만점, 소수점 가능) ---------- */
@@ -437,7 +446,7 @@ function renderSeriesCards() {
       <div class="wl-body">
         <div class="wl-title-row"><span class="wl-title">${esc(s.name)}</span></div>
         <div class="wl-genres">
-          ${s.items.slice(0, 3).map(x => `<span class="badge badge-season">${esc(x.season || x.releaseYear || x.title)}</span>`).join("")}
+          ${s.items.slice(0, 3).map(x => `<span class="badge badge-season">${seriesLabel(x) || esc(x.releaseYear || x.title)}</span>`).join("")}
           ${s.items.length > 3 ? `<span class="badge badge-genre">+${s.items.length - 3}</span>` : ""}
         </div>
         <div class="wl-meta">${s.yearRange || ""}</div>
@@ -597,7 +606,7 @@ function renderCards() {
           ${i.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${i.voteAverage}</span>` : ""}
           ${i.rating ? `<span class="wl-myrate">${hearts(i.rating)}</span>` : ""}
         </div>
-        ${i.season ? `<span class="wl-season">${esc(i.season)}</span>` : ""}
+        ${seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : ""}
       </div>
       <div class="wl-body">
         <div class="wl-title-row">
@@ -735,8 +744,8 @@ function openDetail(id) {
           ${i.originalTitle && i.originalTitle !== i.title ? `<div class="text-xs text-slate-400 font-medium">${esc(i.originalTitle)}</div>` : ""}
           ${(!multiSeason && i.rating) ? `<div class="mt-1">${hearts(i.rating, true)}</div>` : ""}
           <div class="flex flex-wrap gap-1 mt-2">
-            ${multiSeason
-              ? `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>시즌 ${seasons.length}개</span>`
+            ${i.seriesNo
+              ? `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>시리즈 ${i.seriesNo}${i.seriesTotal ? `/${i.seriesTotal}` : ""}편</span>`
               : (i.season ? `<span class="badge badge-season">${esc(i.season)}</span>` : "")}
             ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
             ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}
@@ -768,7 +777,7 @@ function openDetail(id) {
         </div>
         <div class="flex flex-wrap gap-1.5">
           ${siblings.map(s => `<span class="badge badge-season badge-link" onclick="openDetail('${s.id}')">
-            ${esc(s.season || s.title)}${s.releaseYear ? ` <span class="opacity-70 ml-1">${s.releaseYear}</span>` : ""}
+            ${seriesLabel(s) || esc(s.title)}${s.releaseYear ? ` <span class="opacity-70 ml-1">${s.releaseYear}</span>` : ""}
           </span>`).join("")}
         </div>
       </div>` : ""}
@@ -1189,7 +1198,19 @@ async function runRefreshCollections() {
       const d = await tmdbDetail(i.tmdbId, mediaType);
       i.collectionId = d.collectionId || null;
       i.collectionName = d.collectionName || "";
-      if (i.collectionId) found++;
+      i.seriesNo = null;
+      i.seriesTotal = null;
+
+      // 시리즈에 속하면 개봉일 순으로 "몇 번째 편"인지까지 채운다
+      if (i.collectionId) {
+        found++;
+        try {
+          const coll = await tmdbCollection(i.collectionId);
+          i.seriesNo = coll.order.get(i.tmdbId) || null;
+          i.seriesTotal = coll.total || null;
+          if (coll.name) i.collectionName = coll.name;
+        } catch { /* 편 번호만 실패해도 컬렉션 정보는 유지 */ }
+      }
     } catch { fail++; }
 
     if (n % 10 === 9) saveLocal(true);

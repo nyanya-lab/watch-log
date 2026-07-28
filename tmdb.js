@@ -212,6 +212,33 @@ async function tmdbDetail(id, mediaType) {
   };
 }
 
+/* ---------- 시리즈(컬렉션) 상세 ----------
+   컬렉션에 속한 작품들을 개봉일 순으로 정렬해 "몇 번째 편"을 계산할 수 있게 한다.
+   같은 컬렉션을 여러 번 조회하지 않도록 캐시. */
+const _collCache = new Map();
+async function tmdbCollection(collectionId) {
+  if (_collCache.has(collectionId)) return _collCache.get(collectionId);
+  const key = getTmdbKey();
+  const url = `${TMDB_BASE}/collection/${collectionId}?api_key=${key}&language=ko-KR`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("TMDB 컬렉션 조회 실패");
+  const d = await res.json();
+
+  // 미개봉(개봉일 없음)은 뒤로 보내고 개봉일 순 정렬
+  const parts = (d.parts || [])
+    .slice()
+    .sort((a, b) => (a.release_date || "9999").localeCompare(b.release_date || "9999"));
+
+  const info = {
+    id: d.id,
+    name: d.name || "",
+    order: new Map(parts.map((p, idx) => [p.id, idx + 1])),   // tmdbId → 몇 번째 편
+    total: parts.length
+  };
+  _collCache.set(collectionId, info);
+  return info;
+}
+
 /* 자동 매칭 (일괄 채우기용) */
 async function tmdbAutoMatch(title, hintType) {
   const { results } = await tmdbSearchSmart(title);

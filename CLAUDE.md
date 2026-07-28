@@ -101,6 +101,8 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
   cast: [{name, character}],  // 상위 8명
   collectionId: 1241,      // TMDB 공식 시리즈 ID (영화만). 시리즈 묶기 기준
   collectionName: "해리 포터 컬렉션",
+  seriesNo: 3,             // 컬렉션 안에서 몇 번째 편 (개봉일 순). 영화만
+  seriesTotal: 8,          // 그 컬렉션의 총 편수
   director: "황동혁",
   otts: ["넷플릭스"]        // TMDB 자동판별 결과
 }
@@ -169,7 +171,11 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
   (`Filters.seriesView` → `renderCards`가 `renderSeriesCards`로 분기). 2편 이상인 그룹만 카드로 표시.
   - 그룹 키(`groupKeyOf`) 1순위 = **TMDB 컬렉션**(`collectionId`) — 제목이 전혀 달라도 같은 시리즈면 묶임.
     예: "브레이킹 던"은 제목에 '트와일라잇'이 없지만 같은 컬렉션이라 잡힌다. 제목 기반으론 불가능한 케이스.
-    설정 "시리즈 정보 가져오기"(`runRefreshCollections`)로 채우며, 없으면 모달에 안내문구 표시.
+    설정 "시리즈 정보 가져오기"(`runRefreshCollections`)로 채우며, 없으면 안내문구 표시.
+  - 같은 버튼이 `/collection/{id}`도 조회해(`tmdbCollection`, 컬렉션당 1회 캐시) 개봉일 순으로
+    **몇 번째 편**인지 `seriesNo`/`seriesTotal`에 채운다.
+  - `seriesLabel(i)`: `seriesNo`가 있으면 "N편", 없으면 `season`("S1"). **seriesNo가 우선** —
+    영화엔 시즌 개념이 없는데 예전에 시리즈 순서를 시즌 칸에 적어둔 기록이 있어 그대로 두면 영화에 "S1"이 뜬다.
   - 2순위 = `tmdbId` + `title` (같은 작품의 여러 시즌). 제목까지 보는 이유: 자동 매칭이 속편에
     1편 tmdbId를 물려놓는 사고가 있어서 tmdbId만으론 다른 작품이 합쳐진다.
   - 시리즈 카드 클릭 → `Filters.group`으로 그 시리즈 기록만 평면 조회 (`filterBySeries`).
