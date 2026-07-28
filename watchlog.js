@@ -204,11 +204,10 @@ function seasonsOf(item) {
     (a.startDate || "").localeCompare(b.startDate || ""));
 }
 
-/* 좌상단 배지에 쓸 라벨.
-   `seriesNo`(TMDB 컬렉션 기준 몇 번째 편)가 있으면 그것을 우선한다 — 영화엔 시즌 개념이 없고,
-   예전에 시리즈 순서를 시즌 칸(S1/S2)에 적어둔 기록이 있어서 그대로 두면 영화에 "S1"이 뜬다. */
+/* 좌상단 배지에 쓸 라벨. 영화 시리즈 편 번호도 시즌과 같은 `S1` 형식으로 통일한다.
+   `seriesNo`(TMDB 컬렉션 기준 몇 번째 편)를 우선 — 사용자가 직접 적어둔 시즌 값보다 정확하다. */
 function seriesLabel(i) {
-  if (i.seriesNo) return `${i.seriesNo}편`;
+  if (i.seriesNo) return "S" + i.seriesNo;
   if (i.season) return esc(i.season);
   return "";
 }
@@ -744,9 +743,9 @@ function openDetail(id) {
           ${i.originalTitle && i.originalTitle !== i.title ? `<div class="text-xs text-slate-400 font-medium">${esc(i.originalTitle)}</div>` : ""}
           ${(!multiSeason && i.rating) ? `<div class="mt-1">${hearts(i.rating, true)}</div>` : ""}
           <div class="flex flex-wrap gap-1 mt-2">
-            ${i.seriesNo
-              ? `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>시리즈 ${i.seriesNo}${i.seriesTotal ? `/${i.seriesTotal}` : ""}편</span>`
-              : (i.season ? `<span class="badge badge-season">${esc(i.season)}</span>` : "")}
+            ${seriesLabel(i) ? `<span class="badge badge-season">
+              ${i.seriesNo ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
+            </span>` : ""}
             ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
             ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}
             ${ottBadges(i)}
