@@ -844,6 +844,9 @@ function openEdit(id) {
         totalEpisodes: i.totalEpisodes, totalSeasons: i.totalSeasons,
         cert: i.cert, voteAverage: i.voteAverage, companies: i.companies || [],
         originalTitle: i.originalTitle, otts: i.otts || [],
+        // 시리즈 정보도 같이 들고 있어야 수정 저장 때 지워지지 않는다
+        collectionId: i.collectionId || null, collectionName: i.collectionName || "",
+        seriesNo: i.seriesNo || null, seriesTotal: i.seriesTotal || null,
         title: i.title, type: i.type, country: i.country
       };
       renderSelected(State.selectedTmdb);
@@ -913,7 +916,8 @@ function saveItem() {
       runtime: t.runtime, totalEpisodes: t.totalEpisodes, totalSeasons: t.totalSeasons,
       cert: t.cert, voteAverage: t.voteAverage, companies: t.companies || [],
       originalTitle: t.originalTitle, otts: t.otts || [],
-      collectionId: t.collectionId || null, collectionName: t.collectionName || ""
+      collectionId: t.collectionId || null, collectionName: t.collectionName || "",
+      seriesNo: t.seriesNo || null, seriesTotal: t.seriesTotal || null
     });
   }
 

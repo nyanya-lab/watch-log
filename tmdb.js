@@ -320,6 +320,17 @@ async function selectTmdb(item) {
   try {
     const d = await tmdbDetail(item.tmdbId, item.mediaType);
     d.otts = await tmdbProviders(item.tmdbId, item.mediaType);
+
+    // 시리즈에 속하면 "몇 번째 편"까지 등록 시점에 채운다
+    if (d.collectionId) {
+      try {
+        const coll = await tmdbCollection(d.collectionId);
+        d.seriesNo = coll.order.get(d.tmdbId) || null;
+        d.seriesTotal = coll.total || null;
+        if (coll.name) d.collectionName = coll.name;
+      } catch { /* 편 번호는 못 가져와도 등록은 계속 */ }
+    }
+
     State.selectedTmdb = d;
     renderSelected(d);
     applyTmdbToForm(d);
@@ -362,6 +373,9 @@ function renderSelected(d) {
   $("#selMeta").textContent = metaBits.join(" · ");
 
   const chips = [];
+  if (d.collectionName) {
+    chips.push(`<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>${esc(d.collectionName)}${d.seriesNo ? ` S${d.seriesNo}` : ""}</span>`);
+  }
   if (d.voteAverage) chips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
   if (d.cert) chips.push(`<span class="badge badge-cert">${esc(d.cert)}</span>`);
   if (d.otts && d.otts.length) chips.push(`<span class="badge badge-ott">${esc(d.otts.join(", "))}</span>`);

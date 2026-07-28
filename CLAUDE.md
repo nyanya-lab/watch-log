@@ -188,6 +188,11 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
   좌상단은 시즌(`.wl-season`). 내 별점=하트 하나+숫자(`hearts()`, 예 ♥4.5). **5점 만점 소수 입력**(`#fRating` number, `readRating()`).
 - 상세(큰 화면)엔 본 날짜 + 방영/개봉일 둘 다 표시(방영일은 releaseDate 없으면 releaseYear로 폴백).
 - 등록/수정 모달: TMDB 검색 → 선택 시 정보카드 표시 + 폼 자동 채움. 수정 시에도 기존 TMDB 정보 카드 표시됨
+  - 등록 시점에 `selectTmdb`가 컬렉션까지 조회해 `seriesNo`/`seriesTotal`을 채운다
+    (그래서 새로 등록한 영화도 바로 시리즈에 묶이고 S번호가 붙는다).
+  - **주의**: `openEdit`이 `State.selectedTmdb`를 재구성할 때 `collectionId`/`collectionName`/
+    `seriesNo`/`seriesTotal`을 반드시 함께 넣어야 한다. 빠뜨리면 수정 저장 시 `saveItem`이
+    `t.collectionId || null`로 덮어써서 시리즈 정보가 지워진다.
 - 시즌: TMDB 시즌 목록 있으면 드롭다운, 없으면 ± 스테퍼로 폴백
 - OTT 입력: 스트리밍 목록은 TMDB가 자동으로 채우므로(`otts`) 직접 기록하는 건 **영화관 체크박스 + 기타 자유입력**뿐.
   - 카드/상세에는 스트리밍 전체 목록(`otts`)을 배지로 표시. "내가 본 곳"(`ott`, 영화관 등)이
