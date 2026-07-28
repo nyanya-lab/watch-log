@@ -45,6 +45,21 @@ function isDupTmdb(i) {
   return !!(i.tmdbId && State._dupIds && State._dupIds.has(i.tmdbId));
 }
 
+/* 자동 재매칭이 안전한 항목만 고른다.
+   조건: TMDB는 이 기록을 시리즈 1편이라 하는데(seriesNo=1) 내가 2편 이상으로 적어둔 경우.
+   = 속편을 1편 tmdbId에 얹어놓은 패턴. 컬렉션에서 그 번호의 영화를 찾아 갈아끼우면 된다.
+   반대로 링크는 맞는데 번호 기준만 다른 경우(예: 안 본 편이 있어 번호가 밀린 브레이킹 던)는
+   seriesNo가 1이 아니므로 자동 대상에서 빠진다 — 잘못 건드리면 엉뚱한 영화로 바뀐다. */
+function autoFixTargets() {
+  return State.items.map(i => {
+    if (i.type !== "영화" || !i.collectionId || i.seriesNo !== 1) return null;
+    const want = parseInt(String(i.season || "").replace(/\D/g, ""));
+    if (!want || want < 2) return null;
+    if (i.seriesTotal && want > i.seriesTotal) return null;   // 총편수 밖이면 판단 필요
+    return { item: i, want };
+  }).filter(Boolean);
+}
+
 function initWatchlog() {
   $("#addBtn").addEventListener("click", () => openEdit(null));
   $("#closeModal").addEventListener("click", closeEdit);
@@ -64,6 +79,9 @@ function initWatchlog() {
 
   /* 시리즈 보기 토글 */
   $("#seriesBtn").addEventListener("click", toggleSeriesView);
+
+  /* 매칭 확인 목록의 자동 재매칭 */
+  $("#autoFixBtn").addEventListener("click", runAutoRematch);
   $("#closeFilter").addEventListener("click", closeFilterModal);
   $("#applyFilterBtn").addEventListener("click", closeFilterModal);
   $("#filterModal").addEventListener("click", e => { if (e.target.id === "filterModal") closeFilterModal(); });
@@ -579,6 +597,17 @@ function renderHeaderCount() {
     }
     db.title = "제목이 다른데 TMDB 작품이 같음 — 자동 매칭 오류 의심";
     db.classList.toggle("hidden", dupCount === 0 && !Filters.dupOnly);
+  }
+
+  // 자동 재매칭 안내바 — 매칭 확인 목록을 보는 중이고 고칠 게 있을 때만
+  const fixBar = $("#autoFixBar");
+  if (fixBar) {
+    const fixable = Filters.dupOnly ? autoFixTargets().length : 0;
+    fixBar.classList.toggle("hidden", fixable === 0);
+    if (fixable) {
+      $("#autoFixMsg").innerHTML =
+        `<i class="fa-solid fa-circle-info mr-1"></i>이 중 <b>${fixable}개</b>는 속편이 1편에 잘못 연결된 경우예요. 올바른 편으로 자동 연결할 수 있어요.`;
+    }
   }
 
   // 시리즈 보기 버튼 활성 표시
@@ -1185,6 +1214,97 @@ async function runRefreshOtts() {
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast(`OTT 정보 갱신 완료`, "success");
 }
+
+/* ---------- 시리즈 편 자동 재매칭 ----------
+   "속편인데 1편 tmdbId를 물고 있는" 기록을 컬렉션의 해당 편으로 다시 연결한다.
+   바꾸기 전에 바뀔 목록을 전부 보여주고 확인을 받는다. */
+async function runAutoRematch() {
+  if (_enriching) { toast("이미 진행 중입니다"); return; }
+  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const targets = autoFixTargets();
+  if (!targets.length) { toast("자동으로 고칠 항목이 없습니다", "success"); return; }
+
+  const status = $("#enrichStatus");
+  _enriching = true;
+
+  // 1) 컬렉션에서 "그 번호의 영화"를 찾아 미리보기 목록을 만든다
+  const plan = [];
+  try {
+    for (const t of targets) {
+      const coll = await tmdbCollection(t.item.collectionId);
+      const target = [...coll.order.entries()].find(([, no]) => no === t.want);
+      if (!target) continue;
+      const newId = target[0];
+      if (newId === t.item.tmdbId) continue;         // 이미 맞음
+      const d = await tmdbDetail(newId, "movie");
+      plan.push({ item: t.item, want: t.want, detail: d });
+      await new Promise(r => setTimeout(r, 220));
+    }
+  } catch (e) {
+    _enriching = false;
+    toast("조회 실패: " + e.message, "error");
+    return;
+  }
+
+  if (!plan.length) { _enriching = false; toast("바꿀 항목이 없습니다", "success"); return; }
+
+  // 2) 확인
+  const lines = plan.map(p =>
+    `· ${p.item.title} (${p.item.releaseYear || "?"})  →  ${p.detail.title} (${p.detail.releaseYear || "?"})`);
+  const ok = confirm(
+    `아래 ${plan.length}개를 올바른 편으로 다시 연결합니다.\n` +
+    `제목·포스터·평점·러닝타임이 그 편 것으로 바뀝니다.\n` +
+    `본 날짜·별점·한줄평 같은 내 기록은 그대로 유지됩니다.\n\n` +
+    lines.join("\n")
+  );
+  if (!ok) { _enriching = false; toast("취소했습니다"); return; }
+
+  // 3) 적용
+  const bar = $("#enrichBar");
+  const fill = $("#enrichBarFill");
+  bar.classList.remove("hidden");
+
+  let done = 0;
+  for (let n = 0; n < plan.length; n++) {
+    const p = plan[n];
+    status.textContent = `${n + 1} / ${plan.length} — ${p.detail.title}`;
+    status.className = "text-sm mt-3 font-medium text-slate-600";
+    fill.style.width = ((n + 1) / plan.length * 100).toFixed(1) + "%";
+
+    const d = p.detail;
+    try {
+      d.otts = await tmdbProviders(d.tmdbId, "movie");
+      const coll = await tmdbCollection(d.collectionId || p.item.collectionId);
+      Object.assign(p.item, {
+        tmdbId: d.tmdbId, title: d.title || p.item.title,
+        poster: d.poster, backdrop: d.backdrop,
+        genres: d.genres, overview: d.overview,
+        originalTitle: d.originalTitle,
+        releaseDate: d.releaseDate, releaseYear: d.releaseYear,
+        runtime: d.runtime, cert: d.cert, voteAverage: d.voteAverage,
+        companies: d.companies, cast: d.cast, director: d.director,
+        otts: d.otts || [],
+        collectionId: d.collectionId || p.item.collectionId,
+        collectionName: d.collectionName || p.item.collectionName,
+        seriesNo: coll ? (coll.order.get(d.tmdbId) || p.want) : p.want,
+        seriesTotal: coll ? coll.total : p.item.seriesTotal
+      });
+      done++;
+    } catch { /* 실패한 항목은 건드리지 않고 넘어간다 */ }
+
+    await new Promise(r => setTimeout(r, 220));
+  }
+
+  saveLocal();
+  applyFilters();
+  _enriching = false;
+  markUpd("rematch");
+  status.textContent = `재매칭 완료 — ${done}개 수정됨`;
+  status.className = "text-sm mt-3 font-medium text-emerald-600";
+  toast(`${done}개를 올바른 편으로 연결했습니다`, "success");
+}
+window.runAutoRematch = runAutoRematch;
 
 /* ---------- 시리즈(TMDB 컬렉션) 정보만 가져오기 ----------
    제목이 달라도 같은 시리즈면 묶이도록 collectionId를 채운다. 영화에만 존재. */
