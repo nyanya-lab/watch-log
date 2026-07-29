@@ -37,6 +37,7 @@ function addWish(w) {
     year: w.year || "",
     voteAverage: w.voteAverage ?? null,
     overview: w.overview || "",
+    otts: w.otts || [],                 // 담는 시점에 한 번 조회 (목록 응답엔 없는 정보)
     reason: w.reason || "",             // 추천으로 담았다면 그 이유
     addedAt: new Date().toISOString()
   });
@@ -464,7 +465,7 @@ function renderDcWish() {
       voteAverage: w.voteAverage,
       note: st.watched
         ? `<span class="badge badge-type"><i class="fa-solid fa-check mr-1"></i>이미 기록에 있어요</span>`
-        : (w.reason ? `<span class="badge badge-genre">${esc(w.reason)}</span>` : ""),
+        : `${ottBadges(w)}${w.reason ? `<span class="badge badge-genre">${esc(w.reason)}</span>` : ""}`,
       actions: acts
     };
   });
@@ -561,21 +562,40 @@ async function addFromDiscover(tmdbId, mediaType, season) {
   }
 }
 
-function dcToggleWish(tmdbId) {
+async function dcToggleWish(tmdbId) {
   const e = Discover._byId.get(String(tmdbId));
   if (isWished(+tmdbId)) {
     removeWish(+tmdbId);
     toast("보고싶어요에서 뺐습니다");
-  } else if (e) {
-    addWish({
-      tmdbId: +tmdbId, mediaType: e.mediaType, title: e.title,
-      originalTitle: (e._raw || {}).originalTitle || "",
-      poster: e.poster, year: e.year, voteAverage: e.voteAverage,
-      overview: (e._raw || {}).overview || ""
-    });
-    toast("보고싶어요에 담았습니다", "success");
+    renderDiscover();
+    return;
   }
+  if (!e) return;
+
+  // 먼저 담아서 바로 반응하게 하고, OTT는 뒤이어 채운다
+  addWish({
+    tmdbId: +tmdbId, mediaType: e.mediaType, title: e.title,
+    originalTitle: (e._raw || {}).originalTitle || "",
+    poster: e.poster, year: e.year, voteAverage: e.voteAverage,
+    overview: (e._raw || {}).overview || "",
+    reason: (e._raw || {}).reason || ""
+  });
+  toast("보고싶어요에 담았습니다", "success");
   renderDiscover();
+  await fillWishOtt(+tmdbId, e.mediaType);
+}
+
+/* 위시에 담는 순간 OTT를 한 번 조회한다.
+   스트리밍 정보는 목록 응답에 없고 작품별 엔드포인트에만 있어서, 카드 60개를 한꺼번에
+   조회하면 그만큼 기다려야 한다. "담을 때 1개씩"이면 기다림 없이 최신 정보를 얻는다. */
+async function fillWishOtt(tmdbId, mediaType) {
+  try {
+    let otts = await tmdbProviders(tmdbId, mediaType);
+    // 구분 추정이 빗나갈 수 있어(애니 극장판 등) 비면 반대쪽도 한 번 시도
+    if (!otts.length) otts = await tmdbProviders(tmdbId, mediaType === "movie" ? "tv" : "movie");
+    const w = State.wishes.find(x => x.tmdbId === tmdbId);
+    if (w) { w.otts = otts; saveLocal(); renderDiscover(); }
+  } catch { /* OTT를 못 가져와도 담긴 건 유지 */ }
 }
 
 /* ---------- TMDB 상세 미리보기 ---------- */
@@ -736,7 +756,8 @@ function dcModalWish(tmdbId, mediaType) {
       tmdbId: +tmdbId, mediaType,
       title: d ? d.title : "", originalTitle: d ? d.originalTitle : "",
       poster: d ? d.poster : null, year: d ? d.releaseYear : "",
-      voteAverage: d ? d.voteAverage : null, overview: d ? d.overview : ""
+      voteAverage: d ? d.voteAverage : null, overview: d ? d.overview : "",
+      otts: d ? (d.otts || []) : []      // 상세를 여는 김에 이미 받아둔 값 — 추가 호출 없음
     });
     toast("보고싶어요에 담았습니다", "success");
   }

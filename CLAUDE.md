@@ -119,8 +119,16 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 
 ```js
 { id:"w...", tmdbId, mediaType:"movie"|"tv", title, originalTitle, poster,
-  year, voteAverage, overview, reason:"「기생충」과 비슷", addedAt:"ISO" }
+  year, voteAverage, overview, otts:["넷플릭스"],
+  reason:"「기생충」과 비슷", addedAt:"ISO" }
 ```
+
+`otts`는 **담는 순간 1회만** 조회한다(`fillWishOtt`). TMDB는 스트리밍 정보를 목록 응답에 안 주고
+작품별 `/watch/providers`에만 주기 때문에, 추천 카드 60개에 붙이려면 호출이 60번 더 필요하다
+(한도 문제는 아니다 — TMDB는 2019년에 "10초당 40회" 제한을 없앴고 지금은 초당 40회 근처의
+느슨한 상한만 있다. 우리는 240ms 간격이라 초당 4회. 문제는 순전히 **기다리는 시간**).
+담을 때 1개씩 부르면 기다림 없이 최신값을 얻는다. 상세 모달에서 담을 땐 이미 받아둔 값을 재사용해
+추가 호출이 아예 없다.
 
 ## 저장 구조
 
@@ -162,6 +170,7 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 
 OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB 연동된 항목의 `otts`만
 `tmdbProviders`로 다시 조회 (구분으로 movie/tv 추정, 비면 반대쪽도 시도). OTT는 시간이 지나면 바뀌므로 별도 제공.
+**시청 기록 + 보고싶어요를 함께** 갱신한다 — 위시는 "지금 어디서 볼 수 있나"가 곧 쓸모라 최신값이 더 중요하다.
 
 평점만 갱신 (`runRefreshRatings`): `voteAverage`만 `tmdbDetail`로 다시 조회.
 각 갱신 버튼 옆에 최근 실행 시각 표시 (`LS_UPD`=`watchlog_updated_at`, `markUpd`/`renderUpdInfo`).
@@ -292,7 +301,8 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 - [x] ~~속편이 1편과 같은 `tmdbId`~~ → 2026-07-27 사용자가 직접 재매칭해 해결.
       제목이 다른데 tmdbId가 같은 항목 0개 확인.
 - [ ] TMDB 검색 실패 시 Gemini API로 원제 추론하는 방안 논의됐으나 미적용
-- [ ] 추천 결과에 OTT 배지 없음 (작품마다 `/watch/providers` 호출이 필요해 비쌈 — 상세에서만 보임)
+- [ ] 추천·검색 카드에는 OTT 배지 없음 (작품마다 별도 호출이 필요해 60개면 ~19초).
+      대신 **보고싶어요에 담는 순간** 조회해서 위시 카드에는 표시됨. 상세 모달에도 나옴.
 - [ ] `favicon.ico` 없음 (404 로그)
 - [ ] 항목 수가 많아지면 카드 렌더링 최적화 필요 (현재 24개씩 더보기)
 

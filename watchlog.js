@@ -1174,9 +1174,17 @@ async function runRefreshOtts() {
   if (_enriching) { toast("이미 진행 중입니다"); return; }
   if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
 
-  const targets = State.items.filter(i => i.tmdbId);
+  // 시청 기록 + 보고싶어요를 함께 갱신한다.
+  // (위시는 "지금 어디서 볼 수 있나"가 곧 쓸모라 오히려 최신값이 더 필요하다)
+  const targets = [
+    ...State.items.filter(i => i.tmdbId).map(i => ({ obj: i, primary: i.type === "영화" ? "movie" : "tv" })),
+    ...State.wishes.filter(w => w.tmdbId).map(w => ({ obj: w, primary: w.mediaType || "movie" }))
+  ];
   if (!targets.length) { toast("갱신할 항목이 없습니다 (TMDB 연동된 항목만 대상)", "success"); return; }
-  if (!confirm(`${targets.length}개 항목의 OTT(스트리밍) 정보를 새로 조회합니다.`)) return;
+
+  const wishN = State.wishes.filter(w => w.tmdbId).length;
+  if (!confirm(`${targets.length - wishN}개 기록${wishN ? ` + 보고싶어요 ${wishN}개` : ""}의 ` +
+               `OTT(스트리밍) 정보를 새로 조회합니다.`)) return;
 
   _enriching = true;
   const status = $("#enrichStatus");
@@ -1186,13 +1194,12 @@ async function runRefreshOtts() {
 
   let changed = 0, fail = 0;
   for (let n = 0; n < targets.length; n++) {
-    const i = targets[n];
+    const { obj: i, primary } = targets[n];
     status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
     status.className = "text-sm mt-3 font-medium text-slate-600";
     fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
 
     // 저장된 구분으로 movie/tv 추정, 비면 반대쪽도 시도 (애니 극장판 등 대비)
-    const primary = i.type === "영화" ? "movie" : "tv";
     const other = primary === "movie" ? "tv" : "movie";
     try {
       let otts = await tmdbProviders(i.tmdbId, primary);
@@ -1208,6 +1215,7 @@ async function runRefreshOtts() {
 
   saveLocal();
   applyFilters();
+  renderDiscover();
   _enriching = false;
   markUpd("ott");
   status.textContent = `OTT 갱신 완료 — 변경 ${changed}개${fail ? `, 실패 ${fail}개` : ""}`;
