@@ -1353,6 +1353,7 @@ async function runRefreshCollections() {
           i.seriesNo = coll.order.get(i.tmdbId) || null;
           i.seriesTotal = coll.total || null;
           if (coll.name) i.collectionName = coll.name;
+          saveCollInfo(coll);        // 편별 개봉일·제목 저장 (탐색 탭 이어보기용)
         } catch { /* 편 번호만 실패해도 컬렉션 정보는 유지 */ }
       }
     } catch { fail++; }

@@ -296,10 +296,40 @@ async function tmdbCollection(collectionId) {
     id: d.id,
     name: d.name || "",
     order: new Map(parts.map((p, idx) => [p.id, idx + 1])),   // tmdbId → 몇 번째 편
-    total: parts.length
+    total: parts.length,
+    // 편별 정보. "안 본 편" 중 미개봉을 걸러내고, 카드에 실제 제목·포스터를 쓰려면 필요하다
+    parts: parts.map((p, idx) => ({
+      tmdbId: p.id,
+      no: idx + 1,
+      title: p.title || p.name || "",
+      releaseDate: p.release_date || "",
+      poster: p.poster_path ? TMDB_IMG + p.poster_path : null
+    }))
   };
   _collCache.set(collectionId, info);
   return info;
+}
+
+/* ---------- 컬렉션 편 정보 캐시 (localStorage) ----------
+   `_collCache`는 새로고침하면 날아가므로, 편별 개봉일·제목을 이 기기에 남겨둔다.
+   TMDB에서 다시 만들 수 있는 정보라 서버 동기화는 하지 않는다(payload만 커짐). */
+const LS_COLL = "watchlog_collections";
+
+function getCollCache() {
+  try { return JSON.parse(localStorage.getItem(LS_COLL) || "{}"); }
+  catch { return {}; }
+}
+
+function saveCollInfo(info) {
+  if (!info || !info.id || !info.parts) return;
+  try {
+    const c = getCollCache();
+    c[info.id] = {
+      name: info.name, total: info.total, parts: info.parts,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem(LS_COLL, JSON.stringify(c));
+  } catch { /* 저장 공간 문제면 조용히 넘어간다 (캐시일 뿐) */ }
 }
 
 /* 자동 매칭 (일괄 채우기용) */
@@ -391,6 +421,7 @@ async function selectTmdb(item) {
         d.seriesNo = coll.order.get(d.tmdbId) || null;
         d.seriesTotal = coll.total || null;
         if (coll.name) d.collectionName = coll.name;
+        saveCollInfo(coll);          // 편 정보도 같이 남겨둔다 (탐색 탭 이어보기용)
       } catch { /* 편 번호는 못 가져와도 등록은 계속 */ }
     }
 

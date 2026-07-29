@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260729c">
+<link rel="stylesheet" href="style.css?v=20260730a">
 </head>
 <body>
 
@@ -149,6 +149,14 @@
           내가 별점을 높게 준 작품·재시청한 작품과 <b>비슷한 작품</b>, 그리고 <b>내 취향 장르</b>에서 함께 골라옵니다.
           이미 기록한 작품은 빠집니다.
         </p>
+      </div>
+
+      <!-- 이어보기: 영화 시리즈의 편 정보가 없을 때 안내 -->
+      <div id="dcPartsBar" class="hidden flex items-center gap-3 flex-wrap text-sm font-semibold text-lime-800 bg-lime-50 border border-lime-200 rounded-lg px-3 py-2.5">
+        <span id="dcPartsMsg" class="flex-1 min-w-0"></span>
+        <button id="dcPartsBtn" class="px-3.5 py-2 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800 shrink-0">
+          <i class="fa-solid fa-layer-group mr-1"></i>시리즈 편 정보 가져오기
+        </button>
       </div>
 
       <div id="dcHint" class="hidden text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></div>
@@ -499,11 +507,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260729c"></script>
-<script src="core.js?v=20260729c"></script>
-<script src="tmdb.js?v=20260729c"></script>
-<script src="watchlog.js?v=20260729c"></script>
-<script src="discover.js?v=20260729c"></script>
-<script src="stats.js?v=20260729c"></script>
+<script src="seed-data.js?v=20260730a"></script>
+<script src="core.js?v=20260730a"></script>
+<script src="tmdb.js?v=20260730a"></script>
+<script src="watchlog.js?v=20260730a"></script>
+<script src="discover.js?v=20260730a"></script>
+<script src="stats.js?v=20260730a"></script>
 </body>
 </html>

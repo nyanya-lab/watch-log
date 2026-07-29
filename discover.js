@@ -331,6 +331,84 @@ function renderDcReco() {
     <p class="text-sm mt-1">"추천 받기"를 누르면 내 기록을 바탕으로 골라옵니다.</p>`);
 }
 
+/* ---------- 영화 시리즈 이어보기 ----------
+   TV는 `totalSeasons`로 안 본 시즌을 알 수 있지만, 영화에는 그 필드가 없다.
+   영화는 TMDB 컬렉션(`collectionId`)의 편 목록과 내 기록을 맞춰봐야 한다.
+
+   미개봉 편은 뺀다 — TMDB 컬렉션에는 발표만 된 속편도 들어있어서
+   (분노의 질주 12편, 범죄도시 5편 등) 그대로 두면 볼 수 없는 걸 "안 봤다"고 띄운다. */
+function movieContinueList() {
+  const cache = getCollCache();
+  const today = new Date().toISOString().slice(0, 10);
+  const dkey = (x) => x.lastWatchStart || x.startDate || "";
+
+  const byColl = new Map();
+  State.items.forEach(i => {
+    if (i.type !== "영화" || !i.collectionId) return;
+    if (!byColl.has(i.collectionId)) byColl.set(i.collectionId, []);
+    byColl.get(i.collectionId).push(i);
+  });
+
+  const out = [];
+  byColl.forEach((recs, cid) => {
+    const info = cache[cid];
+    if (!info || !info.parts) return;            // 편 정보를 아직 안 가져온 시리즈
+
+    /* 본 편 판정을 tmdbId와 편 번호 둘 다로 한다.
+       속편이 1편의 tmdbId를 물고 있는 기록이 남아 있을 수 있어서(매칭 확인 참고),
+       tmdbId만 보면 실제로 본 편을 "안 봤다"고 잘못 잡는다. */
+    const seenId = new Set(recs.map(r => r.tmdbId).filter(Boolean));
+    const seenNo = new Set(recs.map(r =>
+      r.seriesNo || parseInt(String(r.season || "").replace(/\D/g, "")) || 0).filter(Boolean));
+
+    const released = info.parts.filter(p => p.releaseDate && p.releaseDate <= today);
+    const missing = released.filter(p => !seenId.has(p.tmdbId) && !seenNo.has(p.no));
+    if (!missing.length) return;
+
+    const main = recs.slice().sort((a, b) => dkey(b).localeCompare(dkey(a)))[0];
+    out.push({
+      kind: "movie", collectionId: cid, info, recs, main, missing,
+      watched: recs.length,
+      upcoming: info.parts.length - released.length,   // 아직 안 나온 편 수 (안내용)
+      sortKey: dkey(main)
+    });
+  });
+
+  return out;
+}
+
+/* 편 정보를 아직 안 가져온 영화 시리즈 */
+function collsNeedingParts() {
+  const cache = getCollCache();
+  const ids = new Set();
+  State.items.forEach(i => {
+    if (i.type === "영화" && i.collectionId && !cache[i.collectionId]) ids.add(i.collectionId);
+  });
+  return [...ids];
+}
+
+/* 그 시리즈들의 편 정보를 받아온다 (시리즈당 1회) */
+let _partsFetching = false;
+async function runFetchCollParts() {
+  if (_partsFetching) return;
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const ids = collsNeedingParts();
+  if (!ids.length) { toast("이미 다 가져왔습니다", "success"); return; }
+
+  _partsFetching = true;
+  const msg = $("#dcPartsMsg");
+  let ok = 0;
+  for (let n = 0; n < ids.length; n++) {
+    msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>시리즈 편 정보 ${n + 1} / ${ids.length} 가져오는 중...`;
+    try { saveCollInfo(await tmdbCollection(ids[n])); ok++; } catch { /* 하나 실패해도 계속 */ }
+    await new Promise(r => setTimeout(r, 240));
+  }
+  _partsFetching = false;
+  toast(`시리즈 ${ok}개의 편 정보를 가져왔습니다`, "success");
+  renderDiscover();
+}
+
 /* ---------- 카드 ---------- */
 /* e = { tmdbId, mediaType, title, poster, year, voteAverage, note, flag, actions[] } */
 function dcCardHtml(e) {
@@ -389,6 +467,7 @@ function renderDiscover() {
   if (!$("#dcGrid")) return;
   updateDcNav();
   if (Discover.view !== "reco") $("#dcRecoBar").classList.add("hidden");
+  if (Discover.view !== "next") $("#dcPartsBar").classList.add("hidden");
 
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "search") return renderDcSearch();
@@ -399,7 +478,7 @@ window.renderDiscover = renderDiscover;
 
 function updateDcNav() {
   $$(".dc-nav").forEach(b => b.classList.toggle("active", b.dataset.view === Discover.view));
-  const nextN = continueList().length;
+  const nextN = continueList().length + movieContinueList().length;
   const wishN = State.wishes.length;
   $("#dcNextCount").textContent = nextN;
   $("#dcWishCount").textContent = wishN;
@@ -411,15 +490,17 @@ function updateDcNav() {
   if (sb) sb.classList.toggle("hidden", !Discover.results.length && Discover.view !== "search");
 }
 
-/* 이어보기 */
+/* 이어보기 — TV의 안 본 시즌 + 영화 시리즈의 안 본 편을 함께 */
 function renderDcNext() {
   $("#dcHint").classList.add("hidden");
 
-  const list = continueList().map(c => {
+  // TV: 안 본 시즌
+  const tv = continueList().map(c => {
     const st = c.st;
     const seen = st.seenSeasons.map(n => `S${n}`).join("·");
     const miss = st.missing.map(n => `S${n}`).join("·");
     return {
+      _sort: c.item.lastWatchStart || c.item.startDate || "",
       tmdbId: c.tmdbId,
       mediaType: c.mediaType,
       title: c.item.title,
@@ -437,10 +518,45 @@ function renderDcNext() {
     };
   });
 
+  /* 영화: 안 본 편. 카드는 "다음에 볼 편"을 대표로 세운다
+     (포스터·제목이 이미 본 편이 아니라 볼 편이어야 쓸모가 있다) */
+  const movie = movieContinueList().map(c => {
+    const next = c.missing[0];
+    return {
+      _sort: c.sortKey,
+      tmdbId: next.tmdbId,
+      mediaType: "movie",
+      title: next.title,
+      poster: next.poster,
+      year: (next.releaseDate || "").slice(0, 4),
+      voteAverage: null,
+      flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${c.missing.length}편 안 봄</span>`,
+      note: `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>${esc(c.info.name)} ${next.no}편</span>
+             <span class="badge badge-type">${c.watched}편 봄</span>
+             ${c.upcoming ? `<span class="badge badge-genre">미개봉 ${c.upcoming}편 제외</span>` : ""}`,
+      actions: [
+        { act: "add", label: "이 편 기록하기", icon: "fa-plus", cls: "dc-btn-main" },
+        { act: "open", id: c.main.id, label: "내 기록", icon: "fa-clock-rotate-left" }
+      ]
+    };
+  });
+
+  const list = [...tv, ...movie].sort((a, b) => (b._sort || "").localeCompare(a._sort || ""));
+
+  // 편 정보를 안 가져온 영화 시리즈가 있으면 안내
+  const need = collsNeedingParts();
+  const bar = $("#dcPartsBar");
+  bar.classList.toggle("hidden", need.length === 0);
+  if (need.length) {
+    $("#dcPartsMsg").innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>영화 시리즈 <b>${need.length}개</b>의
+      편 정보가 아직 없어요. 가져오면 해리포터·아바타처럼 <b>안 본 편</b>도 여기 모입니다
+      (약 ${Math.ceil(need.length * 0.25)}초).`;
+  }
+
   paintDcCards(list, `
     <i class="fa-solid fa-circle-check text-4xl mb-3"></i>
-    <p class="font-medium">안 본 시즌이 없어요</p>
-    <p class="text-sm mt-1">시즌이 여러 개인 작품 중 일부만 본 게 있으면 여기에 모입니다.</p>`);
+    <p class="font-medium">안 본 시즌·편이 없어요</p>
+    <p class="text-sm mt-1">시즌이나 시리즈 중 일부만 본 게 있으면 여기에 모입니다.</p>`);
 }
 
 /* 보고싶어요 */
@@ -792,6 +908,7 @@ function initDiscover() {
 
   /* 추천 */
   $("#dcRecoBtn").addEventListener("click", runReco);
+  $("#dcPartsBtn").addEventListener("click", runFetchCollParts);
   $$(".dc-type").forEach(btn => {
     btn.addEventListener("click", () => {
       Discover.recoType = btn.dataset.type;

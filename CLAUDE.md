@@ -138,6 +138,9 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 - `watchlog_items_backup` — 저장 직전 상태 1개
 - `watchlog_wishes` — 보고싶어요 목록 (`State.wishes`)
 - `watchlog_reco` — 추천 결과 캐시 `{generatedAt, basis:[장르], list:[...]}`. 이 기기에만, 동기화 안 함
+- `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
+  영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
+  정보라 서버 동기화는 안 함 (`getCollCache`/`saveCollInfo` in tmdb.js)
 - `watchlog_modified` — 마지막 수정 ISO 시각 (동기화 비교용)
 - `watchlog_tmdb_key`
 - `watchlog_sync_password` — 동기화 비밀번호(= 서버 데이터 경로). 이 기기에만 저장.
@@ -263,9 +266,20 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
   - 결과는 `localStorage.watchlog_reco`에 캐시. 탭을 열 때 재조회하지 않고, 버튼을 눌러야 새로 뽑는다
     (API 호출이 시드 10 + 장르 4 + 장르목록 2 ≈ 16회, 240ms 간격).
   - 렌더 시점에 "캐시 만든 뒤 기록한 작품"을 한 번 더 걸러낸다.
-- **이어보기**(`continueList`): `totalSeasons > 1`인데 일부 시즌만 본 작품 → "S2 안 봄".
+- **이어보기**: TV의 안 본 시즌 + 영화 시리즈의 안 본 편을 **한 목록에 섞어서** 보여준다.
   목록 탭의 "시즌 미기록"과 다르다 — 그쪽은 시즌을 **안 적은** 경우, 이쪽은 적었는데 **빠진 시즌**이 있는 경우.
-  시즌을 하나도 안 적었으면 몇 개를 봤는지 알 수 없으므로 대상에서 빠진다(`unknownSeason`).
+  - TV(`continueList`): `totalSeasons > 1`인데 일부 시즌만 본 작품 → "S2 안 봄".
+    시즌을 하나도 안 적었으면 몇 개를 봤는지 알 수 없으므로 대상에서 빠진다(`unknownSeason`).
+  - 영화(`movieContinueList`): `totalSeasons`는 **TV에만 있는 필드**라 영화엔 못 쓴다.
+    영화는 TMDB 컬렉션의 편 목록(`getCollCache()`)과 내 기록을 맞춰본다.
+    - **미개봉 편은 뺀다.** TMDB 컬렉션에는 발표만 된 속편도 들어있어서(분노의 질주 12편,
+      범죄도시 5편, 아바타 4·5편 등) 그냥 두면 볼 수 없는 영화를 "안 봤다"고 띄운다.
+      `releaseDate <= 오늘`인 편만 대상. 예: 아바타를 3편까지 봤으면 4·5편은 미개봉이라 안 뜬다.
+    - 본 편 판정은 **tmdbId와 편 번호 둘 다**로 한다. 속편이 1편의 tmdbId를 물고 있는 기록이
+      남아 있으면(위 "매칭 확인" 참고) tmdbId만 보면 실제로 본 편을 "안 봤다"고 잘못 잡는다.
+    - 카드 대표는 **다음에 볼 편** — 포스터·제목이 이미 본 편이 아니라 볼 편이어야 쓸모가 있다.
+  - 편 정보가 없는 영화 시리즈가 있으면 `#dcPartsBar` 안내가 뜨고, 버튼으로 시리즈당 1회씩 받아온다
+    (`runFetchCollParts`). 설정의 "시리즈 정보 가져오기"·새 작품 등록 때도 자동으로 채워진다.
 - **보고싶어요**: `State.wishes`. 이미 기록에 생긴 작품은 "이미 봤어요" 배지 + 빼기 버튼을 보여준다
   (자동 삭제하지 않음 — 사용자 데이터를 말없이 지우지 않는다).
 - **검색**: `tmdbSearchSmart`(등록 모달과 같은 제목 변형 재시도)로 TMDB 전체 검색.
