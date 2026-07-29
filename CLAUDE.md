@@ -16,18 +16,20 @@
 전부 같은 폴더에 평면 배치 (GitHub Pages 복붙 업로드 편의).
 
 ```
-index.html      361줄  전체 마크업 (로그인/헤더/목록/통계/설정 + 모달 4개)
-style.css       173줄  커스텀 CSS (Tailwind CDN 위에 얹음)
-core.js         390줄  Firebase 동기화, 로그인, 상태(State), 유틸
-tmdb.js         345줄  TMDB API 검색/상세/OTT판별, 검색 UI
-watchlog.js     654줄  카드 목록, 필터, 등록·수정 모달, 설정 탭
-stats.js        271줄  Chart.js 통계 + 히트맵
+index.html      509줄  전체 마크업 (헤더/목록/탐색/통계/설정 + 모달 5개)
+style.css       386줄  커스텀 CSS (Tailwind CDN 위에 얹음)
+core.js         532줄  Firebase 동기화, 상태(State), 탭, 유틸
+tmdb.js         454줄  TMDB API 검색/상세/OTT판별/추천·발굴, 검색 UI
+watchlog.js    1407줄  카드 목록, 필터, 등록·수정 모달, 설정 탭
+discover.js     802줄  탐색 탭 (TMDB 검색·이어보기·보고싶어요·추천)
+stats.js        379줄  Chart.js 통계 + 히트맵
 seed-data.js   5630줄  노션에서 변환한 초기 데이터 268개
 dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
 .gitignore            dev-local.js 제외
 ```
 
-로드 순서 고정 (index.html 하단): `seed-data → core → tmdb → watchlog → stats`
+로드 순서 고정 (index.html 하단): `seed-data → core → tmdb → watchlog → discover → stats`
+(discover.js는 watchlog.js의 `visibleGenres`·`hearts`·`openEdit` 등을 쓰므로 그 뒤여야 함)
 
 의존성: Tailwind CDN, FontAwesome 6.5.1, Chart.js 4.4.1
 
@@ -110,12 +112,24 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 
 `tmdbId`가 null인 항목 = "미등록". 목록 상단 노란 버튼으로 필터링.
 
+### 보고싶어요 (State.wishes) — 아직 안 본 작품
+
+시청 기록(`State.items`)과 **절대 섞지 않는다.** 섞으면 통계·히트맵·시리즈 묶기·총 개수가
+"안 본 작품"까지 집계하게 되므로, 별도 배열로 둔다.
+
+```js
+{ id:"w...", tmdbId, mediaType:"movie"|"tv", title, originalTitle, poster,
+  year, voteAverage, overview, reason:"「기생충」과 비슷", addedAt:"ISO" }
+```
+
 ## 저장 구조
 
 ### 로컬 (localStorage)
 
 - `watchlog_items` — 데이터 본체
 - `watchlog_items_backup` — 저장 직전 상태 1개
+- `watchlog_wishes` — 보고싶어요 목록 (`State.wishes`)
+- `watchlog_reco` — 추천 결과 캐시 `{generatedAt, basis:[장르], list:[...]}`. 이 기기에만, 동기화 안 함
 - `watchlog_modified` — 마지막 수정 ISO 시각 (동기화 비교용)
 - `watchlog_tmdb_key`
 - `watchlog_sync_password` — 동기화 비밀번호(= 서버 데이터 경로). 이 기기에만 저장.
@@ -123,7 +137,9 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 ### 서버 (Realtime Database REST, SDK 안 씀)
 
 - `PUT/GET {DB_URL}/watchlog/{동기화 비밀번호}.json` (경로는 `getDataUrl()`이 생성)
-- 저장 형태: `{ items: [...], updatedAt: ISO, count: n }`
+- 저장 형태: `{ items: [...], wishes: [...], updatedAt: ISO, count: n }`
+- `wishes`는 나중에 추가된 필드라 예전 저장본엔 없다. `adoptWishes(d)`가 **있을 때만** 반영하고
+  없으면 이 기기 것을 유지한다 (구버전 데이터가 위시를 지워버리지 않도록).
 
 ### 동기화 흐름
 
@@ -221,6 +237,36 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 
 설계 원칙: TMDB에서 온 정보든 직접 입력한 정보든 조회 화면에서 구분되지 않아야 함.
 
+## 탐색 탭 (discover.js)
+
+목록 탭이 "이미 본 기록"이라면, 탐색 탭은 **"볼 것"**을 다룬다. 뷰 4개를 `Discover.view`로 전환
+(`reco` / `next` / `wish` / `search`), 카드는 전부 `dcCardHtml` → `paintDcCards` 한 경로로 그린다.
+카드·버튼 클릭은 `#dcGrid`에 **이벤트 위임** 하나로 처리(`data-act`: detail/add/wish/unwish/open).
+
+- **추천**(`runReco`, 기본 뷰): 두 갈래를 섞어 점수화한다.
+  ① 유사작 — 시드 작품의 `/{type}/{id}/recommendations` (근거가 구체적: "「기생충」과 비슷")
+  ② 취향 발굴 — 상위 장르 2개로 `/discover/movie|tv` (안 본 영역까지 넓게)
+  - **시드 가중치**(`seedWeight`): 별점이 달린 기록이 몇 개 없으므로(268개 중 9개) 별점만으로는
+    부족하다. **재시청(+1.5)·최근 1년 내 시청(+0.4)**도 취향 신호로 쓰고, 별점 없음은 중립(0.6),
+    **3점 미만은 0**(취향 신호에서 제외). 같은 작품·같은 `collectionId`는 시드에 한 번만
+    (해리포터 8편이 시드를 다 잡아먹지 않게). 동점이면 셔플 → "다시 추천받기"마다 결과가 바뀐다.
+  - 제외: 이미 본 `tmdbId`, 포스터 없음, `voteCount < 50`.
+  - 결과는 `localStorage.watchlog_reco`에 캐시. 탭을 열 때 재조회하지 않고, 버튼을 눌러야 새로 뽑는다
+    (API 호출이 시드 10 + 장르 4 + 장르목록 2 ≈ 16회, 240ms 간격).
+  - 렌더 시점에 "캐시 만든 뒤 기록한 작품"을 한 번 더 걸러낸다.
+- **이어보기**(`continueList`): `totalSeasons > 1`인데 일부 시즌만 본 작품 → "S2 안 봄".
+  목록 탭의 "시즌 미기록"과 다르다 — 그쪽은 시즌을 **안 적은** 경우, 이쪽은 적었는데 **빠진 시즌**이 있는 경우.
+  시즌을 하나도 안 적었으면 몇 개를 봤는지 알 수 없으므로 대상에서 빠진다(`unknownSeason`).
+- **보고싶어요**: `State.wishes`. 이미 기록에 생긴 작품은 "이미 봤어요" 배지 + 빼기 버튼을 보여준다
+  (자동 삭제하지 않음 — 사용자 데이터를 말없이 지우지 않는다).
+- **검색**: `tmdbSearchSmart`(등록 모달과 같은 제목 변형 재시도)로 TMDB 전체 검색.
+  결과 카드에 **내 기록을 겹쳐서** 보여주는 게 핵심(`myStatus`): 봤으면 내 별점·기록 수,
+  시즌이 빠졌으면 "안 본 시즌 S2", 안 봤으면 [보고싶어요]/[봤어요].
+- 카드 클릭 → `#dcModal`(TMDB 작품 미리보기). 내 기록 상세(`#detailModal`)와 **별개 모달**이다.
+- `addFromDiscover(tmdbId, mediaType, season)` — 등록 모달을 열고 `selectTmdb`로 정보를 채운 뒤
+  시즌까지 미리 선택한다. 즉 탐색에서 바로 기록으로 이어진다.
+- `josa(word, "과", "와")` — 받침에 따라 조사 선택 ("기생충과" / "해리 포터와").
+
 ## 통계 탭
 
 요약 타일 6개(시청 기록(편·시즌별) / 작품 수(시리즈 묶음) / 올해 시청 / 재시청 / 평균 별점 / 예상 시청시간).
@@ -246,6 +292,7 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 - [x] ~~속편이 1편과 같은 `tmdbId`~~ → 2026-07-27 사용자가 직접 재매칭해 해결.
       제목이 다른데 tmdbId가 같은 항목 0개 확인.
 - [ ] TMDB 검색 실패 시 Gemini API로 원제 추론하는 방안 논의됐으나 미적용
+- [ ] 추천 결과에 OTT 배지 없음 (작품마다 `/watch/providers` 호출이 필요해 비쌈 — 상세에서만 보임)
 - [ ] `favicon.ico` 없음 (404 로그)
 - [ ] 항목 수가 많아지면 카드 렌더링 최적화 필요 (현재 24개씩 더보기)
 

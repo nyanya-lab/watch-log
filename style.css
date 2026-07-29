@@ -296,6 +296,79 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
   background: #e2e8f0; object-fit: cover; align-self: flex-start;
 }
 
+/* ===== 탐색 탭 ===== */
+.dc-nav {
+  display: inline-flex; align-items: center;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  font-size: 14px; font-weight: 600;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.dc-nav:hover { background: #f2f8ec; color: #4d7c2a; border-color: #a9cd85; }
+.dc-nav.active {
+  background: linear-gradient(135deg,#5f9235,#7bad48);
+  border-color: #5f9235; color: #fff;
+}
+.dc-num {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef3e9; color: #4f5c49;
+  font-size: 11px; font-weight: 700;
+}
+.dc-nav.active .dc-num { background: rgba(255,255,255,.25); color: #fff; }
+
+/* 추천 구분 토글 */
+.dc-type {
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px; font-weight: 600;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.dc-type:hover { background: #f2f8ec; }
+.dc-type.active { background: #e8f4dd; border-color: #a9cd85; color: #3b6d11; }
+
+/* 카드 좌상단 상태 깃발 */
+.dc-flag {
+  position: absolute; top: 7px; left: 7px;
+  color: #fff; font-size: 10px; font-weight: 700;
+  padding: 2px 8px; border-radius: 999px;
+  backdrop-filter: blur(2px);
+  background: rgba(61,82,51,.84);
+}
+.dc-flag-seen { background: rgba(77,124,42,.9); }
+.dc-flag-wish { background: rgba(224,112,15,.9); }
+.dc-flag-next { background: rgba(220,68,68,.9); }
+
+.dc-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 5px 0 2px; }
+
+.dc-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.dc-btn {
+  flex: 1 1 auto;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+  font-size: 11px; font-weight: 600;
+  white-space: nowrap;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.dc-btn:hover { background: #f1f5f9; }
+.dc-btn-main {
+  border-color: #5f9235;
+  background: #f1f8ea;
+  color: #3b6d11;
+}
+.dc-btn-main:hover { background: #d5e9c3; }
+.dc-btn-on { border-color: #e0700f; background: #ffedd9; color: #e0700f; }
+
 /* ===== 히트맵 ===== */
 .heat-cell { width: 12px; height: 12px; border-radius: 2px; background: #f1f5f9; }
 .heat-1 { background: #d5e9c3; }

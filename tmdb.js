@@ -86,7 +86,10 @@ async function tmdbSearchRaw(query) {
       poster: r.poster_path ? TMDB_IMG + r.poster_path : null,
       posterSm: r.poster_path ? TMDB_IMG_SM + r.poster_path : null,
       year: (r.release_date || r.first_air_date || "").slice(0, 4),
-      overview: r.overview || ""
+      overview: r.overview || "",
+      // 탐색 탭 카드용 (등록 모달은 안 씀)
+      voteAverage: r.vote_average ? Math.round(r.vote_average * 10) / 10 : null,
+      genreIds: r.genre_ids || []
     }));
 }
 
@@ -101,6 +104,66 @@ async function tmdbSearchSmart(query) {
 }
 
 async function tmdbSearch(q) { return (await tmdbSearchSmart(q)).results; }
+
+/* ---------- 추천용 (탐색 탭) ---------- */
+/* 목록형 응답 한 건을 카드용 공통 모양으로 */
+function normTmdbCard(r, mediaType) {
+  return {
+    tmdbId: r.id,
+    mediaType: mediaType || r.media_type || "movie",
+    title: r.title || r.name || "",
+    originalTitle: r.original_title || r.original_name || "",
+    poster: r.poster_path ? TMDB_IMG + r.poster_path : null,
+    year: (r.release_date || r.first_air_date || "").slice(0, 4),
+    overview: r.overview || "",
+    voteAverage: r.vote_average ? Math.round(r.vote_average * 10) / 10 : null,
+    voteCount: r.vote_count || 0,
+    genreIds: r.genre_ids || []
+  };
+}
+
+/* 이 작품을 본 사람들이 함께 본 작품 */
+async function tmdbRecommendations(id, mediaType) {
+  const key = getTmdbKey();
+  const url = `${TMDB_BASE}/${mediaType}/${id}/recommendations?api_key=${key}&language=ko-KR&page=1`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const d = await res.json();
+  return (d.results || []).map(r => normTmdbCard(r, mediaType));
+}
+
+/* 조건 검색 (장르·국가 등 취향 조건으로 발굴) */
+async function tmdbDiscoverList(mediaType, params) {
+  const key = getTmdbKey();
+  const qs = new URLSearchParams({
+    api_key: key, language: "ko-KR", include_adult: "false", page: "1", ...params
+  });
+  const res = await fetch(`${TMDB_BASE}/discover/${mediaType}?${qs}`);
+  if (!res.ok) return [];
+  const d = await res.json();
+  return (d.results || []).map(r => normTmdbCard(r, mediaType));
+}
+
+/* 장르 목록 (이름 → TMDB 장르 id). 앱 표시명과 맞추려고 koGenre로 한글화해 둔다.
+   TV의 합본 장르("Action & Adventure")는 koGenre가 ["액션","모험"]으로 쪼개주므로
+   영화 쪽 "액션"과 같은 이름으로 이어진다. */
+let _genreCache = null;
+async function tmdbGenreMap() {
+  if (_genreCache) return _genreCache;
+  const key = getTmdbKey();
+  const out = { movie: [], tv: [] };
+  for (const mt of ["movie", "tv"]) {
+    try {
+      const res = await fetch(`${TMDB_BASE}/genre/${mt}/list?api_key=${key}&language=ko-KR`);
+      if (res.ok) {
+        const d = await res.json();
+        out[mt] = (d.genres || []).map(g => ({ id: g.id, names: koGenre(g.name) }));
+      }
+    } catch { /* 장르 목록은 없어도 추천은 돌아간다 */ }
+  }
+  _genreCache = out;
+  return out;
+}
 
 /* ---------- 한국 스트리밍(OTT) 판별 ---------- */
 async function tmdbProviders(id, mediaType) {

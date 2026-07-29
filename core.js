@@ -17,6 +17,7 @@ const AUTO_SYNC_DELAY = 2500;       // 자동 저장 대기시간(ms)
 /* --------------------------------------------- */
 
 const LS_KEY = "watchlog_items";
+const LS_WISH = "watchlog_wishes";  // 보고싶어요 목록. 시청 기록과 섞지 않고 따로 둔다(통계 오염 방지)
 const LS_TMDB = "watchlog_tmdb_key";
 const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서버 데이터 경로 (이 기기에만 저장, 깃에는 없음)
 const LS_MODIFIED = "watchlog_modified";
@@ -40,6 +41,7 @@ const LEGACY_URL = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${LEGACY_KEY}.json`;
 
 const State = {
   items: [],
+  wishes: [],        // 보고싶어요 (아직 안 본 작품) — items와 별도
   filtered: [],
   page: 1,
   perPage: 24,
@@ -118,6 +120,7 @@ function saveLocal(skipCloud) {
     if (prev && prev.length > 20) localStorage.setItem(LS_BACKUP, prev);
 
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+    localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
     localStorage.setItem(LS_MODIFIED, new Date().toISOString());
   } catch (e) {
     console.error("로컬 저장 실패", e);
@@ -138,6 +141,9 @@ function loadLocal() {
   try {
     State.items = JSON.parse(localStorage.getItem(LS_KEY) || "[]");
   } catch { State.items = []; }
+  try {
+    State.wishes = JSON.parse(localStorage.getItem(LS_WISH) || "[]");
+  } catch { State.wishes = []; }
 }
 
 /* ---------- 서버 통신 (Realtime Database REST) ---------- */
@@ -154,6 +160,7 @@ async function autoPush() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: State.items,
+        wishes: State.wishes,
         updatedAt: localStorage.getItem(LS_MODIFIED) || new Date().toISOString(),
         count: State.items.length
       })
@@ -188,6 +195,7 @@ async function pushToServer() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: State.items,
+        wishes: State.wishes,
         updatedAt: new Date().toISOString(),
         count: State.items.length
       })
@@ -214,6 +222,15 @@ async function fetchServer() {
   return await res.json();   // null 이면 서버에 데이터 없음
 }
 
+/* 서버 응답의 보고싶어요 목록을 반영.
+   예전에 저장된 데이터에는 wishes가 없으므로, 없으면 이 기기 것을 그대로 둔다. */
+function adoptWishes(d) {
+  if (d && Array.isArray(d.wishes)) {
+    State.wishes = d.wishes;
+    localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
+  }
+}
+
 async function pullFromServer(silent) {
   if (!hasSyncPassword()) {
     if (!silent) { toast("먼저 동기화 비밀번호를 설정하세요", "error"); openSyncPwModal(); }
@@ -226,6 +243,7 @@ async function pullFromServer(silent) {
       return false;
     }
     State.items = d.items;
+    adoptWishes(d);
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_MODIFIED, d.updatedAt || new Date().toISOString());
     setSyncIcon("saved");
@@ -271,9 +289,11 @@ async function syncOnBoot() {
         if (!ok) { await autoPush(); return; }
       }
       State.items = d.items;
+      adoptWishes(d);
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod);
       applyFilters();
+      if (window.renderDiscover) renderDiscover();
       setSyncIcon("saved");
       toast(`서버에서 불러옴 (${State.items.length}개)`);
       return;
@@ -447,7 +467,7 @@ function updateSyncPwStatus() {
 /* ---------- 탭 ---------- */
 function initTabs() {
   // 탭마다 스크롤 위치를 기억해서, 돌아오면 보던 자리 그대로 (통계 ↔ 목록)
-  const scrollPos = { list: 0, stats: 0, settings: 0 };
+  const scrollPos = { list: 0, discover: 0, stats: 0, settings: 0 };
   let curTab = "list";
 
   $$(".tab-btn").forEach(btn => {
@@ -457,10 +477,11 @@ function initTabs() {
       $$(".tab-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       const tab = btn.dataset.tab;
-      ["list", "stats", "settings"].forEach(t => {
+      ["list", "discover", "stats", "settings"].forEach(t => {
         $("#tab-" + t).classList.toggle("hidden", t !== tab);
       });
       if (tab === "stats") renderStats();
+      if (tab === "discover") renderDiscover();
       curTab = tab;
 
       // 렌더 끝난 뒤 이전 위치로 복원
@@ -490,6 +511,7 @@ function bootApp() {
   initTabs();
   initWatchlog();
   initTmdb();
+  initDiscover();
   initSettings();
   applyFilters();
 

@@ -1,0 +1,802 @@
+/* ============================================
+   discover.js — 탐색 탭
+   목록 탭이 "이미 본 기록"이라면, 이 탭은 "볼 것"을 다룬다.
+     · 검색      — TMDB 전체에서 찾기 (안 본 작품 포함). 내 기록이 있으면 겹쳐서 보여준다
+     · 이어보기  — 시즌이 여러 개인데 일부만 본 작품
+     · 보고싶어요 — 나중에 볼 작품 담아두기 (State.wishes)
+   ============================================ */
+
+const Discover = {
+  view: "reco",      // reco=추천 | next=이어보기 | wish=보고싶어요 | search=검색 결과
+  recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
+  reco: null,        // 캐시된 추천 결과
+  query: "",
+  usedQuery: "",
+  wasFallback: false,
+  results: [],
+  searching: false,
+  _byId: new Map()   // 화면에 그려진 카드의 원본 데이터 (버튼 핸들러가 참조)
+};
+
+/* ---------- 보고싶어요 (위시리스트) ----------
+   시청 기록(State.items)과 섞지 않는다. 섞으면 통계·히트맵·시리즈 묶기가
+   "아직 안 본 작품"까지 집계하게 되기 때문. 저장·동기화는 core.js가 함께 처리. */
+function isWished(tmdbId) {
+  return State.wishes.some(w => w.tmdbId === tmdbId);
+}
+
+function addWish(w) {
+  if (isWished(w.tmdbId)) return false;
+  State.wishes.unshift({
+    id: uid(),
+    tmdbId: w.tmdbId,
+    mediaType: w.mediaType || "movie",
+    title: w.title || "",
+    originalTitle: w.originalTitle || "",
+    poster: w.poster || null,
+    year: w.year || "",
+    voteAverage: w.voteAverage ?? null,
+    overview: w.overview || "",
+    reason: w.reason || "",             // 추천으로 담았다면 그 이유
+    addedAt: new Date().toISOString()
+  });
+  saveLocal();
+  return true;
+}
+
+function removeWish(tmdbId) {
+  const before = State.wishes.length;
+  State.wishes = State.wishes.filter(w => w.tmdbId !== tmdbId);
+  if (State.wishes.length !== before) saveLocal();
+}
+
+/* ---------- 이 작품에 대한 "내 상태" ----------
+   봤는지 / 어느 시즌까지 봤는지 / 위시에 담아뒀는지 */
+function myStatus(tmdbId) {
+  const wished = isWished(tmdbId);
+  const recs = State.items.filter(i => i.tmdbId === tmdbId);
+  if (!recs.length) return { watched: false, wished, recs: [], missing: [] };
+
+  const total = Math.max(...recs.map(r => r.totalSeasons || 0), 0);
+  const seen = new Set();
+  recs.forEach(r => {
+    const n = parseInt(String(r.season || "").replace(/\D/g, ""));
+    if (n) seen.add(n);
+  });
+
+  const missing = [];
+  if (total > 1 && seen.size) {
+    for (let n = 1; n <= total; n++) if (!seen.has(n)) missing.push(n);
+  }
+
+  return {
+    watched: true,
+    wished,
+    recs,
+    rating: Math.max(...recs.map(r => r.rating || 0)) || null,
+    totalSeasons: total,
+    seenSeasons: [...seen].sort((a, b) => a - b),
+    missing,
+    // 시즌이 여러 개인데 몇 시즌을 봤는지 안 적어둔 경우 (목록 탭 "시즌 미기록"이 담당)
+    unknownSeason: total > 1 && seen.size === 0
+  };
+}
+
+/* 저장된 구분(type)으로 TMDB media_type 추정 */
+function mediaTypeOf(item) {
+  return item.type === "영화" ? "movie" : "tv";
+}
+
+/* ---------- 이어보기 목록 ----------
+   시즌이 2개 이상인데 일부만 본 작품. (예: 총 2시즌인데 S1만 기록됨 → S2 안 봄) */
+function continueList() {
+  const byId = new Map();
+  State.items.forEach(i => {
+    if (!i.tmdbId || !((i.totalSeasons || 0) > 1)) return;
+    if (!byId.has(i.tmdbId)) byId.set(i.tmdbId, []);
+    byId.get(i.tmdbId).push(i);
+  });
+
+  const dkey = (x) => x.lastWatchStart || x.startDate || "";
+  const out = [];
+  byId.forEach((recs, tmdbId) => {
+    const st = myStatus(tmdbId);
+    if (!st.missing.length) return;
+    const main = recs.slice().sort((a, b) => dkey(b).localeCompare(dkey(a)))[0];
+    out.push({ tmdbId, mediaType: mediaTypeOf(main), item: main, st });
+  });
+
+  return out.sort((a, b) => dkey(b.item).localeCompare(dkey(a.item)));
+}
+
+/* ============================================
+   추천
+   두 갈래를 섞는다.
+     ① 유사작  — 내가 좋아한 작품의 TMDB /recommendations (근거가 구체적)
+     ② 취향 발굴 — 내 장르 프로필로 /discover (안 본 영역까지 넓게)
+   결과는 캐시해 두고, "다시 추천받기"를 눌렀을 때만 다시 조회한다.
+   ============================================ */
+
+const LS_RECO = "watchlog_reco";
+
+/* 받침에 따라 조사 고르기 ("오징어 게임과" / "기생충과" → "해리포터와") */
+function josa(word, withBatchim, without) {
+  const ch = String(word || "").trim().slice(-1);
+  if (!ch) return withBatchim;
+  const code = ch.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return withBatchim;   // 한글이 아니면 기본형
+  return ((code - 0xac00) % 28) ? withBatchim : without;
+}
+
+/* 이 기록이 "내 취향"을 얼마나 대변하는지.
+   별점이 달린 기록이 몇 개 없으므로(노션 원본 268개 중 9개) 재시청·최근 시청도 신호로 쓴다. */
+function seedWeight(i) {
+  const r = i.rating || 0;
+  let w;
+  if (r >= 5) w = 3.0;
+  else if (r >= 4.5) w = 2.6;
+  else if (r >= 4) w = 2.2;
+  else if (r >= 3.5) w = 1.4;
+  else if (r >= 3) w = 0.9;
+  else if (r > 0) return 0;          // 낮게 준 작품은 취향 신호로 쓰지 않는다
+  else w = 0.6;                       // 별점 없음 = 중립
+
+  if ((i.watchCount || 1) > 1 || i.lastWatchStart) w += 1.5;   // 재시청 = 확실히 좋아함
+  const y = +((i.startDate || "").slice(0, 4));
+  if (y && y >= new Date().getFullYear() - 1) w += 0.4;        // 최근 취향에 가중
+  return w;
+}
+
+/* 내 기록에서 뽑아낸 취향 프로필 */
+function tasteProfile() {
+  const genre = new Map(), country = new Map();
+  const seeds = [];
+
+  State.items.forEach(i => {
+    const w = seedWeight(i);
+    if (w <= 0) return;
+    visibleGenres(i.genres).forEach(g => genre.set(g, (genre.get(g) || 0) + w));
+    if (i.country) country.set(i.country, (country.get(i.country) || 0) + w);
+    if (i.tmdbId) seeds.push({ item: i, w });
+  });
+
+  // 같은 작품·같은 시리즈는 시드에 한 번만 (해리포터 8편이 시드를 다 잡아먹지 않게)
+  // 가중치가 같으면 섞어서, "다시 추천받기"마다 다른 작품이 시드가 되도록 한다
+  const usedId = new Set(), usedColl = new Set();
+  const picked = [];
+  seeds.sort((a, b) => b.w - a.w || Math.random() - 0.5).forEach(s => {
+    const i = s.item;
+    if (usedId.has(i.tmdbId)) return;
+    if (i.collectionId && usedColl.has(i.collectionId)) return;
+    usedId.add(i.tmdbId);
+    if (i.collectionId) usedColl.add(i.collectionId);
+    picked.push(s);
+  });
+
+  const top = (m, n) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+  return { genres: top(genre, 5), countries: top(country, 3), seeds: picked };
+}
+
+/* 후보 장르가 내 취향 장르와 얼마나 겹치나 (0~1 가중치 합) */
+function genreMatchScore(card, gmap, profMap, maxW) {
+  const names = (gmap[card.mediaType] || [])
+    .filter(g => (card.genreIds || []).includes(g.id))
+    .flatMap(g => g.names);
+  let s = 0;
+  [...new Set(names)].forEach(n => { if (profMap.has(n)) s += profMap.get(n) / maxW; });
+  return s;
+}
+
+let _recoRunning = false;
+
+async function runReco() {
+  if (_recoRunning) { toast("추천을 만드는 중입니다"); return; }
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const prof = tasteProfile();
+  if (!prof.seeds.length) { toast("TMDB 정보가 있는 기록이 있어야 추천할 수 있어요", "error"); return; }
+
+  _recoRunning = true;
+  const seeds = prof.seeds.slice(0, 10);
+  const profMap = new Map(prof.genres);
+  const maxW = prof.genres.length ? prof.genres[0][1] : 1;
+
+  const cand = new Map();
+  const seenIds = new Set(State.items.map(i => i.tmdbId).filter(Boolean));
+  const gmap = await tmdbGenreMap();
+
+  const bump = (card, score, reason) => {
+    if (!card.tmdbId || !card.poster) return;        // 포스터 없는 건 카드가 허전해서 뺀다
+    if (seenIds.has(card.tmdbId)) return;            // 이미 본 작품
+    if ((card.voteCount || 0) < 50) return;          // 표본이 너무 적은 작품
+    const c = cand.get(card.tmdbId) || { card, score: 0, reasons: [] };
+    c.score += score;
+    if (reason && !c.reasons.includes(reason)) c.reasons.push(reason);
+    cand.set(card.tmdbId, c);
+  };
+
+  const setStatus = (msg, pct) => {
+    $("#dcRecoStatus").textContent = msg;
+    $("#dcRecoBarFill").style.width = pct.toFixed(0) + "%";
+  };
+  $("#dcRecoProgress").classList.remove("hidden");
+
+  const genreNames = prof.genres.slice(0, 2).map(g => g[0]);
+  const totalSteps = seeds.length + genreNames.length * 2;
+  let step = 0;
+
+  try {
+    // ① 내가 좋아한 작품과 비슷한 작품
+    for (const s of seeds) {
+      const i = s.item;
+      setStatus(`「${i.title}」과 비슷한 작품 찾는 중...`, ++step / totalSteps * 100);
+      try {
+        const list = await tmdbRecommendations(i.tmdbId, mediaTypeOf(i));
+        const label = `「${i.title}」${josa(i.title, "과", "와")} 비슷`;
+        list.slice(0, 12).forEach((c, idx) => bump(c, s.w * (1.2 - idx * 0.04), label));
+      } catch { /* 한 시드가 실패해도 계속 */ }
+      await new Promise(r => setTimeout(r, 240));
+    }
+
+    // ② 취향 장르로 발굴 (안 본 영역까지)
+    for (const gname of genreNames) {
+      for (const mt of ["movie", "tv"]) {
+        setStatus(`${gname} ${mt === "movie" ? "영화" : "시리즈"} 찾아보는 중...`, ++step / totalSteps * 100);
+        const ids = (gmap[mt] || []).filter(g => g.names.includes(gname)).map(g => g.id);
+        if (!ids.length) continue;
+        try {
+          const list = await tmdbDiscoverList(mt, {
+            with_genres: ids.join("|"),
+            sort_by: "popularity.desc",
+            "vote_average.gte": "7",
+            "vote_count.gte": "200"
+          });
+          const gw = (profMap.get(gname) || 1) / maxW;
+          list.slice(0, 16).forEach((c, idx) => bump(c, 0.9 * gw * (1 - idx * 0.03), `${gname} 취향`));
+        } catch { /* 무시하고 계속 */ }
+        await new Promise(r => setTimeout(r, 240));
+      }
+    }
+
+    // 장르 매칭·평점 보정 후 정렬
+    const list = [...cand.values()].map(c => {
+      const gm = genreMatchScore(c.card, gmap, profMap, maxW);
+      const vote = c.card.voteAverage ? (c.card.voteAverage - 6.8) * 0.2 : 0;
+      return { ...c.card, score: c.score + gm * 0.5 + vote, reason: c.reasons[0] || "" };
+    }).sort((a, b) => b.score - a.score).slice(0, 60);
+
+    const data = { generatedAt: new Date().toISOString(), basis: genreNames, list };
+    localStorage.setItem(LS_RECO, JSON.stringify(data));
+    Discover.reco = data;
+
+    setStatus(`추천 ${list.length}개를 골랐어요`, 100);
+    setTimeout(() => $("#dcRecoProgress").classList.add("hidden"), 1200);
+    toast(`추천 ${list.length}개를 새로 골랐습니다`, "success");
+  } catch (e) {
+    $("#dcRecoProgress").classList.add("hidden");
+    toast("추천 실패: " + e.message, "error");
+  } finally {
+    _recoRunning = false;
+    Discover.view = "reco";
+    renderDiscover();
+  }
+}
+
+function loadReco() {
+  if (Discover.reco) return Discover.reco;
+  try { Discover.reco = JSON.parse(localStorage.getItem(LS_RECO) || "null"); }
+  catch { Discover.reco = null; }
+  return Discover.reco;
+}
+
+/* 추천 목록 */
+function renderDcReco() {
+  $("#dcHint").classList.add("hidden");
+  $("#dcRecoBar").classList.remove("hidden");
+
+  const data = loadReco();
+  const info = $("#dcRecoInfo");
+  $("#dcRecoBtn").innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>${data ? "다시 추천받기" : "추천 받기"}`;
+  if (data) {
+    const d = new Date(data.generatedAt);
+    const p = (n) => String(n).padStart(2, "0");
+    info.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>
+      ${(data.basis || []).length ? `<b>${esc(data.basis.join("·"))}</b> 취향 기준 · ` : ""}
+      ${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 기준`;
+  } else {
+    info.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>아직 추천을 만들지 않았어요. 오른쪽 버튼을 눌러보세요.`;
+  }
+
+  const mt = Discover.recoType;   // "" | movie | tv
+  const list = (data ? data.list : [])
+    // 캐시를 만든 뒤에 기록한 작품은 빼고 보여준다
+    .filter(c => !State.items.some(i => i.tmdbId === c.tmdbId))
+    .filter(c => !mt || c.mediaType === mt)
+    .map(c => ({
+      tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
+      poster: c.poster, year: c.year, voteAverage: c.voteAverage,
+      note: c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "",
+      actions: [
+        { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
+          cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
+        { act: "add", label: "봤어요", icon: "fa-plus" }
+      ],
+      _raw: c
+    }));
+
+  paintDcCards(list, `
+    <i class="fa-solid fa-wand-magic-sparkles text-4xl mb-3"></i>
+    <p class="font-medium">아직 추천이 없어요</p>
+    <p class="text-sm mt-1">"추천 받기"를 누르면 내 기록을 바탕으로 골라옵니다.</p>`);
+}
+
+/* ---------- 카드 ---------- */
+/* e = { tmdbId, mediaType, title, poster, year, voteAverage, note, flag, actions[] } */
+function dcCardHtml(e) {
+  const st = myStatus(e.tmdbId);
+
+  let flag = e.flag || "";
+  if (!flag) {
+    if (st.watched) flag = `<span class="dc-flag dc-flag-seen"><i class="fa-solid fa-check mr-1"></i>봤어요</span>`;
+    else if (st.wished) flag = `<span class="dc-flag dc-flag-wish"><i class="fa-solid fa-bookmark mr-1"></i>담아둠</span>`;
+  }
+
+  const actions = (e.actions || []).map(a => `
+    <button class="dc-btn ${a.cls || ""}" data-act="${a.act}" data-tid="${e.tmdbId}"
+      ${a.season ? `data-season="${a.season}"` : ""}${a.id ? ` data-id="${a.id}"` : ""}>
+      ${a.icon ? `<i class="fa-solid ${a.icon} mr-1"></i>` : ""}${esc(a.label)}
+    </button>`).join("");
+
+  return `
+    <div class="wl-card dc-card" data-act="detail" data-tid="${e.tmdbId}">
+      <div class="wl-poster-wrap">
+        ${e.poster
+          ? `<img class="wl-poster" src="${e.poster}" alt="" loading="lazy">`
+          : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
+        <div class="wl-tr">
+          ${e.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${e.voteAverage}</span>` : ""}
+          ${st.rating ? `<span class="wl-myrate">${hearts(st.rating)}</span>` : ""}
+        </div>
+        ${flag}
+      </div>
+      <div class="wl-body">
+        <div class="wl-title-row">
+          <span class="wl-title">${esc(e.title)}</span>
+          <span class="badge ${e.mediaType === "tv" ? "badge-country" : "badge-type"} shrink-0">
+            ${e.mediaType === "tv" ? "TV" : "영화"}</span>
+        </div>
+        ${e.year ? `<div class="wl-meta">${esc(e.year)}</div>` : ""}
+        ${e.note ? `<div class="dc-note">${e.note}</div>` : ""}
+        ${actions ? `<div class="dc-actions">${actions}</div>` : ""}
+      </div>
+    </div>`;
+}
+
+/* 검색 결과·이어보기·위시에서 공통으로 쓰는 그리기 */
+function paintDcCards(entries, empty) {
+  Discover._byId = new Map(entries.map(e => [String(e.tmdbId), e]));
+  const grid = $("#dcGrid");
+  grid.innerHTML = entries.map(dcCardHtml).join("");
+  const em = $("#dcEmpty");
+  em.innerHTML = empty || "";
+  em.classList.toggle("hidden", entries.length > 0);
+  $("#dcCount").textContent = entries.length ? `${entries.length}개` : "";
+}
+
+/* ---------- 뷰별 렌더 ---------- */
+function renderDiscover() {
+  if (!$("#dcGrid")) return;
+  updateDcNav();
+  if (Discover.view !== "reco") $("#dcRecoBar").classList.add("hidden");
+
+  if (Discover.view === "reco") return renderDcReco();
+  if (Discover.view === "search") return renderDcSearch();
+  if (Discover.view === "wish") return renderDcWish();
+  return renderDcNext();
+}
+window.renderDiscover = renderDiscover;
+
+function updateDcNav() {
+  $$(".dc-nav").forEach(b => b.classList.toggle("active", b.dataset.view === Discover.view));
+  const nextN = continueList().length;
+  const wishN = State.wishes.length;
+  $("#dcNextCount").textContent = nextN;
+  $("#dcWishCount").textContent = wishN;
+  $("#dcNextCount").classList.toggle("hidden", nextN === 0);
+  $("#dcWishCount").classList.toggle("hidden", wishN === 0);
+
+  // 검색 결과 탭은 검색했을 때만 보인다
+  const sb = $('.dc-nav[data-view="search"]');
+  if (sb) sb.classList.toggle("hidden", !Discover.results.length && Discover.view !== "search");
+}
+
+/* 이어보기 */
+function renderDcNext() {
+  $("#dcHint").classList.add("hidden");
+
+  const list = continueList().map(c => {
+    const st = c.st;
+    const seen = st.seenSeasons.map(n => `S${n}`).join("·");
+    const miss = st.missing.map(n => `S${n}`).join("·");
+    return {
+      tmdbId: c.tmdbId,
+      mediaType: c.mediaType,
+      title: c.item.title,
+      poster: c.item.poster,
+      year: c.item.releaseYear || "",
+      voteAverage: c.item.voteAverage,
+      flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${esc(miss)} 안 봄</span>`,
+      note: `<span class="badge badge-season">본 시즌 ${esc(seen)}</span>
+             <span class="badge badge-cert">안 본 시즌 ${esc(miss)}</span>
+             <span class="wl-meta ml-1">총 ${st.totalSeasons}시즌</span>`,
+      actions: [
+        { act: "add", season: st.missing[0], label: `S${st.missing[0]} 기록하기`, icon: "fa-plus", cls: "dc-btn-main" },
+        { act: "open", id: c.item.id, label: "내 기록", icon: "fa-clock-rotate-left" }
+      ]
+    };
+  });
+
+  paintDcCards(list, `
+    <i class="fa-solid fa-circle-check text-4xl mb-3"></i>
+    <p class="font-medium">안 본 시즌이 없어요</p>
+    <p class="text-sm mt-1">시즌이 여러 개인 작품 중 일부만 본 게 있으면 여기에 모입니다.</p>`);
+}
+
+/* 보고싶어요 */
+function renderDcWish() {
+  $("#dcHint").classList.add("hidden");
+
+  const list = State.wishes.map(w => {
+    const st = myStatus(w.tmdbId);
+    const acts = [];
+    if (st.watched) {
+      acts.push({ act: "unwish", label: "위시에서 빼기", icon: "fa-check", cls: "dc-btn-main" });
+    } else {
+      acts.push({ act: "add", label: "봤어요 기록", icon: "fa-plus", cls: "dc-btn-main" });
+      acts.push({ act: "unwish", label: "빼기", icon: "fa-xmark" });
+    }
+    return {
+      tmdbId: w.tmdbId,
+      mediaType: w.mediaType,
+      title: w.title,
+      poster: w.poster,
+      year: w.year,
+      voteAverage: w.voteAverage,
+      note: st.watched
+        ? `<span class="badge badge-type"><i class="fa-solid fa-check mr-1"></i>이미 기록에 있어요</span>`
+        : (w.reason ? `<span class="badge badge-genre">${esc(w.reason)}</span>` : ""),
+      actions: acts
+    };
+  });
+
+  paintDcCards(list, `
+    <i class="fa-solid fa-bookmark text-4xl mb-3"></i>
+    <p class="font-medium">담아둔 작품이 없어요</p>
+    <p class="text-sm mt-1">위에서 검색해 마음에 드는 작품을 담아두세요.</p>`);
+}
+
+/* 검색 결과 */
+function renderDcSearch() {
+  const hint = $("#dcHint");
+  if (Discover.wasFallback) {
+    hint.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>"${esc(Discover.query)}" 결과가 없어
+      <b>"${esc(Discover.usedQuery)}"</b>로 검색했습니다`;
+    hint.classList.remove("hidden");
+  } else {
+    hint.classList.add("hidden");
+  }
+
+  const list = Discover.results.map(r => {
+    const st = myStatus(r.tmdbId);
+    const acts = [];
+    let note = "";
+
+    if (st.watched && st.missing.length) {
+      const miss = st.missing.map(n => `S${n}`).join("·");
+      note = `<span class="badge badge-cert">안 본 시즌 ${esc(miss)}</span>
+              <span class="badge badge-season">본 시즌 ${st.seenSeasons.map(n => "S" + n).join("·")}</span>`;
+      acts.push({ act: "add", season: st.missing[0], label: `S${st.missing[0]} 기록하기`, icon: "fa-plus", cls: "dc-btn-main" });
+      acts.push({ act: "open", id: st.recs[0].id, label: "내 기록", icon: "fa-clock-rotate-left" });
+    } else if (st.watched) {
+      note = `<span class="badge badge-type"><i class="fa-solid fa-check mr-1"></i>${st.recs.length}개 기록 있음</span>`;
+      acts.push({ act: "open", id: st.recs[0].id, label: "내 기록 보기", icon: "fa-clock-rotate-left", cls: "dc-btn-main" });
+      acts.push({ act: "add", label: "또 기록", icon: "fa-plus" });
+    } else {
+      acts.push({ act: "wish", label: st.wished ? "담아둠" : "보고싶어요", icon: "fa-bookmark", cls: st.wished ? "dc-btn-on" : "" });
+      acts.push({ act: "add", label: "봤어요", icon: "fa-plus", cls: "dc-btn-main" });
+    }
+
+    return {
+      tmdbId: r.tmdbId, mediaType: r.mediaType, title: r.title,
+      poster: r.poster, year: r.year, voteAverage: r.voteAverage,
+      note, actions: acts, _raw: r
+    };
+  });
+
+  paintDcCards(list, `
+    <i class="fa-solid fa-face-frown text-4xl mb-3"></i>
+    <p class="font-medium">"${esc(Discover.query)}" 검색 결과가 없습니다</p>
+    <p class="text-sm mt-1">제목을 줄여서 다시 검색해보세요.</p>`);
+}
+
+/* ---------- 검색 실행 ---------- */
+async function runDiscoverSearch() {
+  const q = $("#dcQuery").value.trim();
+  if (!q) return;
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+  if (Discover.searching) return;
+
+  Discover.searching = true;
+  Discover.query = q;
+  Discover.view = "search";
+  updateDcNav();
+  $("#dcGrid").innerHTML = "";
+  $("#dcEmpty").classList.add("hidden");
+  $("#dcHint").innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>"${esc(q)}" 검색 중...`;
+  $("#dcHint").classList.remove("hidden");
+
+  try {
+    const { results, usedQuery, wasFallback } = await tmdbSearchSmart(q);
+    Discover.results = results;
+    Discover.usedQuery = usedQuery;
+    Discover.wasFallback = wasFallback;
+    renderDiscover();
+  } catch (e) {
+    $("#dcHint").innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i>${esc(e.message)}`;
+  } finally {
+    Discover.searching = false;
+  }
+}
+
+/* ---------- 액션 ---------- */
+/* TMDB 작품 → 등록 모달 (정보 자동 채움). season을 주면 그 시즌까지 미리 선택 */
+async function addFromDiscover(tmdbId, mediaType, season) {
+  openEdit(null);
+  await selectTmdb({ tmdbId: +tmdbId, mediaType });
+  if (season) {
+    $("#fSeason").value = season;
+    const sel = $("#fSeasonSelect");
+    if (sel && !sel.classList.contains("hidden")) sel.value = String(season);
+    updateStepperLabel("fSeason");
+  }
+}
+
+function dcToggleWish(tmdbId) {
+  const e = Discover._byId.get(String(tmdbId));
+  if (isWished(+tmdbId)) {
+    removeWish(+tmdbId);
+    toast("보고싶어요에서 뺐습니다");
+  } else if (e) {
+    addWish({
+      tmdbId: +tmdbId, mediaType: e.mediaType, title: e.title,
+      originalTitle: (e._raw || {}).originalTitle || "",
+      poster: e.poster, year: e.year, voteAverage: e.voteAverage,
+      overview: (e._raw || {}).overview || ""
+    });
+    toast("보고싶어요에 담았습니다", "success");
+  }
+  renderDiscover();
+}
+
+/* ---------- TMDB 상세 미리보기 ---------- */
+async function openDcDetail(tmdbId, mediaType) {
+  const modal = $("#dcModal");
+  const box = $("#dcModalContent");
+  box.innerHTML = `<div class="p-10 text-center text-slate-400 font-medium">
+    <i class="fa-solid fa-spinner fa-spin mr-2"></i>정보 가져오는 중...</div>`;
+  modal.classList.remove("hidden");
+
+  try {
+    const d = await tmdbDetail(+tmdbId, mediaType);
+    d.otts = await tmdbProviders(+tmdbId, mediaType);
+    renderDcDetail(d, mediaType);
+  } catch (e) {
+    box.innerHTML = `<div class="p-10 text-center text-red-500 font-medium">${esc(e.message)}</div>`;
+  }
+}
+
+function renderDcDetail(d, mediaType) {
+  const st = myStatus(d.tmdbId);
+  const certLabel = (c) => {
+    if (!c) return "";
+    const s = String(c).trim();
+    if (/^\d+$/.test(s)) return s + "세";
+    if (/^all$/i.test(s)) return "전체";
+    return s;
+  };
+
+  const chips = [];
+  if (d.voteAverage) chips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
+  if (d.runtime) chips.push(`<span class="badge badge-time"><i class="fa-solid fa-clock mr-1"></i>${d.runtime}분</span>`);
+  if (d.totalSeasons) chips.push(`<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>총 ${d.totalSeasons}시즌</span>`);
+  if (d.totalEpisodes) chips.push(`<span class="badge badge-time"><i class="fa-solid fa-list-ol mr-1"></i>총 ${d.totalEpisodes}화</span>`);
+
+  // 내 기록 상황
+  let mine = "";
+  if (st.watched) {
+    const rows = st.recs.map(r => `
+      <button class="badge badge-season badge-link" onclick="dcOpenMyRecord('${r.id}')">
+        ${seriesLabel(r) || "기록"}${r.startDate ? ` <span class="opacity-70 ml-1">${fmtDate(r.startDate)}</span>` : ""}
+      </button>`).join("");
+    mine = `<div class="rounded-xl border border-lime-200 bg-lime-50 p-3.5 mb-4">
+      <div class="text-xs font-semibold text-lime-800 mb-2">
+        <i class="fa-solid fa-check mr-1"></i>이미 본 작품이에요 — 내 기록 ${st.recs.length}개
+        ${st.rating ? `<span class="ml-2">${hearts(st.rating)}</span>` : ""}
+      </div>
+      <div class="flex flex-wrap gap-1.5">${rows}</div>
+      ${st.missing.length
+        ? `<div class="text-xs font-semibold text-rose-700 mt-2.5">
+             <i class="fa-solid fa-forward mr-1"></i>안 본 시즌: ${st.missing.map(n => "S" + n).join(", ")}</div>`
+        : ""}
+    </div>`;
+  }
+
+  // 시즌 목록
+  const seasonsHtml = (d.seasons || []).length > 1
+    ? `<div class="mt-4 border-t border-slate-100 pt-4">
+         <div class="text-xs font-semibold text-slate-500 mb-2"><i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>시즌</div>
+         <div class="flex flex-wrap gap-1.5">
+           ${d.seasons.map(s => {
+             const seen = st.seenSeasons && st.seenSeasons.includes(s.number);
+             return `<span class="badge ${seen ? "badge-type" : "badge-genre"}">
+               ${seen ? `<i class="fa-solid fa-check mr-1"></i>` : ""}S${s.number}${s.year ? ` <span class="opacity-70 ml-1">${s.year}</span>` : ""}
+             </span>`;
+           }).join("")}
+         </div>
+       </div>`
+    : "";
+
+  const castHtml = (d.cast || []).length
+    ? `<div class="mt-4 border-t border-slate-100 pt-4">
+         <div class="text-xs font-semibold text-slate-500 mb-2"><i class="fa-solid fa-users mr-1 text-pink-400"></i>출연진</div>
+         <div class="flex flex-wrap gap-1.5">
+           ${d.cast.map(c => `<span class="badge badge-cast">${esc(c.name)}</span>`).join("")}
+         </div>
+         ${d.director ? `<div class="text-xs font-medium text-slate-500 mt-2">
+           <i class="fa-solid fa-clapperboard text-slate-400 mr-1"></i>감독
+           <span class="badge badge-genre ml-1">${esc(d.director)}</span></div>` : ""}
+       </div>`
+    : "";
+
+  const header = d.backdrop
+    ? `<div class="relative h-32 bg-cover bg-center" style="background-image:url('${d.backdrop}')">
+         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(255,255,255,1),rgba(255,255,255,0.1))"></div>
+         <button onclick="document.getElementById('dcModal').classList.add('hidden')"
+           class="absolute top-3 right-3 w-8 h-8 rounded-lg bg-white/80 hover:bg-white text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+       </div>`
+    : `<div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+         <h3 class="font-semibold text-slate-800">작품 정보</h3>
+         <button onclick="document.getElementById('dcModal').classList.add('hidden')"
+           class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+       </div>`;
+
+  const wished = isWished(d.tmdbId);
+
+  $("#dcModalContent").innerHTML = `
+    ${header}
+    <div class="p-5 ${d.backdrop ? "-mt-12 relative" : ""}">
+      <div class="flex gap-4 mb-4">
+        ${d.poster
+          ? `<img src="${d.poster}" class="w-28 rounded-lg object-cover self-start shadow-md" alt="">`
+          : `<div class="w-28 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
+        <div class="flex-1 min-w-0 ${d.backdrop ? "pt-12" : ""}">
+          <h4 class="text-lg font-bold text-slate-800 leading-snug">
+            ${esc(d.title)}
+            ${d.cert ? `<span class="badge badge-cert align-middle ml-1">${esc(certLabel(d.cert))}</span>` : ""}
+          </h4>
+          ${d.originalTitle && d.originalTitle !== d.title
+            ? `<div class="text-xs text-slate-400 font-medium">${esc(d.originalTitle)}</div>` : ""}
+          <div class="flex flex-wrap gap-1 mt-2">
+            ${d.type ? `<span class="badge badge-type">${esc(d.type)}</span>` : ""}
+            ${d.country ? `<span class="badge badge-country">${esc(d.country)}</span>` : ""}
+            ${(d.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join("")}
+          </div>
+          ${chips.length ? `<div class="flex flex-wrap gap-1 mt-1.5">${chips.join("")}</div>` : ""}
+          ${(d.releaseDate || d.releaseYear) ? `<div class="wl-meta mt-2">
+            <i class="fa-solid fa-clapperboard mr-1"></i>${mediaType === "movie" ? "개봉" : "방영"}
+            ${d.releaseDate ? fmtDate(d.releaseDate) : d.releaseYear}</div>` : ""}
+        </div>
+      </div>
+
+      ${mine}
+
+      ${visibleGenres(d.genres).length ? `<div class="flex flex-wrap gap-1 mb-3">
+        ${visibleGenres(d.genres).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}</div>` : ""}
+
+      ${d.overview ? `<p class="text-sm text-slate-600 leading-relaxed">${esc(d.overview)}</p>` : ""}
+
+      ${seasonsHtml}
+      ${castHtml}
+    </div>
+    <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
+      <button onclick="dcModalWish(${d.tmdbId},'${mediaType}')"
+        class="px-4 py-2.5 rounded-lg border text-sm font-semibold ${wished
+          ? "border-amber-400 bg-amber-50 text-amber-700"
+          : "border-slate-300 text-slate-700 hover:bg-slate-50"}">
+        <i class="fa-solid fa-bookmark mr-1"></i>${wished ? "담아둠" : "보고싶어요"}
+      </button>
+      <div class="flex-1"></div>
+      <button onclick="document.getElementById('dcModal').classList.add('hidden'); addFromDiscover(${d.tmdbId},'${mediaType}')"
+        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+        <i class="fa-solid fa-plus mr-1"></i>시청 기록 추가
+      </button>
+    </div>`;
+
+  // 모달에서 담기/빼기를 눌렀을 때 쓰려고 방금 조회한 정보를 들고 있는다
+  Discover._detail = { ...d, mediaType };
+}
+
+function dcModalWish(tmdbId, mediaType) {
+  const d = Discover._detail;
+  if (isWished(+tmdbId)) {
+    removeWish(+tmdbId);
+    toast("보고싶어요에서 뺐습니다");
+  } else {
+    addWish({
+      tmdbId: +tmdbId, mediaType,
+      title: d ? d.title : "", originalTitle: d ? d.originalTitle : "",
+      poster: d ? d.poster : null, year: d ? d.releaseYear : "",
+      voteAverage: d ? d.voteAverage : null, overview: d ? d.overview : ""
+    });
+    toast("보고싶어요에 담았습니다", "success");
+  }
+  if (d) renderDcDetail(d, mediaType);
+  renderDiscover();
+}
+window.dcModalWish = dcModalWish;
+
+function dcOpenMyRecord(id) {
+  $("#dcModal").classList.add("hidden");
+  openDetail(id);
+}
+window.dcOpenMyRecord = dcOpenMyRecord;
+window.addFromDiscover = addFromDiscover;
+
+/* ---------- 초기화 ---------- */
+function initDiscover() {
+  if (!$("#tab-discover")) return;
+
+  $("#dcSearchBtn").addEventListener("click", runDiscoverSearch);
+  $("#dcQuery").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); runDiscoverSearch(); }
+  });
+
+  $$(".dc-nav").forEach(btn => {
+    btn.addEventListener("click", () => {
+      Discover.view = btn.dataset.view;
+      renderDiscover();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+
+  /* 추천 */
+  $("#dcRecoBtn").addEventListener("click", runReco);
+  $$(".dc-type").forEach(btn => {
+    btn.addEventListener("click", () => {
+      Discover.recoType = btn.dataset.type;
+      $$(".dc-type").forEach(b => b.classList.toggle("active", b === btn));
+      renderDiscover();
+    });
+  });
+
+  /* 카드/버튼 클릭은 위임으로 한 번에 처리 */
+  $("#dcGrid").addEventListener("click", e => {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const act = btn.dataset.act;
+    const tid = btn.dataset.tid;
+    const entry = Discover._byId.get(String(tid));
+
+    if (act === "detail") { openDcDetail(tid, entry ? entry.mediaType : "movie"); return; }
+
+    e.stopPropagation();
+    if (act === "wish") dcToggleWish(tid);
+    else if (act === "unwish") { removeWish(+tid); toast("보고싶어요에서 뺐습니다"); renderDiscover(); }
+    else if (act === "open") openDetail(btn.dataset.id);
+    else if (act === "add") addFromDiscover(tid, entry ? entry.mediaType : "movie", btn.dataset.season);
+  });
+
+  $("#dcModal").addEventListener("click", e => {
+    if (e.target.id === "dcModal") $("#dcModal").classList.add("hidden");
+  });
+}

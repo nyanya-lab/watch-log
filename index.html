@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260728e">
+<link rel="stylesheet" href="style.css?v=20260729b">
 </head>
 <body>
 
@@ -32,6 +32,7 @@
       </div>
       <nav class="flex gap-1 -mb-px">
         <button class="tab-btn active" data-tab="list"><i class="fa-solid fa-grip mr-2"></i>목록</button>
+        <button class="tab-btn" data-tab="discover"><i class="fa-solid fa-compass mr-2"></i>탐색</button>
         <button class="tab-btn" data-tab="stats"><i class="fa-solid fa-chart-pie mr-2"></i>통계</button>
         <button class="tab-btn" data-tab="settings"><i class="fa-solid fa-gear mr-2"></i>설정</button>
       </nav>
@@ -98,6 +99,62 @@
           더 보기 <span id="loadMoreCount" class="text-slate-400 font-medium"></span>
         </button>
       </div>
+    </section>
+
+    <!-- ===== 탐색 탭 ===== -->
+    <section id="tab-discover" class="hidden space-y-4">
+      <div class="flex gap-2">
+        <div class="relative flex-1">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input type="text" id="dcQuery" placeholder="안 본 작품도 찾아보기 — TMDB 전체 검색"
+            class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:border-lime-600 focus:ring-2 focus:ring-lime-100 outline-none text-sm bg-white">
+        </div>
+        <button id="dcSearchBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+          <i class="fa-solid fa-magnifying-glass mr-1"></i>검색
+        </button>
+      </div>
+
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex gap-1.5 flex-wrap">
+          <button class="dc-nav hidden" data-view="search"><i class="fa-solid fa-magnifying-glass mr-1.5"></i>검색 결과</button>
+          <button class="dc-nav active" data-view="reco"><i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i>추천</button>
+          <button class="dc-nav" data-view="next"><i class="fa-solid fa-forward mr-1.5"></i>이어보기 <span id="dcNextCount" class="dc-num">0</span></button>
+          <button class="dc-nav" data-view="wish"><i class="fa-solid fa-bookmark mr-1.5"></i>보고싶어요 <span id="dcWishCount" class="dc-num">0</span></button>
+        </div>
+        <span id="dcCount" class="text-sm font-medium text-slate-500"></span>
+      </div>
+
+      <!-- 추천 뷰 전용 바 -->
+      <div id="dcRecoBar" class="hidden rounded-xl border border-lime-200 bg-white/70 px-4 py-3">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div id="dcRecoInfo" class="text-xs font-semibold text-slate-600 flex-1 min-w-0"></div>
+          <div class="flex items-center gap-2 shrink-0">
+            <div class="flex gap-1">
+              <button class="dc-type active" data-type="">전체</button>
+              <button class="dc-type" data-type="movie">영화</button>
+              <button class="dc-type" data-type="tv">TV</button>
+            </div>
+            <button id="dcRecoBtn" class="px-4 py-2 rounded-lg text-white text-sm font-semibold shadow-sm whitespace-nowrap" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+              <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>추천 받기
+            </button>
+          </div>
+        </div>
+        <div id="dcRecoProgress" class="hidden mt-3">
+          <div id="dcRecoStatus" class="text-xs font-medium text-slate-500 mb-1.5"></div>
+          <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+            <div id="dcRecoBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+          내가 별점을 높게 준 작품·재시청한 작품과 <b>비슷한 작품</b>, 그리고 <b>내 취향 장르</b>에서 함께 골라옵니다.
+          이미 기록한 작품은 빠집니다.
+        </p>
+      </div>
+
+      <div id="dcHint" class="hidden text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></div>
+
+      <div id="dcGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+      <div id="dcEmpty" class="hidden text-center py-16 text-slate-400"></div>
     </section>
 
     <!-- ===== 통계 탭 ===== -->
@@ -393,6 +450,11 @@
   <div id="detailContent" class="bg-white rounded-2xl max-w-lg mx-auto my-8 overflow-hidden"></div>
 </div>
 
+<!-- ===== 탐색: TMDB 작품 미리보기 모달 (내 기록 상세와 별개) ===== -->
+<div id="dcModal" class="hidden fixed inset-0 bg-black/50 z-40 overflow-y-auto p-4">
+  <div id="dcModalContent" class="bg-white rounded-2xl max-w-lg mx-auto my-8 overflow-hidden"></div>
+</div>
+
 <!-- ===== 동기화 비밀번호 모달 ===== -->
 <div id="syncPwModal" class="hidden fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl w-full max-w-md">
@@ -437,10 +499,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260728e"></script>
-<script src="core.js?v=20260728e"></script>
-<script src="tmdb.js?v=20260728e"></script>
-<script src="watchlog.js?v=20260728e"></script>
-<script src="stats.js?v=20260728e"></script>
+<script src="seed-data.js?v=20260729b"></script>
+<script src="core.js?v=20260729b"></script>
+<script src="tmdb.js?v=20260729b"></script>
+<script src="watchlog.js?v=20260729b"></script>
+<script src="discover.js?v=20260729b"></script>
+<script src="stats.js?v=20260729b"></script>
 </body>
 </html>
