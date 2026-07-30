@@ -112,10 +112,20 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 
 `tmdbId`가 null인 항목 = "미등록". 목록 상단 노란 버튼으로 필터링.
 
-### 보고싶어요 (State.wishes) — 아직 안 본 작품
+### 곁 목록 — 보고싶어요(State.wishes) / 관심없음(State.hides)
 
-시청 기록(`State.items`)과 **절대 섞지 않는다.** 섞으면 통계·히트맵·시리즈 묶기·총 개수가
+둘 다 시청 기록(`State.items`)과 **절대 섞지 않는다.** 섞으면 통계·히트맵·시리즈 묶기·총 개수가
 "안 본 작품"까지 집계하게 되므로, 별도 배열로 둔다.
+
+- **보고싶어요** — 나중에 볼 작품.
+- **관심없음**(`State.hides`) — 볼 생각이 없는 작품. 추천·이어보기에서 걸러낸다
+  (`runReco`의 `bump()`와 `renderDcReco`/영화 이어보기에서 제외). 탐색 탭에 모아보는 뷰가 있고
+  0개면 그 탭이 숨는다. **검색에서는 숨기지 않는다** — 직접 찾아온 거라 "관심없음으로 표시함"
+  배지와 [다시 관심] 버튼을 보여준다.
+  관심없음으로 넘기면 위시에서는 자동으로 빠진다(`addHide`).
+  ```js
+  { id, tmdbId, mediaType, title, poster, year, voteAverage, addedAt }
+  ```
 
 ```js
 { id:"w...", tmdbId, mediaType:"movie"|"tv", title, originalTitle, poster,
@@ -137,6 +147,7 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 - `watchlog_items` — 데이터 본체
 - `watchlog_items_backup` — 저장 직전 상태 1개
 - `watchlog_wishes` — 보고싶어요 목록 (`State.wishes`)
+- `watchlog_hides` — 관심없음 목록 (`State.hides`)
 - `watchlog_reco` — 추천 결과 캐시 `{generatedAt, basis:[장르], list:[...]}`. 이 기기에만, 동기화 안 함
 - `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
   영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
@@ -148,9 +159,9 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 ### 서버 (Realtime Database REST, SDK 안 씀)
 
 - `PUT/GET {DB_URL}/watchlog/{동기화 비밀번호}.json` (경로는 `getDataUrl()`이 생성)
-- 저장 형태: `{ items: [...], wishes: [...], updatedAt: ISO, count: n }`
-- `wishes`는 나중에 추가된 필드라 예전 저장본엔 없다. `adoptWishes(d)`가 **있을 때만** 반영하고
-  없으면 이 기기 것을 유지한다 (구버전 데이터가 위시를 지워버리지 않도록).
+- 저장 형태: `{ items: [...], wishes: [...], hides: [...], updatedAt: ISO, count: n }`
+- `wishes`·`hides`는 나중에 추가된 필드라 예전 저장본엔 없다. `adoptLists(d)`가 **있을 때만** 반영하고
+  없으면 이 기기 것을 유지한다 (구버전 데이터가 이 목록들을 지워버리지 않도록).
 
 ### 동기화 흐름
 
@@ -277,7 +288,9 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
       `releaseDate <= 오늘`인 편만 대상. 예: 아바타를 3편까지 봤으면 4·5편은 미개봉이라 안 뜬다.
     - 본 편 판정은 **tmdbId와 편 번호 둘 다**로 한다. 속편이 1편의 tmdbId를 물고 있는 기록이
       남아 있으면(위 "매칭 확인" 참고) tmdbId만 보면 실제로 본 편을 "안 봤다"고 잘못 잡는다.
-    - 카드 대표는 **다음에 볼 편** — 포스터·제목이 이미 본 편이 아니라 볼 편이어야 쓸모가 있다.
+    - **안 본 편마다 카드 한 장.** 편마다 포스터·제목이 따로 있으니 시리즈당 한 장으로 뭉치면
+      다음 편만 보이고 나머지가 묻힌다. TV 시즌은 반대 — 시즌별 포스터·제목이 없으므로
+      한 장에 "S2·S3 안 봄"으로 모아둔다. 이 비대칭은 데이터가 다르기 때문이고 의도한 것이다.
   - 편 정보가 없는 영화 시리즈가 있으면 `#dcPartsBar` 안내가 뜨고, 버튼으로 시리즈당 1회씩 받아온다
     (`runFetchCollParts`). 설정의 "시리즈 정보 가져오기"·새 작품 등록 때도 자동으로 채워진다.
 - **보고싶어요**: `State.wishes`. 이미 기록에 생긴 작품은 "이미 봤어요" 배지 + 빼기 버튼을 보여준다
@@ -288,6 +301,9 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 - 카드 클릭 → `#dcModal`(TMDB 작품 미리보기). 내 기록 상세(`#detailModal`)와 **별개 모달**이다.
 - `addFromDiscover(tmdbId, mediaType, season)` — 등록 모달을 열고 `selectTmdb`로 정보를 채운 뒤
   시즌까지 미리 선택한다. 즉 탐색에서 바로 기록으로 이어진다.
+- **`saveItem`/`deleteItem`이 `renderDiscover()`도 부른다.** 탐색 탭의 세 목록이 전부
+  "이미 본 것"을 기준으로 걸러지므로, 기록만 저장하고 끝내면 방금 등록한 작품이 이어보기·추천에
+  그대로 남아 있어서 탭을 나갔다 오거나 새로고침해야 사라진다.
 - `josa(word, "과", "와")` — 받침에 따라 조사 선택 ("기생충과" / "해리 포터와").
 
 ## 통계 탭

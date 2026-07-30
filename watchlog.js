@@ -978,6 +978,7 @@ function saveItem() {
   saveLocal();
   closeEdit();
   applyFilters();
+  renderDiscover();   // 탐색 탭의 이어보기·추천·위시는 "이미 본 것"을 기준으로 걸러지므로 같이 갱신
 }
 
 function deleteItem() {
@@ -987,6 +988,7 @@ function deleteItem() {
   saveLocal();
   closeEdit();
   applyFilters();
+  renderDiscover();
   toast("삭제되었습니다", "success");
 }
 

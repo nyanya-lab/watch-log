@@ -345,6 +345,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-flag-seen { background: rgba(77,124,42,.9); }
 .dc-flag-wish { background: rgba(224,112,15,.9); }
 .dc-flag-next { background: rgba(220,68,68,.9); }
+.dc-flag-hide { background: rgba(100,116,139,.9); }
 
 .dc-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 5px 0 2px; }
 
@@ -368,6 +369,9 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 }
 .dc-btn-main:hover { background: #d5e9c3; }
 .dc-btn-on { border-color: #e0700f; background: #ffedd9; color: #e0700f; }
+/* 아이콘만 있는 버튼 (관심없음) — 좁게 붙여서 다른 버튼 자리를 안 빼앗는다 */
+.dc-btn-icon { flex: 0 0 auto; padding: 6px 10px; color: #94a3b8; }
+.dc-btn-icon:hover { background: #f1f5f9; color: #64748b; }
 
 /* ===== 히트맵 ===== */
 .heat-cell { width: 12px; height: 12px; border-radius: 2px; background: #f1f5f9; }

@@ -51,12 +51,44 @@ function removeWish(tmdbId) {
   if (State.wishes.length !== before) saveLocal();
 }
 
+/* ---------- 관심없음 ----------
+   추천·검색에서 계속 나오는데 볼 생각이 없는 작품을 걸러낸다.
+   위시와 같은 이유로 items와 섞지 않는다 (본 게 아니니까). */
+function isHidden(tmdbId) {
+  return State.hides.some(h => h.tmdbId === tmdbId);
+}
+
+function addHide(h) {
+  if (isHidden(h.tmdbId)) return false;
+  State.hides.unshift({
+    id: uid(),
+    tmdbId: h.tmdbId,
+    mediaType: h.mediaType || "movie",
+    title: h.title || "",
+    poster: h.poster || null,
+    year: h.year || "",
+    voteAverage: h.voteAverage ?? null,
+    addedAt: new Date().toISOString()
+  });
+  // 관심없음으로 옮기면 위시에는 남겨둘 이유가 없다
+  removeWish(h.tmdbId);
+  saveLocal();
+  return true;
+}
+
+function removeHide(tmdbId) {
+  const before = State.hides.length;
+  State.hides = State.hides.filter(h => h.tmdbId !== tmdbId);
+  if (State.hides.length !== before) saveLocal();
+}
+
 /* ---------- 이 작품에 대한 "내 상태" ----------
    봤는지 / 어느 시즌까지 봤는지 / 위시에 담아뒀는지 */
 function myStatus(tmdbId) {
   const wished = isWished(tmdbId);
+  const hidden = isHidden(tmdbId);
   const recs = State.items.filter(i => i.tmdbId === tmdbId);
-  if (!recs.length) return { watched: false, wished, recs: [], missing: [] };
+  if (!recs.length) return { watched: false, wished, hidden, recs: [], missing: [] };
 
   const total = Math.max(...recs.map(r => r.totalSeasons || 0), 0);
   const seen = new Set();
@@ -73,6 +105,7 @@ function myStatus(tmdbId) {
   return {
     watched: true,
     wished,
+    hidden,
     recs,
     rating: Math.max(...recs.map(r => r.rating || 0)) || null,
     totalSeasons: total,
@@ -209,6 +242,7 @@ async function runReco() {
   const bump = (card, score, reason) => {
     if (!card.tmdbId || !card.poster) return;        // 포스터 없는 건 카드가 허전해서 뺀다
     if (seenIds.has(card.tmdbId)) return;            // 이미 본 작품
+    if (isHidden(card.tmdbId)) return;               // 관심없음으로 넘긴 작품
     if ((card.voteCount || 0) < 50) return;          // 표본이 너무 적은 작품
     const c = cand.get(card.tmdbId) || { card, score: 0, reasons: [] };
     c.score += score;
@@ -310,8 +344,9 @@ function renderDcReco() {
 
   const mt = Discover.recoType;   // "" | movie | tv
   const list = (data ? data.list : [])
-    // 캐시를 만든 뒤에 기록한 작품은 빼고 보여준다
+    // 캐시를 만든 뒤에 기록하거나 관심없음으로 넘긴 작품은 빼고 보여준다
     .filter(c => !State.items.some(i => i.tmdbId === c.tmdbId))
+    .filter(c => !isHidden(c.tmdbId))
     .filter(c => !mt || c.mediaType === mt)
     .map(c => ({
       tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
@@ -320,7 +355,8 @@ function renderDcReco() {
       actions: [
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
-        { act: "add", label: "봤어요", icon: "fa-plus" }
+        { act: "add", label: "봤어요", icon: "fa-plus" },
+        { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 추천에서 빼기" }
       ],
       _raw: c
     }));
@@ -417,13 +453,15 @@ function dcCardHtml(e) {
   let flag = e.flag || "";
   if (!flag) {
     if (st.watched) flag = `<span class="dc-flag dc-flag-seen"><i class="fa-solid fa-check mr-1"></i>봤어요</span>`;
+    else if (st.hidden) flag = `<span class="dc-flag dc-flag-hide"><i class="fa-solid fa-ban mr-1"></i>관심없음</span>`;
     else if (st.wished) flag = `<span class="dc-flag dc-flag-wish"><i class="fa-solid fa-bookmark mr-1"></i>담아둠</span>`;
   }
 
   const actions = (e.actions || []).map(a => `
     <button class="dc-btn ${a.cls || ""}" data-act="${a.act}" data-tid="${e.tmdbId}"
-      ${a.season ? `data-season="${a.season}"` : ""}${a.id ? ` data-id="${a.id}"` : ""}>
-      ${a.icon ? `<i class="fa-solid ${a.icon} mr-1"></i>` : ""}${esc(a.label)}
+      ${a.season ? `data-season="${a.season}"` : ""}${a.id ? ` data-id="${a.id}"` : ""}
+      ${a.title ? ` title="${esc(a.title)}"` : ""}>
+      ${a.icon ? `<i class="fa-solid ${a.icon}${a.label ? " mr-1" : ""}"></i>` : ""}${esc(a.label)}
     </button>`).join("");
 
   return `
@@ -472,6 +510,7 @@ function renderDiscover() {
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "search") return renderDcSearch();
   if (Discover.view === "wish") return renderDcWish();
+  if (Discover.view === "hide") return renderDcHide();
   return renderDcNext();
 }
 window.renderDiscover = renderDiscover;
@@ -480,10 +519,17 @@ function updateDcNav() {
   $$(".dc-nav").forEach(b => b.classList.toggle("active", b.dataset.view === Discover.view));
   const nextN = continueList().length + movieContinueList().length;
   const wishN = State.wishes.length;
+  const hideN = State.hides.length;
   $("#dcNextCount").textContent = nextN;
   $("#dcWishCount").textContent = wishN;
+  $("#dcHideCount").textContent = hideN;
   $("#dcNextCount").classList.toggle("hidden", nextN === 0);
   $("#dcWishCount").classList.toggle("hidden", wishN === 0);
+  $("#dcHideCount").classList.toggle("hidden", hideN === 0);
+
+  // 관심없음 탭은 표시한 게 있을 때만 (0개면 굳이 자리 차지할 필요 없음)
+  const hb = $('.dc-nav[data-view="hide"]');
+  if (hb) hb.classList.toggle("hidden", hideN === 0 && Discover.view !== "hide");
 
   // 검색 결과 탭은 검색했을 때만 보인다
   const sb = $('.dc-nav[data-view="search"]');
@@ -518,28 +564,29 @@ function renderDcNext() {
     };
   });
 
-  /* 영화: 안 본 편. 카드는 "다음에 볼 편"을 대표로 세운다
-     (포스터·제목이 이미 본 편이 아니라 볼 편이어야 쓸모가 있다) */
-  const movie = movieContinueList().map(c => {
-    const next = c.missing[0];
-    return {
-      _sort: c.sortKey,
-      tmdbId: next.tmdbId,
+  /* 영화: 안 본 편을 **편마다 한 장씩** 카드로. 편마다 포스터·제목이 따로 있으니
+     한 장으로 뭉치면(예전 방식) 다음 편만 보이고 나머지는 묻힌다.
+     TV 시즌은 반대로 포스터·제목이 시즌마다 없으므로 한 장에 모아둔다. */
+  const movie = movieContinueList().flatMap(c =>
+    c.missing.filter(p => !isHidden(p.tmdbId)).map(p => ({
+      _sort: c.sortKey + "|" + String(1000 - p.no).padStart(4, "0"),   // 시리즈끼리 붙이고 편 순서대로
+      tmdbId: p.tmdbId,
       mediaType: "movie",
-      title: next.title,
-      poster: next.poster,
-      year: (next.releaseDate || "").slice(0, 4),
+      title: p.title,
+      poster: p.poster,
+      year: (p.releaseDate || "").slice(0, 4),
       voteAverage: null,
-      flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${c.missing.length}편 안 봄</span>`,
-      note: `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>${esc(c.info.name)} ${next.no}편</span>
+      flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${p.no}편 안 봄</span>`,
+      note: `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>${esc(c.info.name)} ${p.no}편</span>
              <span class="badge badge-type">${c.watched}편 봄</span>
              ${c.upcoming ? `<span class="badge badge-genre">미개봉 ${c.upcoming}편 제외</span>` : ""}`,
       actions: [
-        { act: "add", label: "이 편 기록하기", icon: "fa-plus", cls: "dc-btn-main" },
-        { act: "open", id: c.main.id, label: "내 기록", icon: "fa-clock-rotate-left" }
+        { act: "add", label: "기록하기", icon: "fa-plus", cls: "dc-btn-main" },
+        { act: "wish", label: isWished(p.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
+          cls: isWished(p.tmdbId) ? "dc-btn-on" : "" },
+        { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 이 목록에서 숨기기" }
       ]
-    };
-  });
+    })));
 
   const list = [...tv, ...movie].sort((a, b) => (b._sort || "").localeCompare(a._sort || ""));
 
@@ -592,6 +639,26 @@ function renderDcWish() {
     <p class="text-sm mt-1">위에서 검색해 마음에 드는 작품을 담아두세요.</p>`);
 }
 
+/* 관심없음 모아보기 */
+function renderDcHide() {
+  $("#dcHint").classList.add("hidden");
+
+  const list = State.hides.map(h => ({
+    tmdbId: h.tmdbId, mediaType: h.mediaType, title: h.title,
+    poster: h.poster, year: h.year, voteAverage: h.voteAverage,
+    flag: `<span class="dc-flag dc-flag-hide"><i class="fa-solid fa-ban mr-1"></i>관심없음</span>`,
+    actions: [
+      { act: "unhide", label: "다시 관심", icon: "fa-rotate-left", cls: "dc-btn-main" },
+      { act: "wish", label: "보고싶어요", icon: "fa-bookmark" }
+    ]
+  }));
+
+  paintDcCards(list, `
+    <i class="fa-solid fa-ban text-4xl mb-3"></i>
+    <p class="font-medium">관심없음으로 표시한 작품이 없어요</p>
+    <p class="text-sm mt-1">추천이나 이어보기에서 <i class="fa-solid fa-ban mx-1"></i>를 누르면 여기로 옵니다.</p>`);
+}
+
 /* 검색 결과 */
 function renderDcSearch() {
   const hint = $("#dcHint");
@@ -618,9 +685,14 @@ function renderDcSearch() {
       note = `<span class="badge badge-type"><i class="fa-solid fa-check mr-1"></i>${st.recs.length}개 기록 있음</span>`;
       acts.push({ act: "open", id: st.recs[0].id, label: "내 기록 보기", icon: "fa-clock-rotate-left", cls: "dc-btn-main" });
       acts.push({ act: "add", label: "또 기록", icon: "fa-plus" });
+    } else if (st.hidden) {
+      // 직접 검색해서 찾아온 거니 숨기지 않고, 되돌릴 버튼을 준다
+      note = `<span class="badge badge-genre"><i class="fa-solid fa-ban mr-1"></i>관심없음으로 표시함</span>`;
+      acts.push({ act: "unhide", label: "다시 관심", icon: "fa-rotate-left", cls: "dc-btn-main" });
     } else {
       acts.push({ act: "wish", label: st.wished ? "담아둠" : "보고싶어요", icon: "fa-bookmark", cls: st.wished ? "dc-btn-on" : "" });
       acts.push({ act: "add", label: "봤어요", icon: "fa-plus", cls: "dc-btn-main" });
+      acts.push({ act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음" });
     }
 
     return {
@@ -712,6 +784,17 @@ async function fillWishOtt(tmdbId, mediaType) {
     const w = State.wishes.find(x => x.tmdbId === tmdbId);
     if (w) { w.otts = otts; saveLocal(); renderDiscover(); }
   } catch { /* OTT를 못 가져와도 담긴 건 유지 */ }
+}
+
+function dcHide(tmdbId) {
+  const e = Discover._byId.get(String(tmdbId));
+  if (!e) return;
+  addHide({
+    tmdbId: +tmdbId, mediaType: e.mediaType, title: e.title,
+    poster: e.poster, year: e.year, voteAverage: e.voteAverage
+  });
+  toast(`「${e.title}」을 관심없음으로 표시했습니다`);
+  renderDiscover();
 }
 
 /* ---------- TMDB 상세 미리보기 ---------- */
@@ -851,6 +934,13 @@ function renderDcDetail(d, mediaType) {
           : "border-slate-300 text-slate-700 hover:bg-slate-50"}">
         <i class="fa-solid fa-bookmark mr-1"></i>${wished ? "담아둠" : "보고싶어요"}
       </button>
+      <button onclick="dcModalHide(${d.tmdbId},'${mediaType}')"
+        class="px-3 py-2.5 rounded-lg border text-sm font-semibold ${isHidden(d.tmdbId)
+          ? "border-slate-400 bg-slate-100 text-slate-600"
+          : "border-slate-300 text-slate-500 hover:bg-slate-50"}"
+        title="${isHidden(d.tmdbId) ? "관심없음 해제" : "관심없음 — 추천에서 빼기"}">
+        <i class="fa-solid fa-ban"></i>
+      </button>
       <div class="flex-1"></div>
       <button onclick="document.getElementById('dcModal').classList.add('hidden'); addFromDiscover(${d.tmdbId},'${mediaType}')"
         class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
@@ -881,6 +971,24 @@ function dcModalWish(tmdbId, mediaType) {
   renderDiscover();
 }
 window.dcModalWish = dcModalWish;
+
+function dcModalHide(tmdbId, mediaType) {
+  const d = Discover._detail;
+  if (isHidden(+tmdbId)) {
+    removeHide(+tmdbId);
+    toast("관심없음을 해제했습니다");
+  } else {
+    addHide({
+      tmdbId: +tmdbId, mediaType,
+      title: d ? d.title : "", poster: d ? d.poster : null,
+      year: d ? d.releaseYear : "", voteAverage: d ? d.voteAverage : null
+    });
+    toast("관심없음으로 표시했습니다");
+  }
+  if (d) renderDcDetail(d, mediaType);
+  renderDiscover();
+}
+window.dcModalHide = dcModalHide;
 
 function dcOpenMyRecord(id) {
   $("#dcModal").classList.add("hidden");
@@ -930,6 +1038,8 @@ function initDiscover() {
     e.stopPropagation();
     if (act === "wish") dcToggleWish(tid);
     else if (act === "unwish") { removeWish(+tid); toast("보고싶어요에서 뺐습니다"); renderDiscover(); }
+    else if (act === "hide") dcHide(tid);
+    else if (act === "unhide") { removeHide(+tid); toast("관심없음을 해제했습니다"); renderDiscover(); }
     else if (act === "open") openDetail(btn.dataset.id);
     else if (act === "add") addFromDiscover(tid, entry ? entry.mediaType : "movie", btn.dataset.season);
   });

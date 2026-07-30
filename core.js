@@ -18,6 +18,7 @@ const AUTO_SYNC_DELAY = 2500;       // 자동 저장 대기시간(ms)
 
 const LS_KEY = "watchlog_items";
 const LS_WISH = "watchlog_wishes";  // 보고싶어요 목록. 시청 기록과 섞지 않고 따로 둔다(통계 오염 방지)
+const LS_HIDE = "watchlog_hides";   // 관심없음 목록. 추천·검색에서 걸러낼 작품
 const LS_TMDB = "watchlog_tmdb_key";
 const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서버 데이터 경로 (이 기기에만 저장, 깃에는 없음)
 const LS_MODIFIED = "watchlog_modified";
@@ -42,6 +43,7 @@ const LEGACY_URL = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${LEGACY_KEY}.json`;
 const State = {
   items: [],
   wishes: [],        // 보고싶어요 (아직 안 본 작품) — items와 별도
+  hides: [],         // 관심없음 — 추천·검색에서 제외할 작품
   filtered: [],
   page: 1,
   perPage: 24,
@@ -121,6 +123,7 @@ function saveLocal(skipCloud) {
 
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
+    localStorage.setItem(LS_HIDE, JSON.stringify(State.hides));
     localStorage.setItem(LS_MODIFIED, new Date().toISOString());
   } catch (e) {
     console.error("로컬 저장 실패", e);
@@ -144,6 +147,9 @@ function loadLocal() {
   try {
     State.wishes = JSON.parse(localStorage.getItem(LS_WISH) || "[]");
   } catch { State.wishes = []; }
+  try {
+    State.hides = JSON.parse(localStorage.getItem(LS_HIDE) || "[]");
+  } catch { State.hides = []; }
 }
 
 /* ---------- 서버 통신 (Realtime Database REST) ---------- */
@@ -161,6 +167,7 @@ async function autoPush() {
       body: JSON.stringify({
         items: State.items,
         wishes: State.wishes,
+        hides: State.hides,
         updatedAt: localStorage.getItem(LS_MODIFIED) || new Date().toISOString(),
         count: State.items.length
       })
@@ -196,6 +203,7 @@ async function pushToServer() {
       body: JSON.stringify({
         items: State.items,
         wishes: State.wishes,
+        hides: State.hides,
         updatedAt: new Date().toISOString(),
         count: State.items.length
       })
@@ -222,12 +230,18 @@ async function fetchServer() {
   return await res.json();   // null 이면 서버에 데이터 없음
 }
 
-/* 서버 응답의 보고싶어요 목록을 반영.
-   예전에 저장된 데이터에는 wishes가 없으므로, 없으면 이 기기 것을 그대로 둔다. */
-function adoptWishes(d) {
-  if (d && Array.isArray(d.wishes)) {
+/* 서버 응답의 곁 목록(보고싶어요·관심없음)을 반영.
+   나중에 추가된 필드라 예전 저장본에는 없다 → 없으면 이 기기 것을 그대로 둔다
+   (구버전 데이터가 이 기기의 목록을 지워버리지 않도록). */
+function adoptLists(d) {
+  if (!d) return;
+  if (Array.isArray(d.wishes)) {
     State.wishes = d.wishes;
     localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
+  }
+  if (Array.isArray(d.hides)) {
+    State.hides = d.hides;
+    localStorage.setItem(LS_HIDE, JSON.stringify(State.hides));
   }
 }
 
@@ -243,7 +257,7 @@ async function pullFromServer(silent) {
       return false;
     }
     State.items = d.items;
-    adoptWishes(d);
+    adoptLists(d);
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_MODIFIED, d.updatedAt || new Date().toISOString());
     setSyncIcon("saved");
@@ -289,7 +303,7 @@ async function syncOnBoot() {
         if (!ok) { await autoPush(); return; }
       }
       State.items = d.items;
-      adoptWishes(d);
+      adoptLists(d);
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod);
       applyFilters();
