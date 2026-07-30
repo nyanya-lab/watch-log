@@ -131,6 +131,11 @@ function initWatchlog() {
     applyFilters();
   });
 
+  /* 별점 몰아넣기 */
+  $("#quickRateBtn").addEventListener("click", openQuickRate);
+  $("#qrClose").addEventListener("click", closeQuickRate);
+  $("#quickRateModal").addEventListener("click", e => { if (e.target.id === "quickRateModal") closeQuickRate(); });
+
   $("#loadMoreBtn").addEventListener("click", () => { State.page++; renderCards(); });
 
   /* 별점 (숫자 입력, 5점 만점 소수 가능) */
@@ -610,6 +615,14 @@ function renderHeaderCount() {
     db.classList.toggle("hidden", dupCount === 0 && !Filters.dupOnly);
   }
 
+  // 별점 채우기 버튼 (필터가 아니라 몰아넣기 모달을 여는 버튼 — 0개면 숨김)
+  const noRate = State.items.filter(i => !i.rating).length;
+  const qb = $("#quickRateBtn");
+  if (qb) {
+    $("#quickRateCount").textContent = noRate;
+    qb.classList.toggle("hidden", noRate === 0);
+  }
+
   // 자동 재매칭 안내바 — 매칭 확인 목록을 보는 중이고 고칠 게 있을 때만
   const fixBar = $("#autoFixBar");
   if (fixBar) {
@@ -830,6 +843,143 @@ function readRating() {
   const v = parseFloat($("#fRating").value);
   if (!isFinite(v) || v <= 0) return null;
   return Math.min(5, Math.round(v * 10) / 10);   // 5점 만점, 소수 첫째자리까지
+}
+
+/* ---------- 별점 몰아넣기 ----------
+   별점이 276개 중 11개뿐이라, 수정 모달을 6단계 거치는 방식으로는 절대 안 채워진다.
+   한 장씩 띄우고 숫자만 입력 → Enter로 다음. 빈 값으로 Enter는 건너뛰기.
+   큐는 열 때 한 번 스냅샷으로 잡는다 — 점수를 넣는 순간 목록이 줄어들면 뒤로 가기가 깨진다. */
+const QuickRate = { queue: [], idx: 0, done: 0 };
+
+/* 최근 본 것부터 — 기억이 선명한 순서 */
+function quickRateTargets() {
+  const dkey = (i) => i.lastWatchStart || i.startDate || "";
+  return State.items.filter(i => !i.rating).sort((a, b) => dkey(b).localeCompare(dkey(a)));
+}
+
+function openQuickRate() {
+  QuickRate.queue = quickRateTargets();
+  QuickRate.idx = 0;
+  QuickRate.done = 0;
+  if (!QuickRate.queue.length) { toast("별점 없는 기록이 없습니다", "success"); return; }
+  $("#quickRateModal").classList.remove("hidden");
+  renderQuickRate();
+}
+
+function closeQuickRate() {
+  $("#quickRateModal").classList.add("hidden");
+  const n = QuickRate.done;
+  applyFilters();
+  renderDiscover();
+  if (n) toast(`별점 ${n}개를 넣었습니다`, "success");
+}
+
+function renderQuickRate() {
+  const q = QuickRate.queue;
+  const body = $("#qrBody");
+  const total = q.length;
+
+  // 다 넘겼을 때
+  if (QuickRate.idx >= total) {
+    $("#qrProgress").textContent = "";
+    $("#qrBar").style.width = "100%";
+    const left = q.filter(i => !i.rating).length;
+    body.innerHTML = `
+      <div class="text-center py-8">
+        <i class="fa-solid fa-circle-check text-4xl text-emerald-500 mb-3"></i>
+        <p class="font-semibold text-slate-800">${QuickRate.done}개에 별점을 넣었어요</p>
+        ${left ? `<p class="text-sm text-slate-500 mt-1 font-medium">건너뛴 ${left}개는 다음에 또 뜹니다</p>` : ""}
+        <div class="flex gap-2 justify-center mt-5">
+          ${left ? `<button id="qrRestart" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
+            <i class="fa-solid fa-rotate-left mr-1"></i>건너뛴 것 다시 보기</button>` : ""}
+          <button id="qrDone" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">닫기</button>
+        </div>
+      </div>`;
+    $("#qrDone").addEventListener("click", closeQuickRate);
+    const rs = $("#qrRestart");
+    if (rs) rs.addEventListener("click", () => {
+      QuickRate.queue = q.filter(i => !i.rating);
+      QuickRate.idx = 0;
+      renderQuickRate();
+    });
+    return;
+  }
+
+  const i = q[QuickRate.idx];
+  $("#qrProgress").textContent = `${QuickRate.idx + 1} / ${total}`;
+  $("#qrBar").style.width = ((QuickRate.idx) / total * 100).toFixed(1) + "%";
+
+  const meta = [i.type, i.releaseYear, seriesLabel(i)].filter(Boolean).join(" · ");
+
+  body.innerHTML = `
+    <div class="flex gap-4">
+      ${i.poster
+        ? `<img src="${i.poster}" class="w-24 rounded-lg object-cover self-start shadow-md" alt="">`
+        : `<div class="w-24 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-slate-800 leading-snug">${esc(i.title)}</div>
+        <div class="text-sm text-slate-500 font-medium mt-1">${esc(meta)}</div>
+        ${fmtRange(i.startDate, i.endDate)
+          ? `<div class="text-xs text-slate-500 font-medium mt-2">
+               <i class="fa-solid fa-calendar-day mr-1 text-rose-400"></i>${fmtRange(i.startDate, i.endDate)}</div>` : ""}
+        ${visibleGenres(i.genres).length
+          ? `<div class="flex flex-wrap gap-1 mt-2">
+               ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}</div>` : ""}
+        ${i.voteAverage ? `<div class="mt-2"><span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span></div>` : ""}
+      </div>
+    </div>
+
+    <div class="mt-5">
+      <div class="flex items-center gap-2">
+        <div class="relative flex-1">
+          <i class="fa-solid fa-heart absolute left-3 top-1/2 -translate-y-1/2 text-rose-400"></i>
+          <input type="number" id="qrInput" class="form-input pl-9 text-lg font-semibold" min="0" max="5" step="0.1"
+            placeholder="0 ~ 5 (소수점 가능)" value="${i.rating || ""}" autocomplete="off">
+        </div>
+        <span class="text-sm font-semibold text-slate-400">/ 5</span>
+      </div>
+      <p class="text-xs text-slate-400 font-medium mt-2">
+        <b>Enter</b>로 저장하고 다음 · 빈 칸으로 <b>Enter</b>면 건너뛰기 · <b>Esc</b>로 닫기
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100">
+      <button id="qrPrev" class="px-3.5 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 ${QuickRate.idx === 0 ? "opacity-40 pointer-events-none" : ""}">
+        <i class="fa-solid fa-arrow-left mr-1"></i>뒤로
+      </button>
+      <button id="qrSkip" class="px-3.5 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
+        건너뛰기<i class="fa-solid fa-arrow-right ml-1"></i>
+      </button>
+      <div class="flex-1"></div>
+      <span class="text-xs font-semibold text-slate-400">넣은 별점 ${QuickRate.done}개</span>
+    </div>`;
+
+  const input = $("#qrInput");
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    quickRateSubmit();
+  });
+  $("#qrSkip").addEventListener("click", () => { QuickRate.idx++; renderQuickRate(); });
+  $("#qrPrev").addEventListener("click", () => { QuickRate.idx = Math.max(0, QuickRate.idx - 1); renderQuickRate(); });
+
+  input.focus();
+  input.select();
+}
+
+/* Enter 처리: 값이 있으면 저장, 없으면 건너뛰기 */
+function quickRateSubmit() {
+  const item = QuickRate.queue[QuickRate.idx];
+  const raw = parseFloat($("#qrInput").value);
+  if (isFinite(raw) && raw > 0) {
+    const v = Math.min(5, Math.round(raw * 10) / 10);
+    const isNew = !item.rating;
+    item.rating = v;
+    if (isNew) QuickRate.done++;
+    saveLocal();          // 저장은 매번. 서버 전송은 2.5초 디바운스가 묶어준다
+  }
+  QuickRate.idx++;
+  renderQuickRate();
 }
 
 /* ---------- 등록/수정 모달 ---------- */

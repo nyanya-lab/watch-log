@@ -478,6 +478,7 @@ function updateSyncPwStatus() {
    등록/수정 모달은 State도 정리해야 하므로 closeEdit()을 쓴다. */
 function initEscapeKey() {
   const layers = [
+    { sel: "#quickRateModal", close: () => closeQuickRate() },
     { sel: "#dcModal" },
     { sel: "#detailModal" },
     { sel: "#filterModal", close: () => closeFilterModal() },

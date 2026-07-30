@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260730d">
+<link rel="stylesheet" href="style.css?v=20260730e">
 </head>
 <body>
 
@@ -76,6 +76,10 @@
           </button>
           <button id="dupBtn" class="px-3.5 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition" title="제목이 다른데 TMDB 작품이 같음 — 자동 매칭 오류 의심">
             <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>매칭 확인 <span id="dupCount">0</span>개
+          </button>
+          <!-- 필터 토글이 아니라 별점 몰아넣기 모달을 연다 -->
+          <button id="quickRateBtn" class="px-3.5 py-2 rounded-lg border border-pink-300 bg-pink-50 text-pink-700 text-sm font-semibold hover:bg-pink-100 transition" title="별점 없는 기록을 한 장씩 넘기며 빠르게 입력">
+            <i class="fa-solid fa-heart mr-1.5"></i>별점 채우기 <span id="quickRateCount">0</span>개
           </button>
         </div>
         <span id="resultCount" class="text-sm font-medium text-slate-500"></span>
@@ -457,6 +461,23 @@
   <div id="detailContent" class="bg-white rounded-2xl max-w-lg mx-auto my-8 overflow-hidden"></div>
 </div>
 
+<!-- ===== 별점 몰아넣기 모달 ===== -->
+<div id="quickRateModal" class="hidden fixed inset-0 bg-black/60 z-40 overflow-y-auto p-4">
+  <div class="bg-white rounded-2xl max-w-md mx-auto my-8 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-heart mr-2 text-rose-400"></i>별점 몰아넣기</h3>
+      <div class="flex items-center gap-3">
+        <span id="qrProgress" class="text-sm font-semibold text-slate-500"></span>
+        <button id="qrClose" class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+    <div class="h-1.5 bg-slate-100">
+      <div id="qrBar" class="h-full transition-all" style="width:0%;background:linear-gradient(90deg,#f43f5e,#fb7185)"></div>
+    </div>
+    <div id="qrBody" class="p-5"></div>
+  </div>
+</div>
+
 <!-- ===== 탐색: TMDB 작품 미리보기 모달 (내 기록 상세와 별개) ===== -->
 <div id="dcModal" class="hidden fixed inset-0 bg-black/50 z-40 overflow-y-auto p-4">
   <div id="dcModalContent" class="bg-white rounded-2xl max-w-lg mx-auto my-8 overflow-hidden"></div>
@@ -506,11 +527,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260730d"></script>
-<script src="core.js?v=20260730d"></script>
-<script src="tmdb.js?v=20260730d"></script>
-<script src="watchlog.js?v=20260730d"></script>
-<script src="discover.js?v=20260730d"></script>
-<script src="stats.js?v=20260730d"></script>
+<script src="seed-data.js?v=20260730e"></script>
+<script src="core.js?v=20260730e"></script>
+<script src="tmdb.js?v=20260730e"></script>
+<script src="watchlog.js?v=20260730e"></script>
+<script src="discover.js?v=20260730e"></script>
+<script src="stats.js?v=20260730e"></script>
 </body>
 </html>
