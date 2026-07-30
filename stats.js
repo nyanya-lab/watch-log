@@ -251,7 +251,7 @@ function renderStats() {
     _charts.push(new Chart($("#chartActor"), {
       type: "bar",
       data: { labels: aLabels, datasets: [{ data: aValues, backgroundColor: "#ec4899", borderRadius: 6 }] },
-      options: { ...commonOpts, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+      options: { ...commonOpts, onClick: clickToFilter(l => ({ person: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     }));
   }
 
@@ -263,7 +263,7 @@ function renderStats() {
     _charts.push(new Chart($("#chartDirector"), {
       type: "bar",
       data: { labels: dLabels, datasets: [{ data: dValues, backgroundColor: "#64748b", borderRadius: 6 }] },
-      options: { ...commonOpts, indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+      options: { ...commonOpts, onClick: clickToFilter(l => ({ person: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     }));
   }
 

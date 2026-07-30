@@ -284,7 +284,7 @@ async function tmdbCollection(collectionId) {
   const key = getTmdbKey();
   const url = `${TMDB_BASE}/collection/${collectionId}?api_key=${key}&language=ko-KR`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error("TMDB 컬렉션 조회 실패");
+  if (!res.ok) throw new Error(`TMDB 컬렉션 조회 실패 (${res.status})`);
   const d = await res.json();
 
   // 미개봉(개봉일 없음)은 뒤로 보내고 개봉일 순 정렬
@@ -322,14 +322,35 @@ function getCollCache() {
 
 function saveCollInfo(info) {
   if (!info || !info.id || !info.parts) return;
+  writeCollCache(info.id, {
+    name: info.name, total: info.total, parts: info.parts
+  });
+}
+
+/* 조회가 실패한 컬렉션도 흔적을 남긴다.
+   안 남기면 "편 정보 없음" 안내가 영원히 뜨고, 버튼을 눌러도 매번 같은 실패를 반복해
+   아무 일도 안 일어나는 것처럼 보인다 (없어진 컬렉션이면 절대 성공하지 않는다). */
+function saveCollFailure(collectionId, message) {
+  writeCollCache(collectionId, { failed: true, error: String(message || "") });
+}
+
+function writeCollCache(id, value) {
   try {
     const c = getCollCache();
-    c[info.id] = {
-      name: info.name, total: info.total, parts: info.parts,
-      updatedAt: new Date().toISOString()
-    };
+    c[id] = { ...value, updatedAt: new Date().toISOString() };
     localStorage.setItem(LS_COLL, JSON.stringify(c));
   } catch { /* 저장 공간 문제면 조용히 넘어간다 (캐시일 뿐) */ }
+}
+
+/* 실패로 기록된 컬렉션들을 지워서 다시 시도할 수 있게 한다 */
+function clearCollFailures() {
+  try {
+    const c = getCollCache();
+    let n = 0;
+    Object.keys(c).forEach(k => { if (c[k] && c[k].failed) { delete c[k]; n++; } });
+    localStorage.setItem(LS_COLL, JSON.stringify(c));
+    return n;
+  } catch { return 0; }
 }
 
 /* 자동 매칭 (일괄 채우기용) */

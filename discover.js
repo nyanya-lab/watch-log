@@ -388,7 +388,7 @@ function movieContinueList() {
   const out = [];
   byColl.forEach((recs, cid) => {
     const info = cache[cid];
-    if (!info || !info.parts) return;            // 편 정보를 아직 안 가져온 시리즈
+    if (!info || !info.parts) return;            // 편 정보가 없거나 조회에 실패한 시리즈
 
     /* 본 편 판정을 tmdbId와 편 번호 둘 다로 한다.
        속편이 1편의 tmdbId를 물고 있는 기록이 남아 있을 수 있어서(매칭 확인 참고),
@@ -413,35 +413,70 @@ function movieContinueList() {
   return out;
 }
 
-/* 편 정보를 아직 안 가져온 영화 시리즈 */
+/* 편 정보를 아직 안 가져온 영화 시리즈.
+   조회에 실패해 `failed`로 기록된 것은 제외한다 — 없어진 컬렉션이면 다시 눌러도 계속 실패하고,
+   그러면 안내바가 영원히 뜬 채로 버튼이 먹지 않는 것처럼 보인다. */
 function collsNeedingParts() {
   const cache = getCollCache();
   const ids = new Set();
   State.items.forEach(i => {
-    if (i.type === "영화" && i.collectionId && !cache[i.collectionId]) ids.add(i.collectionId);
+    if (i.type !== "영화" || !i.collectionId) return;
+    if (!cache[i.collectionId]) ids.add(i.collectionId);
   });
   return [...ids];
 }
 
+/* 조회에 실패한 컬렉션 수 (안내에만 씀) */
+function collsFailedCount() {
+  const cache = getCollCache();
+  const ids = new Set();
+  State.items.forEach(i => {
+    if (i.type === "영화" && i.collectionId) {
+      const c = cache[i.collectionId];
+      if (c && c.failed) ids.add(i.collectionId);
+    }
+  });
+  return ids.size;
+}
+
 /* 그 시리즈들의 편 정보를 받아온다 (시리즈당 1회) */
 let _partsFetching = false;
-async function runFetchCollParts() {
+async function runFetchCollParts(retryFailed) {
   if (_partsFetching) return;
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
 
+  if (retryFailed) clearCollFailures();
+
   const ids = collsNeedingParts();
-  if (!ids.length) { toast("이미 다 가져왔습니다", "success"); return; }
+  if (!ids.length) { toast("가져올 시리즈가 없습니다"); renderDiscover(); return; }
 
   _partsFetching = true;
   const msg = $("#dcPartsMsg");
   let ok = 0;
-  for (let n = 0; n < ids.length; n++) {
-    msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>시리즈 편 정보 ${n + 1} / ${ids.length} 가져오는 중...`;
-    try { saveCollInfo(await tmdbCollection(ids[n])); ok++; } catch { /* 하나 실패해도 계속 */ }
-    await new Promise(r => setTimeout(r, 240));
+  const failed = [];
+  try {
+    for (let n = 0; n < ids.length; n++) {
+      msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>시리즈 편 정보 ${n + 1} / ${ids.length} 가져오는 중...`;
+      try {
+        saveCollInfo(await tmdbCollection(ids[n]));
+        ok++;
+      } catch (e) {
+        // 실패도 기록해 둔다. 안 그러면 이 안내가 사라지지 않는다.
+        saveCollFailure(ids[n], e.message);
+        failed.push({ id: ids[n], error: e.message });
+      }
+      await new Promise(r => setTimeout(r, 240));
+    }
+  } finally {
+    _partsFetching = false;
   }
-  _partsFetching = false;
-  toast(`시리즈 ${ok}개의 편 정보를 가져왔습니다`, "success");
+
+  if (failed.length) {
+    console.warn("컬렉션 편 정보 조회 실패:", failed);
+    toast(`${ok}개 완료 · ${failed.length}개는 TMDB에서 못 찾았습니다`, failed.length > ok ? "error" : "info");
+  } else {
+    toast(`시리즈 ${ok}개의 편 정보를 가져왔습니다`, "success");
+  }
   renderDiscover();
 }
 
@@ -590,14 +625,27 @@ function renderDcNext() {
 
   const list = [...tv, ...movie].sort((a, b) => (b._sort || "").localeCompare(a._sort || ""));
 
-  // 편 정보를 안 가져온 영화 시리즈가 있으면 안내
+  /* 편 정보를 안 가져온 영화 시리즈가 있으면 안내.
+     실패한 것만 남았을 때는 "가져오기"가 아니라 "다시 시도"를 제안한다 — 그 상태에서
+     같은 버튼을 눌러도 매번 같은 실패라 아무 일도 안 일어나는 것처럼 보이기 때문. */
   const need = collsNeedingParts();
+  const failed = collsFailedCount();
   const bar = $("#dcPartsBar");
-  bar.classList.toggle("hidden", need.length === 0);
+  const btn = $("#dcPartsBtn");
+  bar.classList.toggle("hidden", need.length === 0 && failed === 0);
+
   if (need.length) {
     $("#dcPartsMsg").innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>영화 시리즈 <b>${need.length}개</b>의
-      편 정보가 아직 없어요. 가져오면 해리포터·아바타처럼 <b>안 본 편</b>도 여기 모입니다
+      편 정보가 아직 없어요. 가져오면 해리포터처럼 <b>안 본 편</b>도 여기 모입니다
       (약 ${Math.ceil(need.length * 0.25)}초).`;
+    btn.innerHTML = `<i class="fa-solid fa-layer-group mr-1"></i>시리즈 편 정보 가져오기`;
+    btn.dataset.retry = "";
+  } else if (failed) {
+    $("#dcPartsMsg").innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i>영화 시리즈
+      <b>${failed}개</b>는 TMDB에서 편 정보를 찾지 못했어요 (없어진 컬렉션일 수 있어요).
+      그 시리즈만 안 본 편이 안 잡힙니다.`;
+    btn.innerHTML = `<i class="fa-solid fa-rotate-right mr-1"></i>다시 시도`;
+    btn.dataset.retry = "1";
   }
 
   paintDcCards(list, `
@@ -1016,7 +1064,8 @@ function initDiscover() {
 
   /* 추천 */
   $("#dcRecoBtn").addEventListener("click", runReco);
-  $("#dcPartsBtn").addEventListener("click", runFetchCollParts);
+  $("#dcPartsBtn").addEventListener("click", (e) =>
+    runFetchCollParts(e.currentTarget.dataset.retry === "1"));
   $$(".dc-type").forEach(btn => {
     btn.addEventListener("click", () => {
       Discover.recoType = btn.dataset.type;
