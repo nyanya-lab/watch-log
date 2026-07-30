@@ -31,7 +31,11 @@ dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
 로드 순서 고정 (index.html 하단): `seed-data → core → tmdb → watchlog → discover → stats`
 (discover.js는 watchlog.js의 `visibleGenres`·`hearts`·`openEdit` 등을 쓰므로 그 뒤여야 함)
 
-의존성: Tailwind CDN, FontAwesome 6.5.1, Chart.js 4.4.1
+의존성: Tailwind CDN, FontAwesome 6.5.1, Chart.js 4.4.1, Pretendard
+**Firebase SDK는 안 싣는다.** 동기화는 Realtime Database REST(fetch)로만 한다 —
+예전엔 쓰지도 않는 `firebase-app-compat`+`firebase-firestore-compat`를 매 로드마다 받고 있었다.
+
+favicon은 `<link rel="icon">`에 이모지 SVG를 data URI로 넣었다 (파일 업로드 불필요).
 
 ## 설정값 (core.js 상단)
 
@@ -242,7 +246,12 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
   - **주의**: `openEdit`이 `State.selectedTmdb`를 재구성할 때 `collectionId`/`collectionName`/
     `seriesNo`/`seriesTotal`을 반드시 함께 넣어야 한다. 빠뜨리면 수정 저장 시 `saveItem`이
     `t.collectionId || null`로 덮어써서 시리즈 정보가 지워진다.
-- 시즌: TMDB 시즌 목록 있으면 드롭다운, 없으면 ± 스테퍼로 폴백
+- 시즌: **TMDB 시즌 목록에서 고르기만 한다.** 수기 ± 스테퍼는 없앴다 — 시즌 번호는 TMDB에서 오는
+  값이고 손으로 넣으면 실제 시즌과 어긋나기만 했다. 목록이 없는 작품(영화·단일시즌)은
+  `#seasonField` 자체가 숨는다. 이미 저장된 값은 hidden `#fSeason`에 남아 있어 **저장해도 지워지지 않는다**.
+  - 저장된 기록에는 TMDB 시즌 목록이 없고 `totalSeasons`만 있다 → 수정할 때는 `seasonListFor(i)`가
+    총 시즌 수로 목록을 만들어 드롭다운을 채운다. 안 그러면 수정 화면에서 시즌을 못 고친다.
+  - 스테퍼는 **시청 횟수 하나만** 남았다 (`updateStepperLabel`도 `fCount`만 처리).
 - OTT 입력: 스트리밍 목록은 TMDB가 자동으로 채우므로(`otts`) 직접 기록하는 건 **영화관 체크박스 + 기타 자유입력**뿐.
   - 카드/상세에는 스트리밍 전체 목록(`otts`)을 배지로 표시. "내가 본 곳"(`ott`, 영화관 등)이
     목록에 없으면 앞에 함께 표시 (`ottList()`/`ottBadges()` in watchlog.js). 필터도 `otts` 기준.
@@ -257,6 +266,8 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 - 테마: **연두·세이지**(2026-07-27 보라에서 변경). 배지 색상: 구분=연두, 국가=파랑, OTT=초록, 장르=회색, 시즌=주황, 출연진=핑크, 평점=노랑, 등급=빨강, 시간=청록
   - 이 색상 클래스(`.badge-type` 등)는 **style.css**에 파스텔로 정의됨 (예전엔 정의 누락→검정 텍스트였음).
 - 폰트 Pretendard(CDN), 배경 파스텔 그라데이션. 정적 파일 링크에 `?v=YYYYMMDD` 캐시버스팅.
+- **Escape로 모달 닫기**(`initEscapeKey` in core.js): 모달 5개 전부. 겹쳐 있으면 위에 뜬 것부터
+  **한 겹씩** 닫는다(한 번에 다 닫으면 뒤에 있던 것까지 사라진다). 등록/수정은 State 정리가 필요해 `closeEdit()`.
 
 설계 원칙: TMDB에서 온 정보든 직접 입력한 정보든 조회 화면에서 구분되지 않아야 함.
 
@@ -331,14 +342,19 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 
 ## 알려진 이슈 / 남은 작업
 
-- [ ] 노션 원본 268개 중 별점은 9개, 한줄평은 7개뿐 → 나머지는 수기 입력 필요
+- [ ] **별점이 276개 중 11개(4%)뿐** — 이게 여러 기능의 병목이다. 추천 시드가 11개로 돌아가고,
+      통계의 "평균 별점"·"별점 분포"가 4% 표본이며, 별점 필터가 사실상 무용.
+      → **별점 몰아넣기 모드**로 해결 예정 (한 장씩 띄우고 하트만 눌러 넘기기).
+      한줄평(7개)은 사용자가 "거의 안 쓴다"고 해서 **투자하지 않는다** — 기존 것만 표시.
+- [ ] watchlog.js가 1400줄 (카드·필터·모달·설정이 한 파일). 쪼개면 편해지지만 구조 변경이라 확인 필요.
+- [ ] 카드 렌더러가 watchlog.js·discover.js에 따로 있음 (통합 후보)
 - [x] ~~시즌 묶기~~ → 표시 전용 그룹핑으로 해결 (위 "시즌 묶기" 참고). 데이터는 시즌별로 유지.
 - [x] ~~속편이 1편과 같은 `tmdbId`~~ → 2026-07-27 사용자가 직접 재매칭해 해결.
       제목이 다른데 tmdbId가 같은 항목 0개 확인.
 - [ ] TMDB 검색 실패 시 Gemini API로 원제 추론하는 방안 논의됐으나 미적용
 - [ ] 추천·검색 카드에는 OTT 배지 없음 (작품마다 별도 호출이 필요해 60개면 ~19초).
       대신 **보고싶어요에 담는 순간** 조회해서 위시 카드에는 표시됨. 상세 모달에도 나옴.
-- [ ] `favicon.ico` 없음 (404 로그)
+- [x] ~~`favicon.ico` 없음~~ → 이모지 SVG를 data URI로 넣어 해결
 - [ ] 항목 수가 많아지면 카드 렌더링 최적화 필요 (현재 24개씩 더보기)
 
 ## 배포

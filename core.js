@@ -84,11 +84,6 @@ function fmtRange(s, e) {
   return `${fmtDate(s)} ~ ${fmtDate(e)}`;
 }
 
-function stars(n) {
-  if (!n) return "";
-  return "★".repeat(n) + "☆".repeat(5 - n);
-}
-
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -478,6 +473,29 @@ function updateSyncPwStatus() {
   }
 }
 
+/* ---------- Escape 키로 모달 닫기 ----------
+   위에 겹쳐 뜬 것부터 하나씩 닫는다 (Escape 한 번에 전부 닫히면 뒤에 있던 것까지 사라진다).
+   등록/수정 모달은 State도 정리해야 하므로 closeEdit()을 쓴다. */
+function initEscapeKey() {
+  const layers = [
+    { sel: "#dcModal" },
+    { sel: "#detailModal" },
+    { sel: "#filterModal", close: () => closeFilterModal() },
+    { sel: "#syncPwModal", close: () => closeSyncPwModal() },
+    { sel: "#editModal", close: () => closeEdit() }
+  ];
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    for (const l of layers) {
+      const el = $(l.sel);
+      if (el && !el.classList.contains("hidden")) {
+        if (l.close) l.close(); else el.classList.add("hidden");
+        return;   // 한 번에 한 겹만
+      }
+    }
+  });
+}
+
 /* ---------- 탭 ---------- */
 function initTabs() {
   // 탭마다 스크롤 위치를 기억해서, 돌아오면 보던 자리 그대로 (통계 ↔ 목록)
@@ -523,6 +541,7 @@ function bootApp() {
   loadLocal();
 
   initTabs();
+  initEscapeKey();
   initWatchlog();
   initTmdb();
   initDiscover();

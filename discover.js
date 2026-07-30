@@ -793,8 +793,7 @@ async function addFromDiscover(tmdbId, mediaType, season) {
   if (season) {
     $("#fSeason").value = season;
     const sel = $("#fSeasonSelect");
-    if (sel && !sel.classList.contains("hidden")) sel.value = String(season);
-    updateStepperLabel("fSeason");
+    if (sel) sel.value = String(season);
   }
 }
 

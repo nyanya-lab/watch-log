@@ -4,11 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🎬 냐냐's Watch LOG</title>
+<!-- 파일을 따로 올리지 않아도 되게 이모지를 SVG로 넣는다 (favicon.ico 404 제거) -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260730c">
+<link rel="stylesheet" href="style.css?v=20260730d">
 </head>
 <body>
 
@@ -375,15 +377,11 @@
           </div>
         </div>
 
-        <div>
+        <!-- 시즌은 TMDB 시즌 목록에서 고르기만 한다. 목록이 없는 작품(영화·단일시즌)은
+             이 칸 자체가 숨는다 — 수기로 숫자를 올리던 스테퍼는 없앴다. -->
+        <div id="seasonField">
           <label class="form-label"><i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>시즌</label>
-          <!-- TMDB 시즌 목록이 있으면 드롭다운, 없으면 스테퍼 -->
-          <select id="fSeasonSelect" class="form-input hidden"></select>
-          <div id="fSeasonStepper" class="stepper">
-            <button type="button" class="step-btn" data-target="fSeason" data-d="-1"><i class="fa-solid fa-minus"></i></button>
-            <div class="step-val"><span id="fSeasonLabel">없음</span></div>
-            <button type="button" class="step-btn" data-target="fSeason" data-d="1"><i class="fa-solid fa-plus"></i></button>
-          </div>
+          <select id="fSeasonSelect" class="form-input"></select>
           <input type="hidden" id="fSeason" value="0">
         </div>
         <div>
@@ -492,8 +490,8 @@
 
 <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-xl bg-slate-800 text-white text-sm font-semibold z-50 shadow-lg"></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<!-- Firebase SDK는 싣지 않는다. 동기화는 Realtime Database REST(fetch)로만 하므로
+     SDK가 필요 없고, 예전엔 쓰지도 않는 app+firestore 두 개를 매 로드마다 받고 있었다. -->
 <!-- [개발 전용] localhost / file:// 로 열었을 때만 dev-local.js 를 불러온다.
      그 파일은 .gitignore 에 있어 깃에 안 올라가고, 배포된 사이트에는 존재하지 않는다.
      (없어도 조용히 무시되고 앱은 정상 동작 — 그때는 설정에서 비밀번호를 직접 넣으면 됨) -->
@@ -508,11 +506,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260730c"></script>
-<script src="core.js?v=20260730c"></script>
-<script src="tmdb.js?v=20260730c"></script>
-<script src="watchlog.js?v=20260730c"></script>
-<script src="discover.js?v=20260730c"></script>
-<script src="stats.js?v=20260730c"></script>
+<script src="seed-data.js?v=20260730d"></script>
+<script src="core.js?v=20260730d"></script>
+<script src="tmdb.js?v=20260730d"></script>
+<script src="watchlog.js?v=20260730d"></script>
+<script src="discover.js?v=20260730d"></script>
+<script src="stats.js?v=20260730d"></script>
 </body>
 </html>

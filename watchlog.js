@@ -172,10 +172,10 @@ function initWatchlog() {
   $("#detailModal").addEventListener("click", e => { if (e.target.id === "detailModal") $("#detailModal").classList.add("hidden"); });
 }
 
+/* 남은 스테퍼는 시청 횟수 하나뿐 (시즌 스테퍼는 없앴다) */
 function updateStepperLabel(id) {
   const v = parseInt($("#" + id).value) || 0;
-  if (id === "fSeason") $("#fSeasonLabel").textContent = v === 0 ? "없음" : "S" + v;
-  else $("#fCountLabel").textContent = v;
+  if (id === "fCount") $("#fCountLabel").textContent = v;
 }
 
 function debounce(fn, ms) {
@@ -328,19 +328,30 @@ function setOttOptions(candidates, selected) {
   }
 }
 
-/* ---------- 시즌 드롭다운 (TMDB 시즌목록 있을 때) ---------- */
+/* ---------- 시즌 드롭다운 ----------
+   TMDB가 시즌 목록을 주는 작품만 시즌을 고를 수 있다. 수기 입력은 없앴다 —
+   시즌 번호는 TMDB에서 오는 값이고, 손으로 넣으면 실제 시즌과 어긋나기만 했다.
+   목록이 없으면(영화·단일시즌) 칸 자체를 숨긴다. 이미 저장된 값은 hidden input에 그대로 남으므로
+   수정해서 저장해도 지워지지 않는다. */
+/* 저장된 기록에는 TMDB 시즌 목록이 없다 (`totalSeasons` 숫자만 남는다).
+   수정할 때도 시즌을 고를 수 있어야 하므로 총 시즌 수로 목록을 만들어 준다. */
+function seasonListFor(i) {
+  const n = i.totalSeasons || 0;
+  if (n < 2) return null;
+  return Array.from({ length: n }, (_, k) => ({ number: k + 1 }));
+}
+
 function buildSeasonSelect(seasons) {
   const sel = $("#fSeasonSelect");
-  const stepper = $("#fSeasonStepper");
+  const field = $("#seasonField");
   if (seasons && seasons.length > 1) {
     sel.innerHTML = `<option value="0">시즌 선택 안함</option>` +
       seasons.map(s => `<option value="${s.number}">시즌 ${s.number}${s.year ? " (" + s.year + ")" : ""}${s.episodes ? " · " + s.episodes + "화" : ""}</option>`).join("");
-    sel.classList.remove("hidden");
-    stepper.classList.add("hidden");
+    sel.value = $("#fSeason").value || "0";
+    field.classList.remove("hidden");
     sel.onchange = () => { $("#fSeason").value = sel.value; };
   } else {
-    sel.classList.add("hidden");
-    stepper.classList.remove("hidden");
+    field.classList.add("hidden");
   }
 }
 
@@ -682,7 +693,6 @@ function openDetail(id) {
      같은 시리즈의 다른 편은 아래 "이 시리즈의 다른 편"에서 이동할 수 있다. */
   const seasons = seasonsOf(i);
   const siblings = seasons.filter(s => s.id !== i.id);
-  const multiSeason = false;
 
   const reviewBox = (s) => s.review
     ? `<div class="mt-2 p-3 rounded-lg border" style="background:linear-gradient(135deg,#fef9c3,#fce7f3);border-color:#fde68a">
@@ -698,30 +708,12 @@ function openDetail(id) {
     <div class="flex justify-between"><span class="text-slate-500 font-medium">시청 횟수</span>
       <span class="font-semibold text-slate-700">${s.watchCount || 1}회</span></div>`;
 
-  const recordsHtml = multiSeason
-    ? `<div class="border-t border-slate-100 pt-4">
-         <div class="text-xs font-semibold text-slate-500 mb-2"><i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>시즌별 시청 기록</div>
-         <div class="space-y-3">
-           ${seasons.map(s => `
-             <div class="wl-season-row">
-               <div class="flex items-center justify-between gap-2 mb-2">
-                 <span class="badge badge-season">${esc(s.season || "시즌 없음")}</span>
-                 <div class="flex items-center gap-2">
-                   ${s.rating ? hearts(s.rating) : ""}
-                   <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${s.id}')"
-                     class="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-600 text-xs font-semibold hover:bg-white">
-                     <i class="fa-solid fa-pen mr-1"></i>수정</button>
-                 </div>
-               </div>
-               <div class="space-y-1.5 text-sm">${recordRows(s)}</div>
-               ${reviewBox(s)}
-             </div>`).join("")}
-         </div>
-       </div>`
-    : `<div class="space-y-2 text-sm border-t border-slate-100 pt-4">
-         ${recordRows(i)}
-       </div>
-       ${reviewBox(i)}`;
+  /* 상세는 이 기록 하나만 보여준다. 같은 시리즈의 다른 편은 아래 "이 시리즈의 다른 편"으로 이동. */
+  const recordsHtml = `
+    <div class="space-y-2 text-sm border-t border-slate-100 pt-4">
+      ${recordRows(i)}
+    </div>
+    ${reviewBox(i)}`;
 
   /* 관람등급: 숫자만 저장돼 있어(15, 12, 19...) 회차와 헷갈리므로 "15세"로 풀어서 제목 옆에 표시 */
   const certLabel = (c) => {
@@ -783,7 +775,7 @@ function openDetail(id) {
             ${i.cert ? `<span class="badge badge-cert align-middle ml-1">${esc(certLabel(i.cert))}</span>` : ""}
           </h4>
           ${i.originalTitle && i.originalTitle !== i.title ? `<div class="text-xs text-slate-400 font-medium">${esc(i.originalTitle)}</div>` : ""}
-          ${(!multiSeason && i.rating) ? `<div class="mt-1">${hearts(i.rating, true)}</div>` : ""}
+          ${i.rating ? `<div class="mt-1">${hearts(i.rating, true)}</div>` : ""}
           <div class="flex flex-wrap gap-1 mt-2">
             ${seriesLabel(i) ? `<span class="badge badge-season">
               ${i.collectionId ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
@@ -825,9 +817,9 @@ function openDetail(id) {
     </div>
     <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
       <div class="flex-1"></div>
-      ${multiSeason ? "" : `<button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
+      <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
         class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
-        <i class="fa-solid fa-pen mr-1"></i>수정</button>`}
+        <i class="fa-solid fa-pen mr-1"></i>수정</button>
     </div>`;
 
   $("#detailModal").classList.remove("hidden");
@@ -892,6 +884,7 @@ function openEdit(id) {
         title: i.title, type: i.type, country: i.country
       };
       renderSelected(State.selectedTmdb);
+      buildSeasonSelect(seasonListFor(i));
     } else {
       $("#tmdbQuery").value = i.title || "";
     }
@@ -910,7 +903,6 @@ function openEdit(id) {
     $("#deleteBtn").classList.add("hidden");
   }
 
-  updateStepperLabel("fSeason");
   updateStepperLabel("fCount");
   $("#editModal").classList.remove("hidden");
 }
