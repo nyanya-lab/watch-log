@@ -16,12 +16,12 @@
 전부 같은 폴더에 평면 배치 (GitHub Pages 복붙 업로드 편의).
 
 ```
-index.html      509줄  전체 마크업 (헤더/목록/탐색/통계/설정 + 모달 5개)
-style.css       386줄  커스텀 CSS (Tailwind CDN 위에 얹음)
-core.js         532줄  Firebase 동기화, 상태(State), 탭, 유틸
-tmdb.js         454줄  TMDB API 검색/상세/OTT판별/추천·발굴, 검색 UI
-watchlog.js    1407줄  카드 목록, 필터, 등록·수정 모달, 설정 탭
-discover.js     802줄  탐색 탭 (TMDB 검색·이어보기·보고싶어요·추천)
+index.html      516줄  전체 마크업 (헤더/목록/탐색/통계/설정 + 모달 5개)
+style.css       346줄  커스텀 CSS (Tailwind CDN 위에 얹음)
+core.js         565줄  동기화(REST), 상태(State), 탭, Escape, 유틸
+tmdb.js         489줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
+watchlog.js    1410줄  카드 목록, 필터, 등록·수정 모달, 설정 탭
+discover.js     903줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
 stats.js        379줄  Chart.js 통계 + 히트맵
 seed-data.js   5630줄  노션에서 변환한 초기 데이터 268개
 dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
@@ -121,15 +121,7 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 둘 다 시청 기록(`State.items`)과 **절대 섞지 않는다.** 섞으면 통계·히트맵·시리즈 묶기·총 개수가
 "안 본 작품"까지 집계하게 되므로, 별도 배열로 둔다.
 
-- **보고싶어요** — 나중에 볼 작품.
-- **관심없음**(`State.hides`) — 볼 생각이 없는 작품. 추천·이어보기에서 걸러낸다
-  (`runReco`의 `bump()`와 `renderDcReco`/영화 이어보기에서 제외). 탐색 탭에 모아보는 뷰가 있고
-  0개면 그 탭이 숨는다. **검색에서는 숨기지 않는다** — 직접 찾아온 거라 "관심없음으로 표시함"
-  배지와 [다시 관심] 버튼을 보여준다.
-  관심없음으로 넘기면 위시에서는 자동으로 빠진다(`addHide`).
-  ```js
-  { id, tmdbId, mediaType, title, poster, year, voteAverage, addedAt }
-  ```
+**보고싶어요** — 나중에 볼 작품.
 
 ```js
 { id:"w...", tmdbId, mediaType:"movie"|"tv", title, originalTitle, poster,
@@ -137,7 +129,16 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
   reason:"「기생충」과 비슷", addedAt:"ISO" }
 ```
 
-`otts`는 **담는 순간 1회만** 조회한다(`fillWishOtt`). TMDB는 스트리밍 정보를 목록 응답에 안 주고
+**관심없음**(`State.hides`) — 볼 생각이 없는 작품. 추천·이어보기에서 걸러낸다
+(`runReco`의 `bump()`와 `renderDcReco`/영화 이어보기에서 제외). 탐색 탭에 모아보는 뷰가 있고
+0개면 그 탭이 숨는다. **검색에서는 숨기지 않는다** — 직접 찾아온 거라 "관심없음으로 표시함"
+배지와 [다시 관심] 버튼을 보여준다. 관심없음으로 넘기면 위시에서는 자동으로 빠진다(`addHide`).
+
+```js
+{ id, tmdbId, mediaType, title, poster, year, voteAverage, addedAt }
+```
+
+위시의 `otts`는 **담는 순간 1회만** 조회한다(`fillWishOtt`). TMDB는 스트리밍 정보를 목록 응답에 안 주고
 작품별 `/watch/providers`에만 주기 때문에, 추천 카드 60개에 붙이려면 호출이 60번 더 필요하다
 (한도 문제는 아니다 — TMDB는 2019년에 "10초당 40회" 제한을 없앴고 지금은 초당 40회 근처의
 느슨한 상한만 있다. 우리는 240ms 간격이라 초당 4회. 문제는 순전히 **기다리는 시간**).
