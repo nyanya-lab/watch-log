@@ -153,19 +153,31 @@ textarea.form-input { height: auto; }
 }
 .wl-season-multi { background: rgba(224,112,15,.88); }
 
+/* 평점은 포스터 하단을 가로지르는 한 줄 띠.
+   어두운 페이드라 밝은 포스터·어두운 포스터 어디에서도 읽힌다
+   (흰 칩은 밝은 포스터에서 경계가 사라져 윤곽선을 또 둘러야 한다). */
 .wl-tr {
-  position: absolute; top: 6px; right: 6px;
-  display: flex; align-items: center; gap: 8px;
-  background: rgba(28,34,25,.72);
-  padding: 3px 8px; border-radius: 5px;
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 8px 6px;
+  background: linear-gradient(transparent, rgba(16,20,14,.8));
 }
 .wl-rt {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 11px; font-weight: 600; line-height: 1;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; line-height: 1;
 }
-.wl-rt i { font-size: 10px; }
-.wl-rt-mine { color: #ffb3c6; }
-.wl-rt-tmdb { color: #f7d488; }
+.wl-rt i { font-size: 11px; }
+.wl-rt-mine { color: #ffb0c6; }
+.wl-rt-tmdb { color: #f5d489; }
+
+/* 헤더 구분별 개수 칩 */
+.hd-chip {
+  display: inline-flex; align-items: center;
+  background: #eaf0e2; color: #3b6d11;
+  font-size: 13px; font-weight: 600;
+  padding: 4px 10px; border-radius: 7px;
+}
+.hd-chip i { margin-right: 5px; font-size: 12px; }
 
 /* 시리즈 카드 (시리즈 보기 모드) — 여러 편이 겹쳐 보이도록 */
 .wl-series-card .wl-poster-wrap::after {

@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260731b">
+<link rel="stylesheet" href="style.css?v=20260731c">
 </head>
 <body>
 
@@ -24,9 +24,11 @@
         <div class="flex items-center gap-3">
           <span class="text-2xl">🎬</span>
           <h1 class="text-lg font-bold text-slate-800">냐냐's Watch LOG</h1>
-          <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-bold shadow-sm" style="background:#4d7c2a">
-            <i class="fa-solid fa-film text-xs"></i><span id="totalCount">0</span>
+          <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">
+            <span id="totalCount">0</span>
           </span>
+          <!-- 구분별 개수 — 기록에 있는 구분만 자동으로 채워진다 -->
+          <span id="typeCounts" class="hidden sm:inline-flex items-center gap-1.5"></span>
         </div>
         <button id="syncBtn" class="w-9 h-9 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition" title="동기화">
           <i class="fa-solid fa-cloud-arrow-up"></i>
@@ -530,11 +532,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260731b"></script>
-<script src="core.js?v=20260731b"></script>
-<script src="tmdb.js?v=20260731b"></script>
-<script src="watchlog.js?v=20260731b"></script>
-<script src="discover.js?v=20260731b"></script>
-<script src="stats.js?v=20260731b"></script>
+<script src="seed-data.js?v=20260731c"></script>
+<script src="core.js?v=20260731c"></script>
+<script src="tmdb.js?v=20260731c"></script>
+<script src="watchlog.js?v=20260731c"></script>
+<script src="discover.js?v=20260731c"></script>
+<script src="stats.js?v=20260731c"></script>
 </body>
 </html>

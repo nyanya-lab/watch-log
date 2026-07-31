@@ -260,8 +260,8 @@ const TYPE_ICON = {
 };
 function typeIcon(type) { return TYPE_ICON[type] || TYPE_ICON["기타"]; }
 
-/* 포스터 우상단 평점 칩 — 내 별점과 TMDB 평점을 한 칩에 나란히.
-   둘 다 없으면 칩 자체를 안 그린다. */
+/* 포스터 하단 평점 띠 — 내 별점과 TMDB 평점을 한 줄에 나란히.
+   둘 다 없으면 띠 자체를 안 그린다 (포스터를 괜히 가리지 않게). */
 function ratingChip(i) {
   const mine = i.rating
     ? `<span class="wl-rt wl-rt-mine"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>` : "";
@@ -603,6 +603,18 @@ function renderHeaderCount() {
   $("#totalCount").textContent = total;
   $("#totalBadge").title = `시청 기록 ${total}개 · 시리즈로 묶으면 ${totalWorks}개 작품`;
   $("#totalBadge").classList.remove("hidden");
+
+  /* 구분별 개수 — 기록에 실제로 있는 구분만, 많은 순.
+     지금은 영화·드라마 둘뿐이지만 예능·애니가 생기면 자동으로 늘어난다. */
+  const tc = $("#typeCounts");
+  if (tc) {
+    const byType = {};
+    State.items.forEach(i => { const t = i.type || "기타"; byType[t] = (byType[t] || 0) + 1; });
+    tc.innerHTML = Object.entries(byType)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, n]) => `<span class="hd-chip" title="${esc(t)} ${n}개"><i class="fa-solid ${typeIcon(t)}"></i>${n}</span>`)
+      .join("");
+  }
 
   const pb = $("#pendingBtn");
   if (Filters.pendingOnly) {
