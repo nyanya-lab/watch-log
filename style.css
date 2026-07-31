@@ -262,16 +262,27 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .badge-cert    { background:#ffe3e3; color:#dc4444; }
 .badge-time    { background:#d7f5f7; color:#0b8ca3; }
 
-/* 통계 박스 */
+/* ===== 통계 =====
+   요약 타일만 흰 면을 갖고(숫자를 묶어주는 역할), 차트는 박스를 벗고
+   제목 + 헤어라인으로만 구분한다. 차트마다 테두리 박스를 두르면 관리자 페이지처럼 보인다. */
 .stat-box {
-  background: rgba(255,255,255,.85);
-  border: 1px solid #e4eddb;
-  border-radius: 16px;
-  padding: 14px 16px;
-  box-shadow: 0 2px 10px rgba(90,130,60,.07);
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
 }
-.stat-label { font-size: 12px; font-weight: 600; color: #7d8b76; margin-bottom: 4px; }
-.stat-value { font-size: 22px; font-weight: 700; color: #3d5233; }
+.stat-label { font-size: 12px; font-weight: 600; color: #8a8a80; margin-bottom: 6px; }
+.stat-value { font-size: 26px; font-weight: 700; color: #2c3129; line-height: 1.1; }
+
+.stat-sec { padding: 26px 0; border-top: 1px solid #e6ecdd; }
+.stat-sec:first-child { border-top: 0; padding-top: 8px; }
+.stat-h {
+  font-size: 15px; font-weight: 600; color: #2c3129;
+  margin-bottom: 14px;
+}
+.stat-h i { color: #4d7c2a; margin-right: 8px; }
+.stat-note { font-size: 12px; font-weight: 500; color: #8a8a80; margin: -8px 0 14px; }
+.stat-grid2 { display: grid; grid-template-columns: 1fr; gap: 26px; }
+@media (min-width: 768px) { .stat-grid2 { grid-template-columns: 1fr 1fr; } }
 
 /* ===== TMDB 검색 결과 ===== */
 .tmdb-item {

@@ -67,8 +67,8 @@ function renderStats() {
   const totalHours = Math.round(totalMin / 60);
 
   wrap.innerHTML = `
-    <!-- 요약 -->
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+    <!-- 요약 — 타일만 흰 면을 갖고, 아래 차트들은 박스 없이 헤어라인으로 나뉜다 -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
       <div class="stat-box"><div class="stat-label">시청 기록 <span class="text-slate-400">(편·시즌별)</span></div><div class="stat-value">${items.length}</div></div>
       <div class="stat-box"><div class="stat-label">작품 수 <span class="text-slate-400">(시리즈 묶음)</span></div><div class="stat-value">${totalWorks}</div></div>
       <div class="stat-box"><div class="stat-label">${currentYear}년 시청</div><div class="stat-value">${thisYearCount}</div></div>
@@ -78,76 +78,81 @@ function renderStats() {
     </div>
 
     <!-- 월별 추이 -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-calendar-week mr-2 text-lime-700"></i>월별 시청 (전체 기간)</h3>
+    <section class="stat-sec">
+      <h3 class="stat-h"><i class="fa-solid fa-calendar-week"></i>월별 시청 (전체 기간)</h3>
       <div style="height:220px"><canvas id="chartMonth"></canvas></div>
-    </div>
+    </section>
 
     <!-- 장르 + 구분 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-chart-pie mr-2 text-lime-700"></i>장르별</h3>
-        <p class="text-xs text-slate-400 mb-3 font-medium">한 작품이 장르를 여러 개 가지므로, 전체 장르 태그(${Object.values(byGenre).reduce((a, b) => a + b, 0)}개) 중 비율입니다</p>
-        <div style="height:300px"><canvas id="chartGenre"></canvas></div>
-        ${!Object.keys(byGenre).length ? `<p class="text-sm text-amber-600 font-medium text-center mt-3">
-          TMDB 정보를 채우면 장르 통계가 표시됩니다</p>` : ""}
+    <section class="stat-sec">
+      <div class="stat-grid2">
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-chart-pie"></i>장르별</h3>
+          <p class="stat-note">한 작품이 장르를 여러 개 가지므로, 전체 장르 태그(${Object.values(byGenre).reduce((a, b) => a + b, 0)}개) 중 비율입니다</p>
+          <div style="height:300px"><canvas id="chartGenre"></canvas></div>
+          ${!Object.keys(byGenre).length ? `<p class="stat-note text-center">TMDB 정보를 채우면 장르 통계가 표시됩니다</p>` : ""}
+        </div>
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-shapes"></i>구분별</h3>
+          <div style="height:280px"><canvas id="chartType"></canvas></div>
+        </div>
       </div>
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-shapes mr-2 text-lime-700"></i>구분별</h3>
-        <div style="height:280px"><canvas id="chartType"></canvas></div>
-      </div>
-    </div>
+    </section>
 
     <!-- 국가 + OTT -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-earth-asia mr-2 text-lime-700"></i>국가별</h3>
-        <div style="height:260px"><canvas id="chartCountry"></canvas></div>
+    <section class="stat-sec">
+      <div class="stat-grid2">
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-earth-asia"></i>국가별</h3>
+          <div style="height:260px"><canvas id="chartCountry"></canvas></div>
+        </div>
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-tv"></i>OTT별</h3>
+          <div style="height:260px"><canvas id="chartOtt"></canvas></div>
+        </div>
       </div>
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-tv mr-2 text-lime-700"></i>OTT별</h3>
-        <div style="height:260px"><canvas id="chartOtt"></canvas></div>
-      </div>
-    </div>
+    </section>
 
     <!-- 배우 + 감독 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-user mr-2 text-pink-400"></i>많이 본 배우 TOP 10</h3>
-        ${Object.keys(byActor).length
-          ? `<div style="height:300px"><canvas id="chartActor"></canvas></div>`
-          : `<p class="text-sm text-amber-600 font-medium text-center py-8">TMDB 정보를 채우면 출연진 통계가 표시됩니다</p>`}
+    <section class="stat-sec">
+      <div class="stat-grid2">
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-user" style="color:#d4537e"></i>많이 본 배우 TOP 10</h3>
+          ${Object.keys(byActor).length
+            ? `<div style="height:300px"><canvas id="chartActor"></canvas></div>`
+            : `<p class="stat-note text-center">TMDB 정보를 채우면 출연진 통계가 표시됩니다</p>`}
+        </div>
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-clapperboard" style="color:#64748b"></i>많이 본 감독 TOP 10</h3>
+          ${Object.keys(byDirector).length
+            ? `<div style="height:300px"><canvas id="chartDirector"></canvas></div>`
+            : `<p class="stat-note text-center">TMDB 정보를 채우면 감독 통계가 표시됩니다</p>`}
+        </div>
       </div>
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-clapperboard mr-2 text-slate-500"></i>많이 본 감독 TOP 10</h3>
-        ${Object.keys(byDirector).length
-          ? `<div style="height:300px"><canvas id="chartDirector"></canvas></div>`
-          : `<p class="text-sm text-amber-600 font-medium text-center py-8">TMDB 정보를 채우면 감독 통계가 표시됩니다</p>`}
-      </div>
-    </div>
+    </section>
 
     <!-- 별점 분포 -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-heart mr-2 text-rose-400"></i>별점 분포</h3>
+    <section class="stat-sec">
+      <h3 class="stat-h"><i class="fa-solid fa-heart" style="color:#e0567f"></i>별점 분포</h3>
       <div style="height:220px"><canvas id="chartRating"></canvas></div>
-    </div>
+    </section>
 
     <!-- 연도별 막대 -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4"><i class="fa-solid fa-chart-column mr-2 text-lime-700"></i>연도별 시청</h3>
+    <section class="stat-sec">
+      <h3 class="stat-h"><i class="fa-solid fa-chart-column"></i>연도별 시청</h3>
       <div style="height:260px"><canvas id="chartYear"></canvas></div>
-    </div>
+    </section>
 
     <!-- 히트맵 -->
-    <div class="bg-white rounded-xl border border-slate-200 p-5">
+    <section class="stat-sec">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-calendar-days mr-2 text-lime-700"></i>시청 히트맵</h3>
+        <h3 class="stat-h" style="margin-bottom:0"><i class="fa-solid fa-calendar-days"></i>시청 히트맵</h3>
         <select id="heatYear" class="filter-select">
           ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
         </select>
       </div>
       <div id="heatmapArea" class="overflow-x-auto"></div>
-    </div>
+    </section>
   `;
 
   /* --- 차트 그리기 --- */
