@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260730e">
+<link rel="stylesheet" href="style.css?v=20260731b">
 </head>
 <body>
 
@@ -18,13 +18,13 @@
 <div id="app">
 
   <!-- 헤더 -->
-  <header class="border-b border-slate-200 sticky top-0 z-30" style="background:linear-gradient(135deg,#eff7e6,#f4faee)">
+  <header class="sticky top-0 z-30" style="background:#f8faf5;border-bottom:1px solid #e6ecdd">
     <div class="max-w-6xl mx-auto px-4">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center gap-3">
           <span class="text-2xl">🎬</span>
           <h1 class="text-lg font-bold text-slate-800">냐냐's Watch LOG</h1>
-          <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-bold shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+          <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-bold shadow-sm" style="background:#4d7c2a">
             <i class="fa-solid fa-film text-xs"></i><span id="totalCount">0</span>
           </span>
         </div>
@@ -32,11 +32,13 @@
           <i class="fa-solid fa-cloud-arrow-up"></i>
         </button>
       </div>
-      <nav class="flex gap-1 -mb-px">
-        <button class="tab-btn active" data-tab="list"><i class="fa-solid fa-grip mr-2"></i>목록</button>
-        <button class="tab-btn" data-tab="discover"><i class="fa-solid fa-compass mr-2"></i>탐색</button>
-        <button class="tab-btn" data-tab="stats"><i class="fa-solid fa-chart-pie mr-2"></i>통계</button>
-        <button class="tab-btn" data-tab="settings"><i class="fa-solid fa-gear mr-2"></i>설정</button>
+      <nav class="pb-3">
+        <div class="tab-seg">
+          <button class="tab-btn active" data-tab="list"><i class="fa-solid fa-grip mr-1.5"></i>목록</button>
+          <button class="tab-btn" data-tab="discover"><i class="fa-solid fa-compass mr-1.5"></i>탐색</button>
+          <button class="tab-btn" data-tab="stats"><i class="fa-solid fa-chart-pie mr-1.5"></i>통계</button>
+          <button class="tab-btn" data-tab="settings"><i class="fa-solid fa-gear mr-1.5"></i>설정</button>
+        </div>
       </nav>
     </div>
   </header>
@@ -61,25 +63,25 @@
         <button id="clearFilterBtn" class="hidden w-11 h-11 rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100 transition shrink-0" title="필터 모두 해제">
           <i class="fa-solid fa-filter-circle-xmark"></i>
         </button>
-        <button id="addBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+        <button id="addBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:#4d7c2a">
           <i class="fa-solid fa-plus mr-1"></i>등록
         </button>
       </div>
 
       <div class="flex items-center justify-between mb-4">
         <div class="flex gap-2 flex-wrap">
-          <button id="pendingBtn" class="px-3.5 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition">
-            <i class="fa-solid fa-circle-exclamation mr-1.5"></i>미등록 <span id="pendingCount">0</span>개
+          <button id="pendingBtn" class="wl-chip wl-chip-warn">
+            <i class="fa-solid fa-circle-exclamation"></i>미등록 <span id="pendingCount">0</span>개
           </button>
-          <button id="noSeasonBtn" class="px-3.5 py-2 rounded-lg border border-orange-300 bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition">
-            <i class="fa-solid fa-layer-group mr-1.5"></i>시즌 미기록 <span id="noSeasonCount">0</span>개
+          <button id="noSeasonBtn" class="wl-chip wl-chip-season">
+            <i class="fa-solid fa-layer-group"></i>시즌 미기록 <span id="noSeasonCount">0</span>개
           </button>
-          <button id="dupBtn" class="px-3.5 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition" title="제목이 다른데 TMDB 작품이 같음 — 자동 매칭 오류 의심">
-            <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>매칭 확인 <span id="dupCount">0</span>개
+          <button id="dupBtn" class="wl-chip wl-chip-danger" title="제목이 다른데 TMDB 작품이 같음 — 자동 매칭 오류 의심">
+            <i class="fa-solid fa-triangle-exclamation"></i>매칭 확인 <span id="dupCount">0</span>개
           </button>
           <!-- 필터 토글이 아니라 별점 몰아넣기 모달을 연다 -->
-          <button id="quickRateBtn" class="px-3.5 py-2 rounded-lg border border-pink-300 bg-pink-50 text-pink-700 text-sm font-semibold hover:bg-pink-100 transition" title="별점 없는 기록을 한 장씩 넘기며 빠르게 입력">
-            <i class="fa-solid fa-heart mr-1.5"></i>별점 채우기 <span id="quickRateCount">0</span>개
+          <button id="quickRateBtn" class="wl-chip wl-chip-rate" title="별점 없는 기록을 한 장씩 넘기며 빠르게 입력">
+            <i class="fa-solid fa-heart"></i>별점 채우기 <span id="quickRateCount">0</span>개
           </button>
         </div>
         <span id="resultCount" class="text-sm font-medium text-slate-500"></span>
@@ -95,7 +97,8 @@
         </button>
       </div>
 
-      <div id="cardGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+      <!-- 카드가 흰 박스를 벗어 포스터가 커졌으니 열을 늘려 더 많이 보여준다 -->
+      <div id="cardGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-6"></div>
       <div id="emptyState" class="hidden text-center py-16 text-slate-400">
         <i class="fa-solid fa-film text-4xl mb-3"></i>
         <p class="font-medium">결과가 없습니다</p>
@@ -115,7 +118,7 @@
           <input type="text" id="dcQuery" placeholder="안 본 작품도 찾아보기 — TMDB 전체 검색"
             class="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 focus:border-lime-600 focus:ring-2 focus:ring-lime-100 outline-none text-sm bg-white">
         </div>
-        <button id="dcSearchBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+        <button id="dcSearchBtn" class="px-4 h-11 rounded-lg text-white text-sm font-semibold transition shrink-0 whitespace-nowrap shadow-sm" style="background:#4d7c2a">
           <i class="fa-solid fa-magnifying-glass mr-1"></i>검색
         </button>
       </div>
@@ -141,7 +144,7 @@
               <button class="dc-type" data-type="movie">영화</button>
               <button class="dc-type" data-type="tv">TV</button>
             </div>
-            <button id="dcRecoBtn" class="px-4 py-2 rounded-lg text-white text-sm font-semibold shadow-sm whitespace-nowrap" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+            <button id="dcRecoBtn" class="px-4 py-2 rounded-lg text-white text-sm font-semibold shadow-sm whitespace-nowrap" style="background:#4d7c2a">
               <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>추천 받기
             </button>
           </div>
@@ -337,7 +340,7 @@
       </div>
 
       <!-- 선택된 작품 -->
-      <div id="selectedInfo" class="hidden rounded-xl p-4 flex gap-4 border" style="background:linear-gradient(135deg,#eff7e6,#f2faf0);border-color:#cfe3b6">
+      <div id="selectedInfo" class="hidden rounded-xl p-4 flex gap-4 border" style="background:#f1f8ea;border-color:#cfe3b6">
         <img id="selPoster" class="w-20 rounded-lg bg-slate-200 object-cover self-start shadow-sm" alt="">
         <div class="flex-1 min-w-0">
           <div id="selTitle" class="font-bold text-slate-800"></div>
@@ -451,7 +454,7 @@
       </button>
       <div class="flex-1"></div>
       <button id="cancelBtn" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">취소</button>
-      <button id="saveBtn" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold shadow-sm" style="background:linear-gradient(135deg,#5f9235,#7bad48)">저장</button>
+      <button id="saveBtn" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold shadow-sm" style="background:#4d7c2a">저장</button>
     </div>
   </div>
 </div>
@@ -472,7 +475,7 @@
       </div>
     </div>
     <div class="h-1.5 bg-slate-100">
-      <div id="qrBar" class="h-full transition-all" style="width:0%;background:linear-gradient(90deg,#f43f5e,#fb7185)"></div>
+      <div id="qrBar" class="h-full transition-all" style="width:0%;background:#e0567f"></div>
     </div>
     <div id="qrBody" class="p-5"></div>
   </div>
@@ -527,11 +530,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260730e"></script>
-<script src="core.js?v=20260730e"></script>
-<script src="tmdb.js?v=20260730e"></script>
-<script src="watchlog.js?v=20260730e"></script>
-<script src="discover.js?v=20260730e"></script>
-<script src="stats.js?v=20260730e"></script>
+<script src="seed-data.js?v=20260731b"></script>
+<script src="core.js?v=20260731b"></script>
+<script src="tmdb.js?v=20260731b"></script>
+<script src="watchlog.js?v=20260731b"></script>
+<script src="discover.js?v=20260731b"></script>
+<script src="stats.js?v=20260731b"></script>
 </body>
 </html>

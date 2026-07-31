@@ -3,26 +3,53 @@ body {
   -webkit-font-smoothing: antialiased;
   font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
-  color: #33402f;
-  background:
-    radial-gradient(1200px 600px at 100% -10%, #eaf5df 0%, rgba(234,245,223,0) 55%),
-    radial-gradient(1000px 500px at -10% 0%, #e4f3ea 0%, rgba(228,243,234,0) 50%),
-    linear-gradient(180deg, #fafdf7 0%, #fcfdfa 100%);
-  background-attachment: fixed;
+  color: #2c3129;
+  /* 평평한 캔버스. 카드가 흰 박스를 벗었으니 배경이 조용해야 포스터가 산다.
+     연두 정체성은 아주 옅은 기운으로만 남긴다 (예전엔 radial-gradient 2개를 겹쳤음). */
+  background: #f8faf5;
   min-height: 100vh;
 }
 
-/* ===== 탭 버튼 ===== */
-.tab-btn {
-  padding: 12px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #64748b;
-  border-bottom: 2px solid transparent;
-  transition: all .15s;
+/* ===== 탭 (세그먼트) =====
+   밑줄 탭바는 부트스트랩 관리자 템플릿의 흔적이라 알약 세그먼트로 바꿨다. */
+.tab-seg {
+  display: inline-flex; gap: 2px;
+  background: #eaf0e2;
+  border-radius: 999px;
+  padding: 3px;
 }
-.tab-btn:hover { color: #4d7c2a; }
-.tab-btn.active { color: #4d7c2a; border-bottom-color: #4d7c2a; }
+.tab-btn {
+  padding: 7px 15px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7a63;
+  transition: background .14s, color .14s;
+}
+.tab-btn:hover { color: #3b6d11; }
+.tab-btn.active { background: #fff; color: #2c3129; }
+
+/* ===== 유지보수 칩 (미등록·시즌 미기록·매칭 확인·별점 채우기) =====
+   테두리 있는 색 알약 4개가 나란히 있으면 관리자 페이지처럼 보인다.
+   칩은 중립색으로 두고 아이콘 색으로만 성격을 구분한다. */
+/* gap을 쓰면 "미등록 / 265 / 개"가 각각 flex 항목이 되어 숫자 앞뒤가 벌어진다.
+   아이콘 여백만 따로 준다. */
+.wl-chip {
+  display: inline-flex; align-items: center;
+  padding: 7px 13px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  background: #eceee8; color: #4f5c49;
+  transition: background .12s, color .12s;
+}
+.wl-chip i { margin-right: 7px; }
+.wl-chip:hover { background: #e2e6dc; }
+.wl-chip.on { background: #4d7c2a; color: #fff; }
+.wl-chip.on i { color: #fff; }
+.wl-chip-warn i { color: #c07806; }
+.wl-chip-season i { color: #e0700f; }
+.wl-chip-danger i { color: #dc4444; }
+.wl-chip-rate i { color: #e0567f; }
 
 /* ===== 폼 ===== */
 .form-label {
@@ -87,74 +114,64 @@ textarea.form-input { height: auto; }
   user-select: none;
 }
 
-/* ===== 카드 ===== */
+/* ===== 카드 =====
+   포스터 자체가 카드다. 흰 배경·테두리·그림자로 감싼 박스를 없앴다 —
+   그 세 가지가 "옛날 사이트" 느낌의 가장 큰 원인이었다. */
 .wl-card {
-  background: rgba(255,255,255,.85);
-  backdrop-filter: blur(4px);
-  border: 1px solid #e4eddb;
-  border-radius: 18px;
-  overflow: hidden;
   cursor: pointer;
-  box-shadow: 0 2px 10px rgba(90,130,60,.07);
-  transition: box-shadow .2s, transform .2s, border-color .2s;
+  transition: transform .18s ease-out;
 }
-.wl-card:hover {
-  box-shadow: 0 12px 28px rgba(107,150,70,.18);
-  transform: translateY(-4px);
-  border-color: #c2dba6;
-}
-.wl-card.wl-pending { border-color: #fde68a; background: #fffdf5; }
+.wl-card:hover { transform: translateY(-3px); }
 
-.wl-poster-wrap { position: relative; }
+.wl-poster-wrap {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e9f0e1;
+}
 .wl-poster {
   aspect-ratio: 2/3; width: 100%;
-  object-fit: cover; background: #e9f0e1; display: block;
+  object-fit: cover; display: block;
+  transition: filter .18s;
 }
+.wl-card:hover .wl-poster { filter: brightness(1.05); }
 .wl-poster-empty {
   aspect-ratio: 2/3;
-  background: linear-gradient(135deg,#8fbf63,#a9cd85,#cfe6ac);
+  background: #cfe6ac;
   display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 28px;
+  color: #6d8a4a; font-size: 28px;
 }
+/* TMDB 미등록 — 테두리를 벗었으니 포스터에 윤곽선으로 표시 */
+.wl-card.wl-pending .wl-poster-wrap { box-shadow: inset 0 0 0 2px #eab308; }
 
-/* 포스터 위 오버레이 (우상단=TMDB평점+내 하트 세로 스택, 좌상단=시즌) */
-.wl-tr {
-  position: absolute; top: 7px; right: 7px;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
-}
-.wl-vote {
-  background: rgba(255,255,255,.92);
-  color: #c07806; font-size: 11px; font-weight: 700;
-  padding: 2px 7px; border-radius: 999px;
-  display: inline-flex; align-items: center; gap: 3px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.15);
-}
-.wl-vote i { color: #f5b400; }
-.wl-myrate {
-  background: rgba(255,255,255,.92);
-  padding: 2px 7px; border-radius: 999px;
-  display: inline-flex; align-items: center;
-  box-shadow: 0 1px 4px rgba(0,0,0,.15);
-}
-.wl-myrate .wl-hearts { font-size: 10px; gap: 1px; }
+/* 포스터 위 오버레이 — 좌상단=시즌, 우상단=두 평점을 한 칩에 */
 .wl-season {
-  position: absolute; top: 7px; left: 7px;
-  background: rgba(61,82,51,.84);
-  color: #fff; font-size: 10px; font-weight: 700;
-  padding: 2px 8px; border-radius: 999px;
-  backdrop-filter: blur(2px);
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(28,34,25,.72);
+  color: #fff; font-size: 10px; font-weight: 600;
+  padding: 2px 7px; border-radius: 5px;
 }
-/* 여러 시즌이 하나로 묶인 카드 */
-.wl-season-multi { background: rgba(224,112,15,.9); }
+.wl-season-multi { background: rgba(224,112,15,.88); }
+
+.wl-tr {
+  position: absolute; top: 6px; right: 6px;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(28,34,25,.72);
+  padding: 3px 8px; border-radius: 5px;
+}
+.wl-rt {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 600; line-height: 1;
+}
+.wl-rt i { font-size: 10px; }
+.wl-rt-mine { color: #ffb3c6; }
+.wl-rt-tmdb { color: #f7d488; }
 
 /* 시리즈 카드 (시리즈 보기 모드) — 여러 편이 겹쳐 보이도록 */
-.wl-series-card { border-color: #f5d9a8; }
-.wl-series-card:hover { border-color: #eab764; box-shadow: 0 12px 28px rgba(224,112,15,.16); }
 .wl-series-card .wl-poster-wrap::after {
   content: "";
-  position: absolute; right: -4px; top: 8px; bottom: 8px; width: 4px;
-  border-radius: 0 4px 4px 0;
-  background: rgba(224,112,15,.35);
+  position: absolute; right: 0; top: 8px; bottom: 8px; width: 3px;
+  background: rgba(224,112,15,.55);
 }
 
 /* 상세 모달의 시즌별 기록 블록 */
@@ -165,14 +182,18 @@ textarea.form-input { height: auto; }
   padding: 12px 14px;
 }
 
-.wl-body { padding: 9px 12px 11px; }
+/* 포스터 아래는 두 줄만 — 제목, 그리고 장르·연도.
+   본 날짜는 뺐고, 알약 배지는 색 있는 텍스트로 대체했다. */
+.wl-body { padding: 8px 2px 0; }
 .wl-title-row {
-  display: flex; align-items: flex-start; gap: 6px;
-  margin-bottom: 5px;
+  display: flex; align-items: flex-start; gap: 5px;
+  margin-bottom: 3px;
 }
+/* 구분(영화·드라마·예능…)은 글자 대신 아이콘 하나로 */
+.wl-type { color: #4d7c2a; font-size: 13px; flex-shrink: 0; margin-top: 2px; }
 .wl-title {
   flex: 1; min-width: 0;
-  font-size: 14px; font-weight: 600; color: #33402f;
+  font-size: 13px; font-weight: 600; color: #2c3129;
   line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
@@ -181,7 +202,12 @@ textarea.form-input { height: auto; }
   display: flex; flex-wrap: wrap; gap: 4px;
   margin-bottom: 5px;
 }
-.wl-meta { font-size: 11px; font-weight: 500; color: #7d8b76; }
+.wl-meta {
+  font-size: 11px; font-weight: 500; color: #8a8a80;
+  line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* 내 별점: 하트 하나 + 숫자 (예: ♥ 4.5) */
 .wl-hearts {
@@ -265,8 +291,8 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 }
 .dc-nav:hover { background: #f2f8ec; color: #4d7c2a; border-color: #a9cd85; }
 .dc-nav.active {
-  background: linear-gradient(135deg,#5f9235,#7bad48);
-  border-color: #5f9235; color: #fff;
+  background: #4d7c2a;
+  border-color: #4d7c2a; color: #fff;
 }
 .dc-num {
   margin-left: 6px;
@@ -290,13 +316,12 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-type:hover { background: #f2f8ec; }
 .dc-type.active { background: #e8f4dd; border-color: #a9cd85; color: #3b6d11; }
 
-/* 카드 좌상단 상태 깃발 */
+/* 카드 좌상단 상태 깃발 (시즌 칩과 같은 자리·같은 모양) */
 .dc-flag {
-  position: absolute; top: 7px; left: 7px;
-  color: #fff; font-size: 10px; font-weight: 700;
-  padding: 2px 8px; border-radius: 999px;
-  backdrop-filter: blur(2px);
-  background: rgba(61,82,51,.84);
+  position: absolute; top: 6px; left: 6px;
+  color: #fff; font-size: 10px; font-weight: 600;
+  padding: 2px 7px; border-radius: 5px;
+  background: rgba(28,34,25,.72);
 }
 .dc-flag-seen { background: rgba(77,124,42,.9); }
 .dc-flag-wish { background: rgba(224,112,15,.9); }

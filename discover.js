@@ -505,17 +505,14 @@ function dcCardHtml(e) {
         ${e.poster
           ? `<img class="wl-poster" src="${e.poster}" alt="" loading="lazy">`
           : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
-        <div class="wl-tr">
-          ${e.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${e.voteAverage}</span>` : ""}
-          ${st.rating ? `<span class="wl-myrate">${hearts(st.rating)}</span>` : ""}
-        </div>
+        ${ratingChip({ rating: st.rating, voteAverage: e.voteAverage })}
         ${flag}
       </div>
       <div class="wl-body">
         <div class="wl-title-row">
+          <i class="fa-solid ${e.mediaType === "tv" ? "fa-tv" : "fa-film"} wl-type"
+             title="${e.mediaType === "tv" ? "TV" : "영화"}"></i>
           <span class="wl-title">${esc(e.title)}</span>
-          <span class="badge ${e.mediaType === "tv" ? "badge-country" : "badge-type"} shrink-0">
-            ${e.mediaType === "tv" ? "TV" : "영화"}</span>
         </div>
         ${e.year ? `<div class="wl-meta">${esc(e.year)}</div>` : ""}
         ${e.note ? `<div class="dc-note">${e.note}</div>` : ""}
@@ -990,7 +987,7 @@ function renderDcDetail(d, mediaType) {
       </button>
       <div class="flex-1"></div>
       <button onclick="document.getElementById('dcModal').classList.add('hidden'); addFromDiscover(${d.tmdbId},'${mediaType}')"
-        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">
         <i class="fa-solid fa-plus mr-1"></i>시청 기록 추가
       </button>
     </div>`;

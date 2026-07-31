@@ -247,6 +247,37 @@ function seriesLabel(i) {
   return "";
 }
 
+/* ---------- 구분을 글자 대신 아이콘으로 ----------
+   구분은 6종으로 고정이라 아이콘이 잘 맞는다. 카드 메타 줄에서 글자를 빼면
+   장르와 섞여 보이던 문제가 없어지고 한눈에 구별된다. */
+const TYPE_ICON = {
+  "영화": "fa-film",
+  "드라마": "fa-tv",
+  "예능": "fa-microphone-lines",
+  "애니": "fa-face-smile",
+  "다큐": "fa-camera-retro",
+  "기타": "fa-shapes"
+};
+function typeIcon(type) { return TYPE_ICON[type] || TYPE_ICON["기타"]; }
+
+/* 포스터 우상단 평점 칩 — 내 별점과 TMDB 평점을 한 칩에 나란히.
+   둘 다 없으면 칩 자체를 안 그린다. */
+function ratingChip(i) {
+  const mine = i.rating
+    ? `<span class="wl-rt wl-rt-mine"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>` : "";
+  const tmdb = i.voteAverage
+    ? `<span class="wl-rt wl-rt-tmdb"><i class="fa-solid fa-star"></i>${i.voteAverage}</span>` : "";
+  if (!mine && !tmdb) return "";
+  return `<div class="wl-tr">${mine}${tmdb}</div>`;
+}
+
+/* 포스터 아래 메타 한 줄 — 장르(최대 3개) + 개봉/방영 연도 */
+function metaLine(i) {
+  const bits = visibleGenres(i.genres).slice(0, 3);
+  if (i.releaseYear) bits.push(i.releaseYear);
+  return esc(bits.join(" · "));
+}
+
 /* ---------- 내 별점: 하트 하나 + 숫자 (5점 만점, 소수점 가능) ---------- */
 function fmtRating(n) {
   const v = Number(n);
@@ -489,12 +520,11 @@ function renderSeriesCards() {
         <span class="wl-season wl-season-multi"><i class="fa-solid fa-layer-group mr-1"></i>${s.items.length}편</span>
       </div>
       <div class="wl-body">
-        <div class="wl-title-row"><span class="wl-title">${esc(s.name)}</span></div>
-        <div class="wl-genres">
-          ${s.items.slice(0, 3).map(x => `<span class="badge badge-season">${seriesLabel(x) || esc(x.releaseYear || x.title)}</span>`).join("")}
-          ${s.items.length > 3 ? `<span class="badge badge-genre">+${s.items.length - 3}</span>` : ""}
+        <div class="wl-title-row">
+          <i class="fa-solid fa-layer-group wl-type" style="color:#e0700f"></i>
+          <span class="wl-title">${esc(s.name)}</span>
         </div>
-        <div class="wl-meta">${s.yearRange || ""}</div>
+        <div class="wl-meta">${s.items.length}편${s.yearRange ? ` · ${s.yearRange}` : ""}</div>
       </div>
     </div>`).join("");
 
@@ -576,11 +606,11 @@ function renderHeaderCount() {
 
   const pb = $("#pendingBtn");
   if (Filters.pendingOnly) {
-    pb.className = "px-3.5 py-2 rounded-lg border border-amber-500 bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition";
-    pb.innerHTML = `<i class="fa-solid fa-xmark mr-1.5"></i>미등록 ${pending}개 보는 중`;
+    pb.className = "wl-chip wl-chip-warn on";
+    pb.innerHTML = `<i class="fa-solid fa-xmark"></i>미등록 ${pending}개 보는 중`;
   } else {
-    pb.className = "px-3.5 py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition";
-    pb.innerHTML = `<i class="fa-solid fa-circle-exclamation mr-1.5"></i>미등록 ${pending}개`;
+    pb.className = "wl-chip wl-chip-warn";
+    pb.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i>미등록 ${pending}개`;
   }
   pb.classList.toggle("hidden", pending === 0 && !Filters.pendingOnly);
 
@@ -589,11 +619,11 @@ function renderHeaderCount() {
   const nb = $("#noSeasonBtn");
   if (nb) {
     if (Filters.noSeasonOnly) {
-      nb.className = "px-3.5 py-2 rounded-lg border border-orange-500 bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition";
-      nb.innerHTML = `<i class="fa-solid fa-xmark mr-1.5"></i>시즌 미기록 ${noSeason}개 보는 중`;
+      nb.className = "wl-chip wl-chip-season on";
+      nb.innerHTML = `<i class="fa-solid fa-xmark"></i>시즌 미기록 ${noSeason}개 보는 중`;
     } else {
-      nb.className = "px-3.5 py-2 rounded-lg border border-orange-300 bg-orange-50 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition";
-      nb.innerHTML = `<i class="fa-solid fa-layer-group mr-1.5"></i>시즌 미기록 ${noSeason}개`;
+      nb.className = "wl-chip wl-chip-season";
+      nb.innerHTML = `<i class="fa-solid fa-layer-group"></i>시즌 미기록 ${noSeason}개`;
     }
     nb.classList.toggle("hidden", noSeason === 0 && !Filters.noSeasonOnly);
   }
@@ -605,11 +635,11 @@ function renderHeaderCount() {
   const db = $("#dupBtn");
   if (db) {
     if (Filters.dupOnly) {
-      db.className = "px-3.5 py-2 rounded-lg border border-rose-500 bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition";
-      db.innerHTML = `<i class="fa-solid fa-xmark mr-1.5"></i>매칭 확인 ${dupCount}개 보는 중`;
+      db.className = "wl-chip wl-chip-danger on";
+      db.innerHTML = `<i class="fa-solid fa-xmark"></i>매칭 확인 ${dupCount}개 보는 중`;
     } else {
-      db.className = "px-3.5 py-2 rounded-lg border border-rose-300 bg-rose-50 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition";
-      db.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1.5"></i>매칭 확인 ${dupCount}개`;
+      db.className = "wl-chip wl-chip-danger";
+      db.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i>매칭 확인 ${dupCount}개`;
     }
     db.title = "제목이 다른데 TMDB 작품이 같음 — 자동 매칭 오류 의심";
     db.classList.toggle("hidden", dupCount === 0 && !Filters.dupOnly);
@@ -667,24 +697,15 @@ function renderCards() {
         ${i.poster
           ? `<img class="wl-poster" src="${i.poster}" alt="" loading="lazy">`
           : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
-        <div class="wl-tr">
-          ${i.voteAverage ? `<span class="wl-vote"><i class="fa-solid fa-star"></i> ${i.voteAverage}</span>` : ""}
-          ${i.rating ? `<span class="wl-myrate">${hearts(i.rating)}</span>` : ""}
-        </div>
+        ${ratingChip(i)}
         ${seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : ""}
       </div>
       <div class="wl-body">
         <div class="wl-title-row">
+          <i class="fa-solid ${typeIcon(i.type)} wl-type" title="${esc(i.type || "")}"></i>
           <span class="wl-title">${esc(i.title)}</span>
-          ${i.type ? `<span class="badge badge-type shrink-0">${esc(i.type)}</span>` : ""}
         </div>
-        ${visibleGenres(i.genres).length ? `<div class="wl-genres">
-          ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}
-        </div>` : ""}
-        <div class="wl-meta">${fmtRange(i.startDate, i.endDate) || "날짜 없음"}</div>
-        ${(i.releaseDate || i.releaseYear) ? `<div class="wl-meta" style="opacity:.8">
-          <i class="fa-solid fa-clapperboard mr-1"></i>${i.type === "영화" ? "개봉" : "방영"} ${i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear}
-        </div>` : ""}
+        <div class="wl-meta">${metaLine(i)}</div>
       </div>
     </div>`).join("");
 
@@ -708,7 +729,7 @@ function openDetail(id) {
   const siblings = seasons.filter(s => s.id !== i.id);
 
   const reviewBox = (s) => s.review
-    ? `<div class="mt-2 p-3 rounded-lg border" style="background:linear-gradient(135deg,#fef9c3,#fce7f3);border-color:#fde68a">
+    ? `<div class="mt-2 p-3 rounded-lg border" style="background:#fdf6e3;border-color:#fde68a">
          <div class="text-xs font-semibold text-slate-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i>한줄평</div>
          <div class="text-sm text-slate-700 leading-relaxed">${esc(s.review)}</div></div>`
     : "";
@@ -831,7 +852,7 @@ function openDetail(id) {
     <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
       <div class="flex-1"></div>
       <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
-        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">
+        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">
         <i class="fa-solid fa-pen mr-1"></i>수정</button>
     </div>`;
 
@@ -892,7 +913,7 @@ function renderQuickRate() {
         <div class="flex gap-2 justify-center mt-5">
           ${left ? `<button id="qrRestart" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
             <i class="fa-solid fa-rotate-left mr-1"></i>건너뛴 것 다시 보기</button>` : ""}
-          <button id="qrDone" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:linear-gradient(135deg,#5f9235,#7bad48)">닫기</button>
+          <button id="qrDone" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">닫기</button>
         </div>
       </div>`;
     $("#qrDone").addEventListener("click", closeQuickRate);
