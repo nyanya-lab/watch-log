@@ -16,11 +16,15 @@
   src: url(https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-Bold.woff2) format("woff2");
 }
 
-/* ===== 기본 ===== */
+/* ===== 기본 =====
+   전체를 명조(마루부리)로 간다. 명조는 작은 글씨에서 획이 부서져 보이는데,
+   폰트를 바꿔서 풀 문제가 아니다 — 나눔명조·본명조는 인쇄용이라 가로획이 더 얇아 오히려 심하다.
+   대신 작은 글씨가 명조로도 버티는 조건을 만든다: 크기를 키우고, 굵기를 올리고, 명암을 높인다.
+   (아래 .wl-meta / .badge / .stat-label 등의 값이 그 조정이다) */
 body {
   -webkit-font-smoothing: antialiased;
   font-family: "MaruBuri", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
-    "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
+    "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, serif;
   color: #2c3129;
   /* 평평한 캔버스. 카드가 흰 박스를 벗었으니 배경이 조용해야 포스터가 산다.
      연두 정체성은 아주 옅은 기운으로만 남긴다 (예전엔 radial-gradient 2개를 겹쳤음). */
@@ -174,7 +178,7 @@ textarea.form-input { height: auto; }
 .wl-season {
   position: absolute; top: 6px; left: 6px;
   background: rgba(28,34,25,.72);
-  color: #fff; font-size: 10px; font-weight: 600;
+  color: #fff; font-size: 11px; font-weight: 700;
   padding: 2px 7px; border-radius: 5px;
 }
 .wl-season-multi { background: rgba(224,112,15,.88); }
@@ -190,7 +194,7 @@ textarea.form-input { height: auto; }
 }
 .wl-rt {
   display: inline-flex; align-items: center; gap: 4px;
-  font-size: 12px; font-weight: 600; line-height: 1;
+  font-size: 12.5px; font-weight: 700; line-height: 1;
 }
 .wl-rt i { font-size: 11px; }
 .wl-rt-mine { color: #ffb0c6; }
@@ -231,7 +235,8 @@ textarea.form-input { height: auto; }
 .wl-type { color: #4d7c2a; font-size: 13px; flex-shrink: 0; margin-top: 2px; }
 .wl-title {
   flex: 1; min-width: 0;
-  font-size: 13px; font-weight: 600; color: #2c3129;
+  /* 명조는 같은 px에서 고딕보다 작아 보여 1px 키웠다 */
+  font-size: 14px; font-weight: 600; color: #2c3129;
   line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
@@ -240,8 +245,9 @@ textarea.form-input { height: auto; }
   display: flex; flex-wrap: wrap; gap: 4px;
   margin-bottom: 5px;
 }
+/* 명조로 버티게: 11→12.5px, 500→600, 회색을 한 단계 진하게 */
 .wl-meta {
-  font-size: 11px; font-weight: 500; color: #8a8a80;
+  font-size: 12.5px; font-weight: 600; color: #6f7468;
   line-height: 1.5;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
@@ -266,8 +272,8 @@ textarea.form-input { height: auto; }
   display: inline-flex; align-items: center;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.5;
   white-space: nowrap;
   background: #eef3e9;      /* 기본값 (색 미지정 배지) */
@@ -296,7 +302,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
   border-radius: 12px;
   padding: 16px 18px;
 }
-.stat-label { font-size: 12px; font-weight: 600; color: #8a8a80; margin-bottom: 6px; }
+.stat-label { font-size: 13px; font-weight: 600; color: #6f7468; margin-bottom: 6px; }
 .stat-value { font-size: 26px; font-weight: 700; color: #2c3129; line-height: 1.1; }
 
 .stat-sec { padding: 26px 0; border-top: 1px solid #e6ecdd; }
@@ -306,7 +312,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
   margin-bottom: 14px;
 }
 .stat-h i { color: #4d7c2a; margin-right: 8px; }
-.stat-note { font-size: 12px; font-weight: 500; color: #8a8a80; margin: -8px 0 14px; }
+.stat-note { font-size: 13px; font-weight: 600; color: #6f7468; margin: -8px 0 14px; }
 .stat-grid2 { display: grid; grid-template-columns: 1fr; gap: 26px; }
 @media (min-width: 768px) { .stat-grid2 { grid-template-columns: 1fr 1fr; } }
 
@@ -368,7 +374,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 /* 카드 좌상단 상태 깃발 (시즌 칩과 같은 자리·같은 모양) */
 .dc-flag {
   position: absolute; top: 6px; left: 6px;
-  color: #fff; font-size: 10px; font-weight: 600;
+  color: #fff; font-size: 11px; font-weight: 700;
   padding: 2px 7px; border-radius: 5px;
   background: rgba(28,34,25,.72);
 }
@@ -387,7 +393,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
   border: 1px solid #cbd5e1;
   background: #fff;
   color: #475569;
-  font-size: 11px; font-weight: 600;
+  font-size: 12px; font-weight: 700;
   white-space: nowrap;
   transition: background .12s, color .12s, border-color .12s;
 }
