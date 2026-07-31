@@ -1,7 +1,25 @@
+/* ===== 마루부리 (네이버) =====
+   화면 읽기용으로 만든 명조라 나눔명조·본명조보다 작은 크기에서 덜 거칠다.
+   배포 CSS가 굵기마다 폰트 이름을 따로 두는 방식(MaruBuriBold 등)이라 font-weight가 안 먹으므로,
+   여기서 한 이름으로 다시 묶어 굵기로 쓸 수 있게 한다.
+   굵기당 ~430KB라 실제로 쓰는 3개만 싣는다 (얇은 글씨는 규칙상 안 씀). */
+@font-face {
+  font-family: "MaruBuri"; font-weight: 400; font-display: swap;
+  src: url(https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-Regular.woff2) format("woff2");
+}
+@font-face {
+  font-family: "MaruBuri"; font-weight: 600; font-display: swap;
+  src: url(https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-SemiBold.woff2) format("woff2");
+}
+@font-face {
+  font-family: "MaruBuri"; font-weight: 700; font-display: swap;
+  src: url(https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-Bold.woff2) format("woff2");
+}
+
 /* ===== 기본 ===== */
 body {
   -webkit-font-smoothing: antialiased;
-  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+  font-family: "MaruBuri", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, sans-serif;
   color: #2c3129;
   /* 평평한 캔버스. 카드가 흰 박스를 벗었으니 배경이 조용해야 포스터가 산다.
@@ -17,15 +35,23 @@ body {
   background: #eaf0e2;
   border-radius: 999px;
   padding: 3px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.tab-seg::-webkit-scrollbar { display: none; }
 .tab-btn {
   padding: 7px 15px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
   color: #6b7a63;
+  /* 좁은 화면에서 "목록"이 목/록으로 쪼개지지 않게 */
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: background .14s, color .14s;
 }
+@media (max-width: 400px) { .tab-btn { padding: 7px 11px; } }
 .tab-btn:hover { color: #3b6d11; }
 .tab-btn.active { background: #fff; color: #2c3129; }
 
