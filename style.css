@@ -1,30 +1,32 @@
-/* ===== 마루부리 (네이버) =====
-   화면 읽기용으로 만든 명조라 나눔명조·본명조보다 작은 크기에서 덜 거칠다.
-   배포 CSS가 굵기마다 폰트 이름을 따로 두는 방식(MaruBuriBold 등)이라 font-weight가 안 먹으므로,
-   여기서 한 이름으로 다시 묶어 굵기로 쓸 수 있게 한다.
-   굵기당 ~430KB라 실제로 쓰는 3개만 싣는다 (얇은 글씨는 규칙상 안 씀). */
-@font-face {
-  font-family: "MaruBuri"; font-weight: 400; font-display: swap;
-  src: url(https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-Regular.woff2) format("woff2");
-}
-@font-face {
-  font-family: "MaruBuri"; font-weight: 600; font-display: swap;
-  src: url(https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-SemiBold.woff2) format("woff2");
-}
-@font-face {
-  font-family: "MaruBuri"; font-weight: 700; font-display: swap;
-  src: url(https://hangeul.pstatic.net/hangeul_static/webfont/MaruBuri/MaruBuri-Bold.woff2) format("woff2");
-}
+/* ===== 고운돋움 =====
+   부드러운 개성이 있는 돋움. 단, 배포 굵기가 **400 하나뿐**이다.
 
-/* ===== 기본 =====
-   전체를 명조(마루부리)로 간다. 명조는 작은 글씨에서 획이 부서져 보이는데,
-   폰트를 바꿔서 풀 문제가 아니다 — 나눔명조·본명조는 인쇄용이라 가로획이 더 얇아 오히려 심하다.
-   대신 작은 글씨가 명조로도 버티는 조건을 만든다: 크기를 키우고, 굵기를 올리고, 명암을 높인다.
-   (아래 .wl-meta / .badge / .stat-label 등의 값이 그 조정이다) */
+   그래서 굵기로 위계를 못 만든다. `font-weight:700`을 주면 브라우저가 합성한 가짜 볼드가 되는데,
+   한글에서는 가로로 번져 받침이 뭉갠다. 대신 **같은 색 외곽선(-webkit-text-stroke)**으로 획을 굵힌다 —
+   고르게 굵어져 합성 볼드보다 훨씬 깨끗하다. 위계는 크기 + 색 + 외곽선 셋으로 만든다.
+
+   → 이 폰트를 쓰는 동안 `font-weight`는 화면에 영향이 없다. 굵게 하려면 `.tk` / `.tk-lg`를 쓸 것.
+   폰트 자체는 index.html의 Google Fonts 링크로 불러온다. */
+
+/* 굵기 대신 쓰는 외곽선. 작은 글씨엔 쓰지 말 것 — 획이 붙어 뭉갠다 */
+.tk    { -webkit-text-stroke: 0.3px currentColor; }
+.tk-lg { -webkit-text-stroke: 0.5px currentColor; }
+
+/* 굵어야 하는 자리들. font-weight가 안 먹으므로 여기서 외곽선으로 처리한다.
+   13px 미만에는 걸지 않는다 — 획이 서로 붙는다. */
+h1,
+.wl-title,
+.stat-h,
+#selTitle,
+#detailContent h4 { -webkit-text-stroke: 0.3px currentColor; }
+
+.stat-value { -webkit-text-stroke: 0.5px currentColor; }
+
+/* ===== 기본 ===== */
 body {
   -webkit-font-smoothing: antialiased;
-  font-family: "MaruBuri", "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
-    "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", system-ui, serif;
+  font-family: "Gowun Dodum", "GowunDodum", "Pretendard Variable", Pretendard,
+    -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   color: #2c3129;
   /* 평평한 캔버스. 카드가 흰 박스를 벗었으니 배경이 조용해야 포스터가 산다.
      연두 정체성은 아주 옅은 기운으로만 남긴다 (예전엔 radial-gradient 2개를 겹쳤음). */
