@@ -220,8 +220,10 @@ async function tmdbDetail(id, mediaType) {
   if (originCountry.length) country = COUNTRY_KO[originCountry[0]] || originCountry[0];
   else if (prodCountries.length) country = COUNTRY_KO[prodCountries[0].iso_3166_1] || prodCountries[0].name;
 
+  /* 사람 id도 같이 담는다 — TMDB는 사람 이름을 언어별로 번역해주지 않아서,
+     한글 표기를 찾으려면 /person/{id}의 also_known_as를 봐야 한다 (fixPersonNames 참고). */
   const cast = ((d.credits && d.credits.cast) || [])
-    .slice(0, 8).map(c => ({ name: c.name, character: c.character || "" }));
+    .slice(0, 8).map(c => ({ name: c.name, character: c.character || "", id: c.id }));
 
   const crew = (d.credits && d.credits.crew) || [];
   const director = crew.find(c => c.job === "Director");
@@ -270,9 +272,44 @@ async function tmdbDetail(id, mediaType) {
     companies,
     cast,
     director: director ? director.name : (creator ? creator.name : ""),
+    directorId: director ? director.id : (creator ? creator.id : null),
     status: d.status || "",
     type: mapType(mediaType, d.genres)
   };
+}
+
+/* ---------- 사람 이름 한글 표기 ----------
+   TMDB는 사람 이름을 언어별로 번역해주지 않는다. `language=ko-KR`을 줘도 그 사람의
+   대표 표기 하나만 온다 — 한국 배우는 한글로 등록된 경우가 많고 감독은 로마자인 경우가 많아
+   같은 작품 안에서 "임화영 / Park Shin-woo"처럼 갈린다.
+   한글 표기는 `also_known_as`(다른 표기 목록)에 들어 있으므로 거기서 찾는다.
+
+   사람당 한 번만 조회하면 되므로 결과를 localStorage에 캐시한다.
+   한글 표기가 없는 사람(대부분의 외국 배우)은 빈 문자열로 캐시해 재조회를 막는다. */
+const LS_PERSON = "watchlog_person_ko";
+const HANGUL = /[가-힣]/;
+
+function getPersonCache() {
+  try { return JSON.parse(localStorage.getItem(LS_PERSON) || "{}"); }
+  catch { return {}; }
+}
+function savePersonCache(c) {
+  try { localStorage.setItem(LS_PERSON, JSON.stringify(c)); } catch {}
+}
+
+/* 한글 표기를 찾으면 그 문자열, 없으면 "" — 조회 실패는 null (캐시하지 않음) */
+async function tmdbPersonKoreanName(personId) {
+  if (!personId) return null;
+  const key = getTmdbKey();
+  if (!key) return null;
+  try {
+    const res = await fetch(`${TMDB_BASE}/person/${personId}?api_key=${key}&language=ko-KR`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (HANGUL.test(d.name || "")) return d.name;
+    const alias = (d.also_known_as || []).find(a => HANGUL.test(a));
+    return alias || "";
+  } catch { return null; }
 }
 
 /* ---------- 시리즈(컬렉션) 상세 ----------

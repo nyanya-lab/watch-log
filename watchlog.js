@@ -1211,6 +1211,7 @@ function initSettings() {
   $("#refreshOttBtn").addEventListener("click", runRefreshOtts);
   $("#refreshRatingBtn").addEventListener("click", runRefreshRatings);
   $("#refreshCollectionBtn").addEventListener("click", runRefreshCollections);
+  $("#fixNamesBtn").addEventListener("click", runFixNames);
   renderUpdInfo();
 
   $("#exportBtn").addEventListener("click", () => {
@@ -1283,6 +1284,7 @@ function renderUpdInfo() {
   set("updOtt", u.ott);
   set("updRating", u.rating);
   set("updCollection", u.collection);
+  set("updNames", u.names);
 }
 
 /* ---------- 일괄 정보 채우기 ---------- */
@@ -1549,6 +1551,86 @@ async function runRefreshCollections() {
   status.textContent = `시리즈 정보 완료 — ${found}개 작품이 시리즈에 속함${fail ? `, 실패 ${fail}개` : ""}`;
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast("시리즈 정보 가져오기 완료", "success");
+}
+
+/* ---------- 사람 이름 한글로 바꾸기 ----------
+   "임화영 / Park Shin-woo"처럼 한 화면에서 표기가 갈리는 걸 고친다.
+   지금 데이터에는 사람 id가 없으므로(이름만 저장됨) 작품별 크레딧을 다시 받아 id를 얻고,
+   한글이 없는 이름만 /person/{id}의 also_known_as에서 한글 표기를 찾는다.
+   사람 조회 결과는 캐시하므로 같은 배우를 여러 번 부르지 않는다. */
+async function runFixNames() {
+  if (_enriching) { toast("이미 진행 중입니다"); return; }
+  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const targets = State.items.filter(i => i.tmdbId);
+  if (!targets.length) { toast("갱신할 항목이 없습니다", "success"); return; }
+  if (!confirm(
+    `${targets.length}개 항목의 배우·감독 이름을 한글 표기로 바꿉니다.\n` +
+    `한글 표기가 TMDB에 없는 사람(주로 외국 배우)은 그대로 둡니다.\n` +
+    `사람 수가 많아 몇 분 걸릴 수 있습니다.`)) return;
+
+  _enriching = true;
+  const status = $("#enrichStatus");
+  const bar = $("#enrichBar");
+  const fill = $("#enrichBarFill");
+  bar.classList.remove("hidden");
+
+  const cache = getPersonCache();
+  let changed = 0, looked = 0, fail = 0;
+
+  /* 캐시 → 조회 순으로 한글 표기를 얻는다. ""는 "한글 표기 없음"으로 확정된 값 */
+  const koName = async (id, cur) => {
+    if (!id || HANGUL.test(cur)) return null;
+    if (Object.prototype.hasOwnProperty.call(cache, id)) return cache[id] || null;
+    const ko = await tmdbPersonKoreanName(id);
+    await new Promise(r => setTimeout(r, 200));
+    looked++;
+    if (ko === null) { fail++; return null; }   // 조회 실패는 캐시하지 않음
+    cache[id] = ko;
+    return ko || null;
+  };
+
+  for (let n = 0; n < targets.length; n++) {
+    const i = targets[n];
+    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
+    status.className = "text-sm mt-3 font-medium text-slate-600";
+    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
+
+    try {
+      // 저장된 cast에 id가 없으면 크레딧을 다시 받아 id를 채운다
+      const needIds = (i.cast || []).some(c => !c.id) || (i.director && !i.directorId);
+      if (needIds) {
+        const d = await tmdbDetail(i.tmdbId, i.type === "영화" ? "movie" : "tv");
+        if (d) {
+          (i.cast || []).forEach(c => {
+            const m = (d.cast || []).find(x => x.name === c.name);
+            if (m) c.id = m.id;
+          });
+          if (d.directorId && d.director === i.director) i.directorId = d.directorId;
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      for (const c of (i.cast || [])) {
+        const ko = await koName(c.id, c.name);
+        if (ko && ko !== c.name) { c.name = ko; changed++; }
+      }
+      const koDir = await koName(i.directorId, i.director || "");
+      if (koDir && koDir !== i.director) { i.director = koDir; changed++; }
+    } catch { fail++; }
+
+    if (n % 5 === 4) { saveLocal(true); savePersonCache(cache); }
+  }
+
+  savePersonCache(cache);
+  saveLocal();
+  applyFilters();
+  renderDiscover();
+  _enriching = false;
+  markUpd("names");
+  status.textContent = `이름 한글화 완료 — ${changed}곳 변경 (사람 ${looked}명 조회${fail ? `, 실패 ${fail}` : ""})`;
+  status.className = "text-sm mt-3 font-medium text-emerald-600";
+  toast(`배우·감독 이름 ${changed}곳을 한글로 바꿨습니다`, "success");
 }
 
 /* ---------- 평점(TMDB voteAverage)만 갱신 ---------- */

@@ -157,6 +157,7 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 - `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
   영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
   정보라 서버 동기화는 안 함 (`getCollCache`/`saveCollInfo` in tmdb.js)
+- `watchlog_person_ko` — 사람 id → 한글 표기 캐시. `""`는 "한글 표기 없음"으로 확정된 값
 - `watchlog_modified` — 마지막 수정 ISO 시각 (동기화 비교용)
 - `watchlog_is_seed` — 지금 로컬 데이터가 "부팅 때 자동으로 넣은 시드일 뿐"인지 (`"1"`).
   아래 **시드 사고** 참고. `saveLocal()`이 호출되면 지워진다(= 사용자가 실제로 뭔가 저장한 순간).
@@ -213,6 +214,18 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB 연동된 항목의 `otts`만
 `tmdbProviders`로 다시 조회 (구분으로 movie/tv 추정, 비면 반대쪽도 시도). OTT는 시간이 지나면 바뀌므로 별도 제공.
 **시청 기록 + 보고싶어요를 함께** 갱신한다 — 위시는 "지금 어디서 볼 수 있나"가 곧 쓸모라 최신값이 더 중요하다.
+
+배우·감독 이름 한글로 (`runFixNames`): 설정 탭.
+**TMDB는 사람 이름을 언어별로 번역해주지 않는다** — `language=ko-KR`을 줘도 그 사람의 대표 표기 하나만 온다.
+한국 배우는 대표 표기가 한글인 경우가 많고 감독은 로마자인 경우가 많아, 한 화면에서
+"임화영 / Park Shin-woo"처럼 갈렸다(감독 207명 중 61명, 배우 1344명 중 152명이 로마자였음).
+한글 표기는 `/person/{id}`의 **`also_known_as`**에 들어 있으므로 거기서 찾는다(`tmdbPersonKoreanName`).
+
+- 기존 데이터에는 **사람 id가 없어서**(이름만 저장) 작품별 크레딧을 다시 받아 id를 채운 뒤 조회한다.
+  앞으로는 `tmdbDetail`이 `cast[].id`·`directorId`를 같이 주므로 재조회가 필요 없다.
+- 사람 조회 결과는 `watchlog_person_ko`에 캐시. **한글 표기가 없는 사람은 `""`로 캐시**해 재조회를 막는다
+  (외국 배우 대부분이 여기 해당). 조회 실패(`null`)는 캐시하지 않는다.
+- 이미 한글인 이름은 건드리지 않는다.
 
 평점만 갱신 (`runRefreshRatings`): `voteAverage`만 `tmdbDetail`로 다시 조회.
 각 갱신 버튼 옆에 최근 실행 시각 표시 (`LS_UPD`=`watchlog_updated_at`, `markUpd`/`renderUpdInfo`).
