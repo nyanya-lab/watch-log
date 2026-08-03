@@ -185,6 +185,62 @@ async function tmdbProviders(id, mediaType) {
   } catch { return []; }
 }
 
+/* ---------- 볼 수 있는 곳 전체 (정액제 + 대여 + 구매) ----------
+   `tmdbProviders`와 목적이 다르다. 그쪽은 `otts`에 **저장**할 값이라 정액제만, 그것도
+   PROVIDER_MAP에 있는 것만 남긴다(앱이 아는 OTT로 좁혀야 필터·통계가 갈리지 않는다).
+   이쪽은 "지금 어디서 볼 수 있나"를 **보여주기만** 하므로 대여·구매까지 포함하고,
+   매핑에 없는 제공사도 원문 이름 그대로 남긴다 (구글플레이 같은 게 통째로 사라지지 않게).
+
+   ⚠ TMDB는 **가격을 주지 않는다** — 제공사 이름·로고·id·표시순서가 전부다.
+   TMDB 사이트에서 보이는 "대여 최저가"는 그 웹페이지가 따로 그리는 것이라
+   우리가 쓸 수 있는 건 `link`(그 페이지 주소)뿐이다. */
+async function tmdbWatchInfo(id, mediaType) {
+  const key = getTmdbKey();
+  const url = `${TMDB_BASE}/${mediaType}/${id}/watch/providers?api_key=${key}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`시청 정보 조회 실패 (${res.status})`);
+  const data = await res.json();
+  const kr = (data.results && data.results.KR) || {};
+
+  const names = (arr) => {
+    const out = [];
+    (arr || []).forEach(p => {
+      const n = PROVIDER_MAP[p.provider_name] || p.provider_name;
+      if (n && !out.includes(n)) out.push(n);
+    });
+    return out;
+  };
+
+  return {
+    flatrate: names([...(kr.flatrate || []), ...(kr.free || []), ...(kr.ads || [])]),
+    rent: names(kr.rent),
+    buy: names(kr.buy),
+    link: kr.link || ""
+  };
+}
+
+/* 조회 결과를 그리는 공용 조각. 상세 모달과 탐색 카드가 같은 모양을 쓴다. */
+function watchInfoHtml(w) {
+  const row = (label, arr, cls) => arr.length
+    ? `<div class="wi-row"><span class="wi-label">${label}</span>
+       ${arr.map(n => `<span class="badge ${cls}">${esc(n)}</span>`).join("")}</div>`
+    : "";
+
+  const body = row("정액제", w.flatrate, "badge-ott")
+             + row("대여", w.rent, "badge-time")
+             + row("구매", w.buy, "badge-genre");
+
+  /* 가격은 API로 안 오므로 TMDB 페이지로 넘긴다 */
+  const link = w.link
+    ? `<div class="wi-link"><a href="${esc(w.link)}" target="_blank" rel="noopener">
+         <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>TMDB에서 가격 보기</a></div>`
+    : "";
+
+  return body
+    ? body + link
+    : `<div class="wi-empty"><i class="fa-solid fa-circle-info mr-1"></i>지금 한국에서 볼 수 있는 곳이 없어요</div>` + link;
+}
+
 /* 관람등급 (한국 기준 우선) */
 function extractCert(d, mediaType) {
   try {

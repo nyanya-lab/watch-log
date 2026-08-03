@@ -85,6 +85,7 @@ function initWatchlog() {
   $("#cancelBtn").addEventListener("click", closeEdit);
   $("#saveBtn").addEventListener("click", saveItem);
   $("#deleteBtn").addEventListener("click", deleteItem);
+  $("#refreshTmdbBtn").addEventListener("click", refreshTmdbInEdit);
   $("#syncBtn").addEventListener("click", async () => { await pushToServer(); });
 
   $("#searchInput").addEventListener("input", debounce(() => {
@@ -907,8 +908,13 @@ function openDetail(id) {
           </span>`).join("")}
         </div>
       </div>` : ""}
+
+      <div id="dtWatch"></div>
     </div>
     <div class="modal-foot">
+      ${i.tmdbId ? `<button onclick="findOtt(this, ${i.tmdbId}, '${i.type === "영화" ? "movie" : "tv"}')"
+        class="btn btn-ghost">
+        <i class="fa-solid fa-tv mr-1"></i>OTT 찾기</button>` : ""}
       <div class="flex-1"></div>
       <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
         class="btn btn-primary">
@@ -916,6 +922,28 @@ function openDetail(id) {
     </div>`;
 
   $("#detailModal").classList.remove("hidden");
+}
+
+/* ---------- 지금 볼 수 있는 곳 찾기 ----------
+   저장된 `otts`는 등록 시점의 정액제 목록이라 시간이 지나면 어긋난다. 이 버튼은 **지금** 값을
+   다시 받아 대여·구매까지 보여준다. 작품마다 별도 호출이 필요해서(카드 60장이면 ~19초)
+   자동으로 부르지 않고 눌렀을 때만 조회한다. 조회 결과는 저장하지 않는다 — 보여주기만 한다. */
+async function findOtt(btn, tmdbId, mediaType) {
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+  const box = $("#dtWatch");
+  if (!box) return;
+
+  btn.disabled = true;
+  box.innerHTML = `<div class="wi-box"><div class="wi-empty">
+    <i class="fa-solid fa-spinner fa-spin mr-1"></i>볼 수 있는 곳 찾는 중...</div></div>`;
+  try {
+    const w = await tmdbWatchInfo(tmdbId, mediaType);
+    box.innerHTML = `<div class="wi-box">${watchInfoHtml(w)}</div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="wi-box"><div class="wi-empty">조회 실패: ${esc(e.message)}</div></div>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ---------- 별점 (숫자 입력) ---------- */
@@ -1119,22 +1147,50 @@ function openEdit(id) {
       $("#tmdbQuery").value = i.title || "";
     }
     $("#deleteBtn").classList.remove("hidden");
+    // TMDB에 연결된 기록만 새로 받을 수 있다
+    $("#refreshTmdbBtn").classList.toggle("hidden", !i.tmdbId);
   } else {
     $("#modalTitle").textContent = "새로 등록";
     ["fTitle", "fCountry", "fStart", "fEnd", "fReview", "fLastStart", "fLastEnd"]
       .forEach(f => $("#" + f).value = "");
     $("#fType").value = "영화";
-    $("#fOtt").value = "넷플릭스";
+    /* 이 칸은 "기타 (직접 입력)"이다. 예전 드롭다운 시절의 기본값 "넷플릭스"가 남아 있어서,
+       손대지 않고 저장하면 어디서 봤든 `ott="넷플릭스"`로 저장됐다. 스트리밍 목록은
+       TMDB(`otts`)가 채우므로 여기 기본값이 있으면 안 된다. */
+    $("#fOtt").value = "";
     $("#fCount").value = 1;
     $("#fSeason").value = 0;
     $("#fRating").value = "";
     $("#rewatchToggle").checked = false;
     $("#rewatchFields").classList.add("hidden");
     $("#deleteBtn").classList.add("hidden");
+    $("#refreshTmdbBtn").classList.add("hidden");
   }
 
   updateStepperLabel("fCount");
   $("#editModal").classList.remove("hidden");
+}
+
+/* 수정창 — 같은 작품을 TMDB에서 다시 받아 폼을 최신값으로 되돌린다.
+   OTT·평점·포스터·출연진은 시간이 지나면 바뀌는데 저장된 값은 등록 시점 그대로다.
+   `selectTmdb`가 상세·OTT·한글 이름·컬렉션까지 한 번에 처리하므로 그대로 재사용한다.
+   제목·구분·국가까지 TMDB 값으로 덮어쓴다 — 저장을 눌러야 실제로 반영된다. */
+async function refreshTmdbInEdit() {
+  const i = State.items.find(x => x.id === State.editingId);
+  if (!i || !i.tmdbId) { toast("TMDB에 연결된 기록이 아닙니다", "error"); return; }
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const btn = $("#refreshTmdbBtn");
+  btn.disabled = true;
+  State.selectedTmdb = null;
+  try {
+    await selectTmdb({ tmdbId: i.tmdbId, mediaType: i.type === "영화" ? "movie" : "tv" });
+    /* selectTmdb는 실패를 검색 결과칸에 그리고 삼킨다. 그래서 결과로 성패를 가린다. */
+    if (State.selectedTmdb) toast("TMDB 정보를 새로 받았습니다 — 저장을 눌러야 반영됩니다", "success");
+    else toast("정보를 받지 못했습니다", "error");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function closeEdit() {

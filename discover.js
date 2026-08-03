@@ -356,6 +356,7 @@ function renderDcReco() {
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
         { act: "add", label: "봤어요", icon: "fa-plus" },
+        { act: "ott", label: "", icon: "fa-tv", cls: "dc-btn-icon", title: "지금 볼 수 있는 곳 찾기" },
         { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 추천에서 빼기" }
       ],
       _raw: c
@@ -649,8 +650,32 @@ function dcCardHtml(e) {
         ${e.year ? `<div class="wl-meta">${esc(e.year)}</div>` : ""}
         ${e.note ? `<div class="dc-note">${e.note}</div>` : ""}
         ${actions ? `<div class="dc-actions">${actions}</div>` : ""}
+        <div class="dc-watch"></div>
       </div>
     </div>`;
+}
+
+/* 카드에서 바로 "지금 볼 수 있는 곳"을 찾는다.
+   추천·이어보기 카드에는 OTT 배지가 없다 — 작품마다 별도 호출이 필요해서 60장을 그릴 때
+   같이 붙이면 ~19초가 걸린다. 그래서 궁금한 카드만 눌러 1건씩 받는다.
+   상세 모달의 [OTT 찾기](`findOtt`)와 같은 조각을 그리고, 결과는 저장하지 않는다. */
+async function dcFindOtt(btn, tmdbId, mediaType) {
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+  const card = btn.closest(".dc-card");
+  const box = card && card.querySelector(".dc-watch");
+  if (!box) return;
+
+  btn.disabled = true;
+  box.innerHTML = `<div class="wi-box"><div class="wi-empty">
+    <i class="fa-solid fa-spinner fa-spin mr-1"></i>찾는 중...</div></div>`;
+  try {
+    const w = await tmdbWatchInfo(+tmdbId, mediaType);
+    box.innerHTML = `<div class="wi-box">${watchInfoHtml(w)}</div>`;
+  } catch (e) {
+    box.innerHTML = `<div class="wi-box"><div class="wi-empty">조회 실패: ${esc(e.message)}</div></div>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* 검색 결과·이어보기·위시에서 공통으로 쓰는 그리기 */
@@ -723,7 +748,8 @@ function renderDcNext() {
              <span class="wl-meta ml-1">총 ${st.totalSeasons}시즌</span>`,
       actions: [
         { act: "add", season: st.missing[0], label: `S${st.missing[0]} 기록하기`, icon: "fa-plus", cls: "dc-btn-main" },
-        { act: "open", id: c.item.id, label: "내 기록", icon: "fa-clock-rotate-left" }
+        { act: "open", id: c.item.id, label: "내 기록", icon: "fa-clock-rotate-left" },
+        { act: "ott", label: "", icon: "fa-tv", cls: "dc-btn-icon", title: "지금 볼 수 있는 곳 찾기" }
       ]
     };
   });
@@ -751,6 +777,7 @@ function renderDcNext() {
         { act: "open", id: c.main.id, label: "내 기록", icon: "fa-clock-rotate-left" },
         { act: "wish", label: isWished(p.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(p.tmdbId) ? "dc-btn-on" : "" },
+        { act: "ott", label: "", icon: "fa-tv", cls: "dc-btn-icon", title: "지금 볼 수 있는 곳 찾기" },
         { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 이 목록에서 숨기기" }
       ]
     })));
@@ -1210,6 +1237,10 @@ function initDiscover() {
 
   /* 카드/버튼 클릭은 위임으로 한 번에 처리 */
   $("#dcGrid").addEventListener("click", e => {
+    /* [OTT 찾기] 결과 안(특히 TMDB 링크)을 누른 건 카드 클릭이 아니다.
+       막지 않으면 링크를 여는 동시에 카드의 detail 모달까지 뜬다. */
+    if (e.target.closest(".dc-watch")) { e.stopPropagation(); return; }
+
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const act = btn.dataset.act;
@@ -1224,6 +1255,7 @@ function initDiscover() {
     else if (act === "hide") dcHide(tid);
     else if (act === "unhide") { removeHide(+tid); toast("관심없음을 해제했습니다"); renderDiscover(); }
     else if (act === "open") openDetail(btn.dataset.id);
+    else if (act === "ott") dcFindOtt(btn, tid, entry ? entry.mediaType : "movie");
     else if (act === "add") addFromDiscover(tid, entry ? entry.mediaType : "movie", btn.dataset.season);
   });
 
