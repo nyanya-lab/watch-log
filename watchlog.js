@@ -7,6 +7,7 @@ const Filters = {
   person: "",                       // 배우/감독 (배지 클릭 전용)
   sort: "date-desc", pendingOnly: false,
   noSeasonOnly: false,              // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
+  engNameOnly: false,               // 배우·감독 이름이 영문으로 남은 항목만
   dupOnly: false,                   // 제목이 다른데 tmdbId가 같은 항목만 (매칭 오류 의심)
   group: "",                        // 시리즈 모아보기에서 고른 그룹 키
   seriesView: false                 // 목록 자리에 시리즈 카드를 보여주는 모드
@@ -15,6 +16,20 @@ const Filters = {
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
 function needsSeason(i) {
   return !i.season && (i.totalSeasons || 0) > 1;
+}
+
+/* 배우·감독 이름이 아직 영문인 항목.
+   **한글 표기가 없다고 확인된 사람(캐시값 "")은 세지 않는다** — 외국 배우가 대부분이라
+   그대로 세면 이 숫자가 영원히 0이 되지 않아 잔소리만 된다.
+   캐시는 applyFilters에서 한 번만 읽어 State._personKo에 담는다(항목마다 파싱하면 느리다). */
+function needsKoName(i) {
+  if (!i.tmdbId) return false;
+  const cache = State._personKo || {};
+  const bad = (name, id) =>
+    !!name && !HANGUL.test(name) &&
+    !(id && Object.prototype.hasOwnProperty.call(cache, id) && cache[id] === "");
+  if (bad(i.director, i.directorId)) return true;
+  return (i.cast || []).some(c => bad(c.name, c.id));
 }
 
 /* 제목이 다른데 tmdbId가 같은 항목 = 자동 매칭 오류 의심.
@@ -107,29 +122,19 @@ function initWatchlog() {
     $("#filterPreview").textContent = `${State.filtered.length}개 표시`;
   });
 
-  /* 미등록 토글 */
-  $("#pendingBtn").addEventListener("click", () => {
-    Filters.pendingOnly = !Filters.pendingOnly;
-    Filters.noSeasonOnly = false;
-    Filters.dupOnly = false;
+  /* 유지보수 칩 토글 — 서로 배타적으로 켜진다 (하나 켜면 나머지는 꺼짐) */
+  const EXCLUSIVE = ["pendingOnly", "noSeasonOnly", "engNameOnly", "dupOnly"];
+  const toggleOnly = (key) => {
+    const on = !Filters[key];
+    EXCLUSIVE.forEach(k => { Filters[k] = false; });
+    Filters[key] = on;
     applyFilters();
-  });
-
-  /* 시즌 미기록 토글 */
-  $("#noSeasonBtn").addEventListener("click", () => {
-    Filters.noSeasonOnly = !Filters.noSeasonOnly;
-    Filters.pendingOnly = false;
-    Filters.dupOnly = false;
-    applyFilters();
-  });
-
-  /* 매칭 확인(중복 tmdbId) 토글 */
-  $("#dupBtn").addEventListener("click", () => {
-    Filters.dupOnly = !Filters.dupOnly;
-    Filters.pendingOnly = false;
-    Filters.noSeasonOnly = false;
-    applyFilters();
-  });
+  };
+  $("#pendingBtn").addEventListener("click", () => toggleOnly("pendingOnly"));
+  $("#noSeasonBtn").addEventListener("click", () => toggleOnly("noSeasonOnly"));
+  $("#engNameBtn").addEventListener("click", () => toggleOnly("engNameOnly"));
+  $("#dupBtn").addEventListener("click", () => toggleOnly("dupOnly"));
+  $("#nameFixBtn").addEventListener("click", () => runFixNames(State.filtered));
 
   /* 별점 몰아넣기 */
   $("#quickRateBtn").addEventListener("click", openQuickRate);
@@ -418,7 +423,8 @@ function buildFilterOptions() {
 function hasActiveFilter() {
   return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
             Filters.genre || Filters.rating || Filters.person ||
-            Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.dupOnly || Filters.group ||
+            Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.engNameOnly ||
+            Filters.dupOnly || Filters.group ||
             Filters.seriesView ||
             Filters.sort !== "date-desc");
 }
@@ -427,7 +433,7 @@ function hasActiveFilter() {
 function clearAllFilters() {
   Object.assign(Filters, {
     q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
-    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: "", seriesView: false, seriesView: false
+    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false, group: "", seriesView: false, seriesView: false
   });
   const s = $("#searchInput"); if (s) s.value = "";
   ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"]
@@ -440,7 +446,7 @@ function clearAllFilters() {
 function jumpToList(patch) {
   const backup = { ...Filters };
   Object.assign(Filters,
-    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, dupOnly: false, group: "", seriesView: false },
+    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false, group: "", seriesView: false },
     patch);
   applyFilters();
 
@@ -565,9 +571,11 @@ window.filterByPerson = filterByPerson;
 function applyFilters() {
   const F = Filters;
   State._dupIds = dupTmdbIdSet();     // 매 조회마다 한 번만 계산
+  State._personKo = getPersonCache(); // 이름 판별용 캐시도 한 번만 읽는다
   let list = State.items.filter(i => {
     if (F.pendingOnly && i.tmdbId) return false;
     if (F.noSeasonOnly && !needsSeason(i)) return false;
+    if (F.engNameOnly && !needsKoName(i)) return false;
     if (F.dupOnly && !isDupTmdb(i)) return false;
     if (F.group && groupKeyOf(i) !== F.group) return false;
     if (F.q && !matchesQuery(i, F.q)) return false;
@@ -655,6 +663,33 @@ function renderHeaderCount() {
     }
     db.title = "제목이 다른데 TMDB 작품이 같음 — 자동 매칭 오류 의심";
     db.classList.toggle("hidden", dupCount === 0 && !Filters.dupOnly);
+  }
+
+  // 이름 영문 칩 (0개면 숨김). 한글 표기가 없다고 확인된 사람은 세지 않으므로
+  // 한 번 정리하고 나면 자연스럽게 0이 된다.
+  const engName = State.items.filter(needsKoName).length;
+  const eb = $("#engNameBtn");
+  if (eb) {
+    if (Filters.engNameOnly) {
+      eb.className = "wl-chip wl-chip-name on";
+      eb.innerHTML = `<i class="fa-solid fa-xmark"></i>이름 영문 ${engName}개 보는 중`;
+    } else {
+      eb.className = "wl-chip wl-chip-name";
+      eb.innerHTML = `<i class="fa-solid fa-language"></i>이름 영문 ${engName}개`;
+    }
+    eb.classList.toggle("hidden", engName === 0 && !Filters.engNameOnly);
+  }
+
+  // 이름 영문 목록을 볼 때만 뜨는 안내바
+  const nameBar = $("#nameFixBar");
+  if (nameBar) {
+    const show = Filters.engNameOnly && engName > 0;
+    nameBar.classList.toggle("hidden", !show);
+    if (show) {
+      $("#nameFixMsg").innerHTML =
+        `<i class="fa-solid fa-circle-info mr-1"></i>TMDB에서 <b>한글 표기</b>를 찾아 바꿉니다.
+         한글 표기가 없는 사람(주로 외국 배우)은 그대로 두고 다시 세지 않아요.`;
+    }
   }
 
   // 별점 채우기 버튼 (필터가 아니라 몰아넣기 모달을 여는 버튼 — 0개면 숨김)
@@ -1211,7 +1246,6 @@ function initSettings() {
   $("#refreshOttBtn").addEventListener("click", runRefreshOtts);
   $("#refreshRatingBtn").addEventListener("click", runRefreshRatings);
   $("#refreshCollectionBtn").addEventListener("click", runRefreshCollections);
-  $("#fixNamesBtn").addEventListener("click", runFixNames);
   renderUpdInfo();
 
   $("#exportBtn").addEventListener("click", () => {
@@ -1284,7 +1318,6 @@ function renderUpdInfo() {
   set("updOtt", u.ott);
   set("updRating", u.rating);
   set("updCollection", u.collection);
-  set("updNames", u.names);
 }
 
 /* ---------- 일괄 정보 채우기 ---------- */
@@ -1559,12 +1592,13 @@ async function runRefreshCollections() {
    지금 데이터에는 사람 id가 없으므로(이름만 저장됨) 작품별 크레딧을 다시 받아 id를 얻고,
    한글이 없는 이름만 /person/{id}의 also_known_as에서 한글 표기를 찾는다.
    사람 조회 결과는 캐시하므로 같은 배우를 여러 번 부르지 않는다. */
-async function runFixNames() {
+async function runFixNames(list) {
   if (_enriching) { toast("이미 진행 중입니다"); return; }
   if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
 
-  const targets = State.items.filter(i => i.tmdbId);
-  if (!targets.length) { toast("갱신할 항목이 없습니다", "success"); return; }
+  // 목록 탭의 "이름 영문" 칩에서 부르면 그 목록만 처리한다
+  const targets = (list || State.items).filter(i => i.tmdbId && needsKoName(i));
+  if (!targets.length) { toast("바꿀 이름이 없습니다", "success"); return; }
   if (!confirm(
     `${targets.length}개 항목의 배우·감독 이름을 한글 표기로 바꿉니다.\n` +
     `한글 표기가 TMDB에 없는 사람(주로 외국 배우)은 그대로 둡니다.\n` +

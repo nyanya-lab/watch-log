@@ -82,6 +82,7 @@ body {
 .wl-chip-season i { color: #e0700f; }
 .wl-chip-danger i { color: #dc4444; }
 .wl-chip-rate i { color: #e0567f; }
+.wl-chip-name i { color: #2f7d8c; }
 
 /* ===== 공통 컴포넌트 =====
    버튼·모달·패널의 인라인 클래스가 파일마다 흩어져 있어 톤이 어긋났다.

@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260803f">
+<link rel="stylesheet" href="style.css?v=20260803g">
 </head>
 <body>
 
@@ -87,6 +87,9 @@
           <button id="quickRateBtn" class="wl-chip wl-chip-rate" title="별점 없는 기록을 한 장씩 넘기며 빠르게 입력">
             <i class="fa-solid fa-heart"></i>별점 채우기 <span id="quickRateCount">0</span>개
           </button>
+          <button id="engNameBtn" class="wl-chip wl-chip-name" title="배우·감독 이름이 영문으로 남아 있는 기록">
+            <i class="fa-solid fa-language"></i>이름 영문 <span id="engNameCount">0</span>개
+          </button>
         </div>
         <span id="resultCount" class="text-sm font-medium text-slate-500"></span>
       </div>
@@ -98,6 +101,15 @@
         <span id="autoFixMsg" class="flex-1 min-w-0"></span>
         <button id="autoFixBtn" class="btn btn-sm btn-primary shrink-0">
           <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>자동으로 고치기
+        </button>
+      </div>
+
+      <!-- 이름 영문 목록을 볼 때 뜨는 안내 -->
+      <div id="nameFixBar" class="hidden flex items-center gap-3 flex-wrap text-sm font-semibold rounded-lg px-3 py-2.5 mb-3"
+           style="background:#eef3e7;color:#3b6d11">
+        <span id="nameFixMsg" class="flex-1 min-w-0"></span>
+        <button id="nameFixBtn" class="btn btn-sm btn-primary shrink-0">
+          <i class="fa-solid fa-language mr-1"></i>한글 표기 가져오기
         </button>
       </div>
 
@@ -216,12 +228,6 @@
               <i class="fa-solid fa-layer-group mr-1"></i>시리즈 정보 가져오기
             </button>
             <span id="updCollection" class="text-xs font-medium text-slate-400"></span>
-          </div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <button id="fixNamesBtn" class="btn btn-ghost shrink-0">
-              <i class="fa-solid fa-language mr-1"></i>배우·감독 이름 한글로
-            </button>
-            <span id="updNames" class="text-xs font-medium text-slate-400"></span>
           </div>
         </div>
         <p class="text-xs text-slate-400 mt-2">OTT·평점은 시간이 지나면 바뀝니다. 위 버튼으로 그 정보만 최신화할 수 있어요.<br>
@@ -541,11 +547,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260803f"></script>
-<script src="core.js?v=20260803f"></script>
-<script src="tmdb.js?v=20260803f"></script>
-<script src="watchlog.js?v=20260803f"></script>
-<script src="discover.js?v=20260803f"></script>
-<script src="stats.js?v=20260803f"></script>
+<script src="seed-data.js?v=20260803g"></script>
+<script src="core.js?v=20260803g"></script>
+<script src="tmdb.js?v=20260803g"></script>
+<script src="watchlog.js?v=20260803g"></script>
+<script src="discover.js?v=20260803g"></script>
+<script src="stats.js?v=20260803g"></script>
 </body>
 </html>
