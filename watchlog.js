@@ -1428,6 +1428,7 @@ async function runAutoRematch() {
       const newId = target[0];
       if (newId === t.item.tmdbId) continue;         // 이미 맞음
       const d = await tmdbDetail(newId, "movie");
+      await applyKoreanNames(d);          // 재매칭으로 갈아끼울 때도 한글 이름으로
       plan.push({ item: t.item, want: t.want, detail: d });
       await new Promise(r => setTimeout(r, 220));
     }

@@ -225,7 +225,11 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
   앞으로는 `tmdbDetail`이 `cast[].id`·`directorId`를 같이 주므로 재조회가 필요 없다.
 - 사람 조회 결과는 `watchlog_person_ko`에 캐시. **한글 표기가 없는 사람은 `""`로 캐시**해 재조회를 막는다
   (외국 배우 대부분이 여기 해당). 조회 실패(`null`)는 캐시하지 않는다.
-- 이미 한글인 이름은 건드리지 않는다.
+- 이미 한글인 이름은 건드리지 않는다 (조회조차 하지 않는다).
+- **TMDB에서 배우·감독을 받아오는 모든 경로가 `applyKoreanNames(d)`를 거친다** —
+  `selectTmdb`(새로 등록·수정), `tmdbAutoMatch`(일괄 채우기), `runAutoRematch`(시리즈 재매칭).
+  한 군데라도 빠뜨리면 **설정에서 정리해도 새로 등록한 작품이 다시 영문으로 들어온다.**
+  cast/director를 저장하는 곳은 이 셋뿐이니 새 경로를 만들면 여기도 걸어야 한다.
 
 평점만 갱신 (`runRefreshRatings`): `voteAverage`만 `tmdbDetail`로 다시 조회.
 각 갱신 버튼 옆에 최근 실행 시각 표시 (`LS_UPD`=`watchlog_updated_at`, `markUpd`/`renderUpdInfo`).

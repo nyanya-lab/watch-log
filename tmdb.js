@@ -312,6 +312,37 @@ async function tmdbPersonKoreanName(personId) {
   } catch { return null; }
 }
 
+/* tmdbDetail 결과의 배우·감독 이름을 한글 표기로 바꾼다 (있을 때만).
+   TMDB 정보를 받아오는 **모든 경로**에서 이걸 거쳐야 한다 —
+   안 그러면 설정에서 한 번 정리해도 새로 등록하는 작품은 다시 영문으로 들어온다.
+   캐시가 있어 이미 조회한 사람은 호출이 없다. */
+async function applyKoreanNames(d) {
+  if (!d) return d;
+  const cache = getPersonCache();
+  let touched = false;
+
+  const ko = async (id, cur) => {
+    if (!id || HANGUL.test(cur || "")) return null;
+    if (Object.prototype.hasOwnProperty.call(cache, id)) return cache[id] || null;
+    const v = await tmdbPersonKoreanName(id);
+    await new Promise(r => setTimeout(r, 150));
+    if (v === null) return null;          // 조회 실패는 캐시하지 않음
+    cache[id] = v;
+    touched = true;
+    return v || null;
+  };
+
+  for (const c of (d.cast || [])) {
+    const v = await ko(c.id, c.name);
+    if (v) c.name = v;
+  }
+  const dv = await ko(d.directorId, d.director);
+  if (dv) d.director = dv;
+
+  if (touched) savePersonCache(cache);
+  return d;
+}
+
 /* ---------- 시리즈(컬렉션) 상세 ----------
    컬렉션에 속한 작품들을 개봉일 순으로 정렬해 "몇 번째 편"을 계산할 수 있게 한다.
    같은 컬렉션을 여러 번 조회하지 않도록 캐시. */
@@ -402,6 +433,7 @@ async function tmdbAutoMatch(title, hintType) {
   }
   const detail = await tmdbDetail(best.tmdbId, best.mediaType);
   detail.otts = await tmdbProviders(best.tmdbId, best.mediaType);
+  await applyKoreanNames(detail);      // 일괄 채우기도 한글 이름으로
   return detail;
 }
 
@@ -471,6 +503,7 @@ async function selectTmdb(item) {
   try {
     const d = await tmdbDetail(item.tmdbId, item.mediaType);
     d.otts = await tmdbProviders(item.tmdbId, item.mediaType);
+    await applyKoreanNames(d);           // 새로 등록·수정할 때도 한글 이름으로
 
     // 시리즈에 속하면 "몇 번째 편"까지 등록 시점에 채운다
     if (d.collectionId) {
