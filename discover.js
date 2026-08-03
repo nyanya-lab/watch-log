@@ -401,9 +401,13 @@ function movieContinueList() {
     const missing = released.filter(p => !seenId.has(p.tmdbId) && !seenNo.has(p.no));
     if (!missing.length) return;
 
+    /* 본 편 번호. 1편부터 차례로 본 게 아니라 중간부터 봤을 수도 있어서,
+       개수("3편 봄")만으로는 뭘 봤는지 알 수 없다. TV 카드와 같이 번호를 보여준다. */
+    const seenNos = released.filter(p => seenId.has(p.tmdbId) || seenNo.has(p.no)).map(p => p.no);
+
     const main = recs.slice().sort((a, b) => dkey(b).localeCompare(dkey(a)))[0];
     out.push({
-      kind: "movie", collectionId: cid, info, recs, main, missing,
+      kind: "movie", collectionId: cid, info, recs, main, missing, seenNos,
       watched: recs.length,
       upcoming: info.parts.length - released.length,   // 아직 안 나온 편 수 (안내용)
       sortKey: dkey(main)
@@ -738,10 +742,13 @@ function renderDcNext() {
       voteAverage: null,
       flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${p.no}편 안 봄</span>`,
       note: `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>${esc(c.info.name)} ${p.no}편</span>
-             <span class="badge badge-type">${c.watched}편 봄</span>
+             <span class="badge badge-type">본 편 ${c.seenNos.length ? c.seenNos.map(n => "S" + n).join("·") : `${c.watched}편`}</span>
              ${c.upcoming ? `<span class="badge badge-genre">미개봉 ${c.upcoming}편 제외</span>` : ""}`,
       actions: [
         { act: "add", label: "기록하기", icon: "fa-plus", cls: "dc-btn-main" },
+        /* 이 카드는 "안 본 편"이라 내 기록이 없다. 그래서 같은 시리즈에서
+           가장 최근에 본 편의 기록을 연다 (TV 카드의 [내 기록]과 같은 동작). */
+        { act: "open", id: c.main.id, label: "내 기록", icon: "fa-clock-rotate-left" },
         { act: "wish", label: isWished(p.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(p.tmdbId) ? "dc-btn-on" : "" },
         { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 이 목록에서 숨기기" }
