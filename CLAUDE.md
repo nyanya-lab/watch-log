@@ -157,7 +157,9 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 - `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
   영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
   정보라 서버 동기화는 안 함 (`getCollCache`/`saveCollInfo` in tmdb.js)
-- `watchlog_person_ko` — 사람 id → 한글 표기 캐시. `""`는 "한글 표기 없음"으로 확정된 값
+- `watchlog_person_ko` — 한글 표기 캐시. `""`는 "확인했지만 한글 표기 없음"으로 **확정된** 값.
+  키가 두 종류다: 숫자 = 사람 id, `"n:이름"` = **id를 못 구한 사람**.
+  id 없는 사람을 이름으로도 기억하지 않으면 "이름 영문" 목록에서 영원히 안 빠진다.
 - `watchlog_modified` — 마지막 수정 ISO 시각 (동기화 비교용)
 - `watchlog_is_seed` — 지금 로컬 데이터가 "부팅 때 자동으로 넣은 시드일 뿐"인지 (`"1"`).
   아래 **시드 사고** 참고. `saveLocal()`이 호출되면 지워진다(= 사용자가 실제로 뭔가 저장한 순간).
@@ -241,6 +243,9 @@ OTT만 갱신 (`runRefreshOtts`): 설정 탭 "OTT 정보만 갱신" 버튼. TMDB
 한글 표기는 `/person/{id}`의 **`also_known_as`**에 들어 있으므로 거기서 찾는다(`tmdbPersonKoreanName`).
 
 - 기존 데이터에는 **사람 id가 없어서**(이름만 저장) 작품별 크레딧을 다시 받아 id를 채운 뒤 조회한다.
+  저장된 이름이 지금 크레딧 목록에 없으면(배역 구성이 바뀐 경우) 매칭이 실패해 id를 못 구한다.
+  그때는 `tmdbFindPersonId`로 **이름이 정확히 일치하는** 사람을 찾아보고, 그래도 없으면
+  `"n:이름"` 키로 "확인함"을 남긴다 — 외국·신인 배우가 여기 해당하며, 이 표시가 없으면 계속 세어진다.
   앞으로는 `tmdbDetail`이 `cast[].id`·`directorId`를 같이 주므로 재조회가 필요 없다.
 - 사람 조회 결과는 `watchlog_person_ko`에 캐시. **한글 표기가 없는 사람은 `""`로 캐시**해 재조회를 막는다
   (외국 배우 대부분이 여기 해당). 조회 실패(`null`)는 캐시하지 않는다.

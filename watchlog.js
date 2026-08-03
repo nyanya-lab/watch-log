@@ -25,9 +25,13 @@ function needsSeason(i) {
 function needsKoName(i) {
   if (!i.tmdbId) return false;
   const cache = State._personKo || {};
-  const bad = (name, id) =>
-    !!name && !HANGUL.test(name) &&
-    !(id && Object.prototype.hasOwnProperty.call(cache, id) && cache[id] === "");
+  const settled = (k) => Object.prototype.hasOwnProperty.call(cache, k) && cache[k] === "";
+  const bad = (name, id) => {
+    if (!name || HANGUL.test(name)) return false;
+    if (id && settled(id)) return false;        // id로 "한글 표기 없음" 확인됨
+    if (settled(nameKey(name))) return false;   // id를 못 구했지만 이름으로 확인됨
+    return true;
+  };
   if (bad(i.director, i.directorId)) return true;
   return (i.cast || []).some(c => bad(c.name, c.id));
 }
@@ -1620,15 +1624,28 @@ async function runFixNames(list) {
   const cache = getPersonCache();
   let changed = 0, looked = 0, fail = 0;
 
-  /* 캐시 → 조회 순으로 한글 표기를 얻는다. ""는 "한글 표기 없음"으로 확정된 값 */
+  /* 캐시 → 조회 순으로 한글 표기를 얻는다. ""는 "한글 표기 없음"으로 확정된 값.
+     id가 없으면 이름으로 한 번 찾아보고, 그래도 안 되면 **이름으로 "확인함"을 남긴다** —
+     안 그러면 그 사람은 영원히 "이름 영문" 목록에 남는다. */
   const koName = async (id, cur) => {
-    if (!id || HANGUL.test(cur)) return null;
-    if (Object.prototype.hasOwnProperty.call(cache, id)) return cache[id] || null;
-    const ko = await tmdbPersonKoreanName(id);
+    if (!cur || HANGUL.test(cur)) return null;
+    if (id && Object.prototype.hasOwnProperty.call(cache, id)) return cache[id] || null;
+    const nk = nameKey(cur);
+    if (!id && Object.prototype.hasOwnProperty.call(cache, nk)) return cache[nk] || null;
+
+    let pid = id;
+    if (!pid) {
+      pid = await tmdbFindPersonId(cur);
+      await new Promise(r => setTimeout(r, 200));
+      if (!pid) { cache[nk] = ""; return null; }   // 사람을 못 찾음 → 확인 완료로 표시
+    }
+
+    const ko = await tmdbPersonKoreanName(pid);
     await new Promise(r => setTimeout(r, 200));
     looked++;
-    if (ko === null) { fail++; return null; }   // 조회 실패는 캐시하지 않음
-    cache[id] = ko;
+    if (ko === null) { fail++; return null; }      // 조회 실패는 캐시하지 않음 (다음에 재시도)
+    cache[pid] = ko;
+    if (!id) cache[nk] = ko;                        // id를 새로 알아낸 경우 이름으로도 기록
     return ko || null;
   };
 

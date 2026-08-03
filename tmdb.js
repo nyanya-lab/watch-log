@@ -297,6 +297,25 @@ function savePersonCache(c) {
   try { localStorage.setItem(LS_PERSON, JSON.stringify(c)); } catch {}
 }
 
+/* 이름으로 사람을 찾는다 — 저장된 이름이 지금 크레딧 목록에 없어 id를 못 구했을 때의 대비책.
+   **이름이 정확히 일치하는 결과만** 받는다 (동명이인·유사검색으로 엉뚱한 사람을 물면 안 된다). */
+async function tmdbFindPersonId(name) {
+  const key = getTmdbKey();
+  if (!key || !name) return null;
+  try {
+    const url = `${TMDB_BASE}/search/person?api_key=${key}&language=ko-KR&query=${encodeURIComponent(name)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const d = await res.json();
+    const hit = (d.results || []).find(p => (p.name || "").trim() === name.trim());
+    return hit ? hit.id : null;
+  } catch { return null; }
+}
+
+/* 이름 자체로 "확인했지만 한글 표기를 못 찾음"을 기억하는 키.
+   id를 못 구한 사람은 id로 기억할 수 없어서, 안 그러면 목록에서 영원히 세어진다. */
+function nameKey(name) { return "n:" + String(name || "").trim(); }
+
 /* 한글 표기를 찾으면 그 문자열, 없으면 "" — 조회 실패는 null (캐시하지 않음) */
 async function tmdbPersonKoreanName(personId) {
   if (!personId) return null;
