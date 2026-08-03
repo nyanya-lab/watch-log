@@ -679,9 +679,7 @@ function renderHeaderCount() {
   // 시리즈 보기 버튼 활성 표시
   const sb = $("#seriesBtn");
   if (sb) {
-    sb.className = Filters.seriesView
-      ? "w-11 h-11 rounded-lg border border-amber-500 bg-amber-500 text-white transition shrink-0"
-      : "w-11 h-11 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-amber-50 hover:text-amber-600 transition shrink-0";
+    sb.className = Filters.seriesView ? "btn-icon on" : "btn-icon";
     sb.title = Filters.seriesView ? "전체 목록으로 돌아가기" : "시리즈만 모아보기";
   }
 
@@ -800,12 +798,12 @@ function openDetail(id) {
     ? `<div class="relative h-32 bg-cover bg-center" style="background-image:url('${i.backdrop}')">
          <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(255,255,255,1),rgba(255,255,255,0.1))"></div>
          <button onclick="document.getElementById('detailModal').classList.add('hidden')"
-           class="absolute top-3 right-3 w-8 h-8 rounded-lg bg-white/80 hover:bg-white text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+           class="modal-x absolute top-3 right-3" style="background:rgba(255,255,255,.85)"><i class="fa-solid fa-xmark"></i></button>
        </div>`
-    : `<div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+    : `<div class="modal-head">
          <h3 class="font-semibold text-slate-800">상세 정보</h3>
          <button onclick="document.getElementById('detailModal').classList.add('hidden')"
-           class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+           class="modal-x"><i class="fa-solid fa-xmark"></i></button>
        </div>`;
 
   $("#detailContent").innerHTML = `
@@ -861,10 +859,10 @@ function openDetail(id) {
         </div>
       </div>` : ""}
     </div>
-    <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
+    <div class="modal-foot">
       <div class="flex-1"></div>
       <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
-        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">
+        class="btn btn-primary">
         <i class="fa-solid fa-pen mr-1"></i>수정</button>
     </div>`;
 
@@ -923,9 +921,9 @@ function renderQuickRate() {
         <p class="font-semibold text-slate-800">${QuickRate.done}개에 별점을 넣었어요</p>
         ${left ? `<p class="text-sm text-slate-500 mt-1 font-medium">건너뛴 ${left}개는 다음에 또 뜹니다</p>` : ""}
         <div class="flex gap-2 justify-center mt-5">
-          ${left ? `<button id="qrRestart" class="px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
+          ${left ? `<button id="qrRestart" class="btn btn-ghost">
             <i class="fa-solid fa-rotate-left mr-1"></i>건너뛴 것 다시 보기</button>` : ""}
-          <button id="qrDone" class="px-5 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">닫기</button>
+          <button id="qrDone" class="btn btn-primary">닫기</button>
         </div>
       </div>`;
     $("#qrDone").addEventListener("click", closeQuickRate);
@@ -977,10 +975,10 @@ function renderQuickRate() {
     </div>
 
     <div class="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100">
-      <button id="qrPrev" class="px-3.5 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 ${QuickRate.idx === 0 ? "opacity-40 pointer-events-none" : ""}">
+      <button id="qrPrev" class="btn btn-sm btn-ghost ${QuickRate.idx === 0 ? "opacity-40 pointer-events-none" : ""}">
         <i class="fa-solid fa-arrow-left mr-1"></i>뒤로
       </button>
-      <button id="qrSkip" class="px-3.5 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">
+      <button id="qrSkip" class="btn btn-sm btn-ghost">
         건너뛰기<i class="fa-solid fa-arrow-right ml-1"></i>
       </button>
       <div class="flex-1"></div>

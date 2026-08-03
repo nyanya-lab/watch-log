@@ -925,12 +925,12 @@ function renderDcDetail(d, mediaType) {
     ? `<div class="relative h-32 bg-cover bg-center" style="background-image:url('${d.backdrop}')">
          <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(255,255,255,1),rgba(255,255,255,0.1))"></div>
          <button onclick="document.getElementById('dcModal').classList.add('hidden')"
-           class="absolute top-3 right-3 w-8 h-8 rounded-lg bg-white/80 hover:bg-white text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+           class="modal-x absolute top-3 right-3" style="background:rgba(255,255,255,.85)"><i class="fa-solid fa-xmark"></i></button>
        </div>`
-    : `<div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+    : `<div class="modal-head">
          <h3 class="font-semibold text-slate-800">작품 정보</h3>
          <button onclick="document.getElementById('dcModal').classList.add('hidden')"
-           class="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button>
+           class="modal-x"><i class="fa-solid fa-xmark"></i></button>
        </div>`;
 
   const wished = isWished(d.tmdbId);
@@ -971,23 +971,23 @@ function renderDcDetail(d, mediaType) {
       ${seasonsHtml}
       ${castHtml}
     </div>
-    <div class="flex gap-2 px-5 py-4 border-t border-slate-200">
+    <div class="modal-foot">
       <button onclick="dcModalWish(${d.tmdbId},'${mediaType}')"
         class="px-4 py-2.5 rounded-lg border text-sm font-semibold ${wished
           ? "border-amber-400 bg-amber-50 text-amber-700"
-          : "border-slate-300 text-slate-700 hover:bg-slate-50"}">
+          : "btn-ghost"}">
         <i class="fa-solid fa-bookmark mr-1"></i>${wished ? "담아둠" : "보고싶어요"}
       </button>
       <button onclick="dcModalHide(${d.tmdbId},'${mediaType}')"
         class="px-3 py-2.5 rounded-lg border text-sm font-semibold ${isHidden(d.tmdbId)
           ? "border-slate-400 bg-slate-100 text-slate-600"
-          : "border-slate-300 text-slate-500 hover:bg-slate-50"}"
+          : "btn-ghost"}"
         title="${isHidden(d.tmdbId) ? "관심없음 해제" : "관심없음 — 추천에서 빼기"}">
         <i class="fa-solid fa-ban"></i>
       </button>
       <div class="flex-1"></div>
       <button onclick="document.getElementById('dcModal').classList.add('hidden'); addFromDiscover(${d.tmdbId},'${mediaType}')"
-        class="px-4 py-2.5 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">
+        class="btn btn-primary">
         <i class="fa-solid fa-plus mr-1"></i>시청 기록 추가
       </button>
     </div>`;

@@ -23,6 +23,18 @@ const LS_TMDB = "watchlog_tmdb_key";
 const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서버 데이터 경로 (이 기기에만 저장, 깃에는 없음)
 const LS_MODIFIED = "watchlog_modified";
 const LS_BACKUP = "watchlog_items_backup";
+/* 지금 로컬 데이터가 "부팅 때 자동으로 넣은 시드"일 뿐인지 표시.
+   시드는 사용자가 만든 기록이 아니므로 **절대 서버로 올리지 않는다.**
+   (이 표시가 없어서 실제 사고가 났다: 빈 기기에서 앱을 열면 시드 268개가 들어가고,
+    그 뒤 동기화 비밀번호를 넣으면 "로컬이 더 최신"으로 판정돼 서버의 진짜 기록을 덮어썼다.) */
+const LS_SEED = "watchlog_is_seed";
+
+/* 로컬 데이터가 아직 "시드일 뿐"인지 */
+function isSeedData() { return localStorage.getItem(LS_SEED) === "1"; }
+function markSeed(on) {
+  if (on) localStorage.setItem(LS_SEED, "1");
+  else localStorage.removeItem(LS_SEED);
+}
 
 /* 동기화 비밀번호 = 서버에서의 내 데이터 방 이름 */
 function getSyncPassword() {
@@ -103,7 +115,7 @@ function setSyncIcon(state) {
   };
   const [icon, color, title] = map[state] || map.idle;
   btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
-  btn.className = `w-9 h-9 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 transition ${color}`;
+  btn.className = `btn-icon ${color}`;
   btn.title = title;
 }
 
@@ -120,6 +132,8 @@ function saveLocal(skipCloud) {
     localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
     localStorage.setItem(LS_HIDE, JSON.stringify(State.hides));
     localStorage.setItem(LS_MODIFIED, new Date().toISOString());
+    // 사용자가 실제로 저장한 순간부터는 더 이상 "시드"가 아니다
+    markSeed(false);
   } catch (e) {
     console.error("로컬 저장 실패", e);
     toast("브라우저 저장 공간이 부족합니다", "error");
@@ -276,15 +290,31 @@ async function syncOnBoot() {
     const localMod = localStorage.getItem(LS_MODIFIED) || "";
     const localCount = State.items.length;
 
-    // 서버가 비어있음 → 로컬을 올림
+    // 서버가 비어있음 → 로컬을 올림 (시드는 제외)
     if (!d || !Array.isArray(d.items)) {
-      if (localCount) await autoPush();
+      if (localCount && !isSeedData()) await autoPush();
       else setSyncIcon("idle");
       return;
     }
 
     const serverMod = d.updatedAt || "";
     const serverCount = d.items.length;
+
+    /* 로컬이 시드일 뿐이면 시각과 무관하게 무조건 서버를 따른다.
+       시드는 부팅 때 자동으로 들어간 것이라 항상 "방금 수정됨"으로 보이는데,
+       그걸 최신으로 믿으면 서버의 진짜 기록을 덮어쓴다. */
+    if (isSeedData() && serverCount) {
+      State.items = d.items;
+      adoptLists(d);
+      localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+      localStorage.setItem(LS_MODIFIED, serverMod || new Date().toISOString());
+      markSeed(false);
+      applyFilters();
+      if (window.renderDiscover) renderDiscover();
+      setSyncIcon("saved");
+      toast(`서버에서 불러옴 (${State.items.length}개)`);
+      return;
+    }
 
     // 서버가 더 최신
     if (serverMod > localMod) {
@@ -308,8 +338,8 @@ async function syncOnBoot() {
       return;
     }
 
-    // 로컬이 더 최신
-    if (localMod > serverMod) { await autoPush(); return; }
+    // 로컬이 더 최신 — 단, 시드는 절대 올리지 않는다
+    if (localMod > serverMod && !isSeedData()) { await autoPush(); return; }
 
     setSyncIcon("saved");
   } catch (e) {
@@ -451,9 +481,11 @@ async function firstSyncAfterPw() {
       }
     }
 
-    // 이 기기 데이터를 새 방에 올림
-    if (State.items.length) { await autoPush(); toast(`이 기기 데이터 ${State.items.length}개를 올렸습니다`, "success"); }
-    else setSyncIcon("saved");
+    // 이 기기 데이터를 새 방에 올림 — 시드는 올리지 않는다
+    if (State.items.length && !isSeedData()) {
+      await autoPush();
+      toast(`이 기기 데이터 ${State.items.length}개를 올렸습니다`, "success");
+    } else setSyncIcon("saved");
   } catch (e) {
     console.error("첫 동기화 실패", e);
     setSyncIcon("error");
@@ -555,12 +587,23 @@ function bootApp() {
 
 async function bootSync() {
   await syncOnBoot();
-  if (State.items.length === 0 && window.SEED_DATA) {
-    State.items = window.SEED_DATA.map(x => ({ ...x, createdAt: new Date().toISOString() }));
-    applyFilters();
-    saveLocal();
-    toast(`노션 데이터 ${State.items.length}개를 불러왔습니다`);
+  if (State.items.length) return;
+  if (!window.SEED_DATA) return;
+
+  /* 동기화 비밀번호가 있는데 비어 있다면, 서버 조회가 실패했거나 방이 빈 것이다.
+     이때 시드를 넣으면 그게 "최신"으로 보여 서버의 진짜 기록을 덮어쓸 수 있으므로 넣지 않는다.
+     (필요하면 설정 → 노션 데이터 불러오기로 직접 넣을 수 있다) */
+  if (hasSyncPassword()) {
+    setSyncIcon("error");
+    toast("서버에서 데이터를 가져오지 못했습니다. 새로고침해 보세요", "error");
+    return;
   }
+
+  State.items = window.SEED_DATA.map(x => ({ ...x, createdAt: new Date().toISOString() }));
+  applyFilters();
+  saveLocal(true);     // 서버로 보내지 않음
+  markSeed(true);      // 아직 "시드일 뿐"이라고 표시 (saveLocal이 지우므로 그 뒤에)
+  toast(`노션 데이터 ${State.items.length}개를 불러왔습니다`);
 }
 
 document.addEventListener("DOMContentLoaded", bootApp);

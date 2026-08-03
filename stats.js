@@ -15,7 +15,17 @@ const PALETTE = [
   "#8fbf63", "#0ea5e9", "#eab308", "#f43f5e", "#22c55e"
 ];
 
+/* Chart.js는 캔버스에 글자를 직접 그리므로 CSS font-family를 물려받지 않는다.
+   기본값이 Helvetica라 차트 안 글씨만 딴 폰트로 나온다 → 여기서 맞춰준다. */
+function applyChartFont() {
+  if (!window.Chart) return;
+  Chart.defaults.font.family = "'Gowun Dodum', 'Pretendard Variable', Pretendard, sans-serif";
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = "#6f7468";
+}
+
 function renderStats() {
+  applyChartFont();
   destroyCharts();
   const items = State.items;
   const wrap = $("#tab-stats");

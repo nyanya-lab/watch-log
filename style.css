@@ -83,6 +83,79 @@ body {
 .wl-chip-danger i { color: #dc4444; }
 .wl-chip-rate i { color: #e0567f; }
 
+/* ===== 공통 컴포넌트 =====
+   버튼·모달·패널의 인라인 클래스가 파일마다 흩어져 있어 톤이 어긋났다.
+   테두리는 border 대신 inset box-shadow로 — 레이아웃 높이를 밀지 않아 정렬이 안 틀어진다. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px; font-weight: 600;
+  white-space: nowrap;
+  transition: background .12s, color .12s;
+}
+.btn i { margin-right: 6px; }
+.btn-sm { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
+.btn-primary { background: #4d7c2a; color: #fff; }
+.btn-primary:hover { background: #3b6d11; }
+.btn-ghost { background: #fff; color: #4f5c49; box-shadow: inset 0 0 0 1px #dfe5d8; }
+.btn-ghost:hover { background: #f2f5ee; }
+.btn-danger { background: #fff; color: #c0392b; box-shadow: inset 0 0 0 1px #f0c4bd; }
+.btn-danger:hover { background: #fdf2f0; }
+
+/* 아이콘만 있는 정사각 버튼 */
+.btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: 10px;
+  background: #fff; color: #5f6b57;
+  box-shadow: inset 0 0 0 1px #dfe5d8;
+  transition: background .12s, color .12s;
+}
+.btn-icon:hover { background: #f2f5ee; color: #3b6d11; }
+.btn-icon.on { background: #4d7c2a; color: #fff; box-shadow: none; }
+.btn-icon.on:hover { background: #3b6d11; color: #fff; }
+
+/* 입력 */
+.inp {
+  width: 100%; height: 44px; padding: 0 14px;
+  border-radius: 10px;
+  background: #fff; color: #2c3129;
+  box-shadow: inset 0 0 0 1px #dfe5d8;
+  font-size: 14px; outline: none;
+}
+.inp:focus { box-shadow: inset 0 0 0 1.5px #7bad48; }
+.inp::placeholder { color: #a3a89c; }
+
+/* 모달 */
+.modal-back {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(28,34,25,.45);
+  overflow-y: auto; padding: 16px;
+}
+.modal-card {
+  background: #fff; border-radius: 16px;
+  margin: 32px auto; overflow: hidden;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #eef1ea;
+}
+.modal-foot {
+  display: flex; gap: 8px; align-items: center;
+  padding: 14px 20px; border-top: 1px solid #eef1ea;
+}
+.modal-x {
+  width: 32px; height: 32px; border-radius: 8px;
+  color: #8a8a80; flex-shrink: 0;
+  transition: background .12s, color .12s;
+}
+.modal-x:hover { background: #f2f5ee; color: #2c3129; }
+
+/* 설정 탭 패널 */
+.panel { background: #fff; border-radius: 14px; padding: 20px; }
+.panel-desc { font-size: 13px; color: #8a8a80; line-height: 1.6; margin-bottom: 14px; }
+
 /* ===== 폼 ===== */
 .form-label {
   display: block;
