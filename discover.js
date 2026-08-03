@@ -441,11 +441,9 @@ function collsFailedCount() {
 
 /* 그 시리즈들의 편 정보를 받아온다 (시리즈당 1회) */
 let _partsFetching = false;
-async function runFetchCollParts(retryFailed) {
+async function runFetchCollParts() {
   if (_partsFetching) return;
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
-
-  if (retryFailed) clearCollFailures();
 
   const ids = collsNeedingParts();
   if (!ids.length) { toast("가져올 시리즈가 없습니다"); renderDiscover(); return; }
@@ -478,6 +476,136 @@ async function runFetchCollParts(retryFailed) {
     toast(`시리즈 ${ok}개의 편 정보를 가져왔습니다`, "success");
   }
   renderDiscover();
+}
+
+/* ---------- 없어진 시리즈 복구 ----------
+   TMDB에서 컬렉션이 삭제·병합되면 기록이 들고 있던 `collectionId`가 404가 된다.
+   이때 같은 요청을 "다시 시도"해봐야 구조적으로 영영 같은 404다 — 고쳐야 할 건
+   TMDB가 아니라 **내 기록이 들고 있는 번호**다. 그래서 그 작품의 상세를 다시 받아
+   지금의 컬렉션으로 갈아끼우고, 컬렉션에서 아예 빠졌으면 비운다.
+   별점·본 날짜·한줄평 같은 내 기록은 건드리지 않는다. */
+async function runFixDeadColls() {
+  if (_partsFetching) return;
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const cache = getCollCache();
+  const failedIds = [...new Set(State.items
+    .filter(i => i.type === "영화" && i.collectionId && cache[i.collectionId] && cache[i.collectionId].failed)
+    .map(i => String(i.collectionId)))];
+  if (!failedIds.length) { toast("고칠 시리즈가 없습니다"); renderDiscover(); return; }
+
+  const msg = $("#dcPartsMsg");
+  _partsFetching = true;
+  try {
+    /* 0) 먼저 컬렉션을 한 번 더 조회해 본다.
+       실패가 404(없어짐)가 아니라 일시적 네트워크 오류였을 수도 있는데,
+       그때 곧장 작품 연결을 고치러 가면 TMDB가 같은 id를 돌려줘서
+       "고칠 수 없다"는 엉뚱한 결론이 난다. 살아 있으면 여기서 그냥 끝난다. */
+    const dead = [];
+    let revived = 0;
+    for (let n = 0; n < failedIds.length; n++) {
+      msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>시리즈 확인 ${n + 1} / ${failedIds.length}...`;
+      try {
+        saveCollInfo(await tmdbCollection(failedIds[n]));
+        revived++;
+      } catch {
+        dead.push(failedIds[n]);
+      }
+      await new Promise(r => setTimeout(r, 240));
+    }
+
+    if (!dead.length) {
+      renderDiscover();
+      toast(`시리즈 ${revived}개의 편 정보를 가져왔습니다 (일시적 오류였어요)`, "success");
+      return;
+    }
+
+    const targets = State.items.filter(i =>
+      i.type === "영화" && i.collectionId && dead.includes(String(i.collectionId)));
+
+    // 1) 작품마다 지금의 컬렉션이 뭔지 다시 확인해 계획을 만든다
+    const plan = [];
+    for (let n = 0; n < targets.length; n++) {
+      const i = targets[n];
+      msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>작품 정보 다시 확인 ${n + 1} / ${targets.length} — ${esc(i.title)}`;
+      const p = { item: i, oldId: String(i.collectionId) };
+      if (!i.tmdbId) {
+        p.error = "TMDB 미등록";               // 다시 확인할 근거가 없다
+      } else {
+        try {
+          const d = await tmdbDetail(i.tmdbId, "movie");
+          p.newId = d.collectionId || null;
+          p.newName = d.collectionName || "";
+        } catch (e) { p.error = e.message; }
+        await new Promise(r => setTimeout(r, 240));
+      }
+      plan.push(p);
+    }
+
+    const change = plan.filter(p => !p.error && String(p.newId) !== p.oldId);
+    const same = plan.filter(p => !p.error && String(p.newId) === p.oldId);
+    const errs = plan.filter(p => p.error);
+
+    const revivedNote = revived ? ` (${revived}개는 다시 조회돼 해결됨)` : "";
+
+    if (!change.length) {
+      /* 작품 쪽도 여전히 없어진 컬렉션을 가리키는 경우 — 우리가 고칠 수 있는 게 없다.
+         조용히 넘기지 않고 그대로 알린다. */
+      toast(same.length
+        ? `TMDB가 아직 없어진 시리즈를 가리키고 있어 고칠 수 없습니다 (${same.length}개)${revivedNote}`
+        : `조회에 실패했습니다 (${errs.length}개)${revivedNote}`, "error");
+      renderDiscover();
+      return;
+    }
+
+    // 2) 확인 — 바뀔 것을 전부 보여준다
+    const lines = change.map(p => `· ${p.item.title} (${p.item.releaseYear || "?"}) → ` +
+      (p.newId ? `「${p.newName || "이름 없는 시리즈"}」로 다시 연결` : "시리즈 없음 (연결 비움)"));
+    const ok = confirm(
+      `TMDB에서 없어진 시리즈를 참조하던 기록 ${change.length}개를 고칩니다.\n` +
+      `시리즈 연결만 바뀌고 별점·본 날짜·한줄평은 그대로 유지됩니다.\n\n` +
+      lines.join("\n") +
+      (same.length ? `\n\n※ ${same.length}개는 TMDB가 아직 없어진 시리즈를 가리켜 그대로 둡니다.` : "") +
+      (errs.length ? `\n※ ${errs.length}개는 조회에 실패해 그대로 둡니다.` : "")
+    );
+    if (!ok) { toast("취소했습니다"); renderDiscover(); return; }
+
+    // 3) 적용
+    let done = 0;
+    for (let n = 0; n < change.length; n++) {
+      const p = change[n];
+      msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>고치는 중 ${n + 1} / ${change.length} — ${esc(p.item.title)}`;
+      if (p.newId) {
+        p.item.collectionId = p.newId;
+        p.item.collectionName = p.newName || "";
+        try {
+          const coll = await tmdbCollection(p.newId);
+          saveCollInfo(coll);
+          p.item.seriesNo = coll.order.get(p.item.tmdbId) || null;
+          p.item.seriesTotal = coll.total || null;
+        } catch { /* 편 정보는 안내바에서 다시 받으면 된다 */ }
+        await new Promise(r => setTimeout(r, 240));
+      } else {
+        p.item.collectionId = null;
+        p.item.collectionName = "";
+        p.item.seriesNo = null;
+        p.item.seriesTotal = null;
+      }
+      done++;
+    }
+
+    /* 이제 아무 기록도 참조하지 않는 실패 흔적은 치운다.
+       안 치우면 고쳐놓고도 안내바가 계속 뜬다. */
+    const used = new Set(State.items.filter(i => i.collectionId).map(i => String(i.collectionId)));
+    [...new Set(plan.map(p => p.oldId))].forEach(id => { if (!used.has(id)) dropCollCache(id); });
+
+    saveLocal();
+    applyFilters();
+    renderDiscover();
+    toast(`${done}개의 시리즈 연결을 고쳤습니다${revivedNote}`, "success");
+  } finally {
+    _partsFetching = false;
+  }
 }
 
 /* ---------- 카드 ---------- */
@@ -638,10 +766,12 @@ function renderDcNext() {
     btn.innerHTML = `<i class="fa-solid fa-layer-group mr-1"></i>시리즈 편 정보 가져오기`;
     btn.dataset.retry = "";
   } else if (failed) {
+    /* 같은 요청을 다시 보내봐야 영영 같은 404다 (TMDB에서 없어진 컬렉션).
+       그래서 "다시 시도"가 아니라 작품 쪽 시리즈 연결을 고치는 길을 준다. */
     $("#dcPartsMsg").innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i>영화 시리즈
-      <b>${failed}개</b>는 TMDB에서 편 정보를 찾지 못했어요 (없어진 컬렉션일 수 있어요).
-      그 시리즈만 안 본 편이 안 잡힙니다.`;
-    btn.innerHTML = `<i class="fa-solid fa-rotate-right mr-1"></i>다시 시도`;
+      <b>${failed}개</b>는 TMDB에서 없어졌어요 (삭제되거나 다른 시리즈로 합쳐진 경우).
+      그 시리즈만 안 본 편이 안 잡힙니다. 작품 정보를 다시 받아 <b>지금의 시리즈로 연결</b>할 수 있어요.`;
+    btn.innerHTML = `<i class="fa-solid fa-wrench mr-1"></i>시리즈 연결 고치기`;
     btn.dataset.retry = "1";
   }
 
@@ -1060,8 +1190,9 @@ function initDiscover() {
 
   /* 추천 */
   $("#dcRecoBtn").addEventListener("click", runReco);
+  /* 아직 안 가져온 게 있으면 가져오기, 실패만 남았으면 연결 고치기 */
   $("#dcPartsBtn").addEventListener("click", (e) =>
-    runFetchCollParts(e.currentTarget.dataset.retry === "1"));
+    e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
   $$(".dc-type").forEach(btn => {
     btn.addEventListener("click", () => {
       Discover.recoType = btn.dataset.type;

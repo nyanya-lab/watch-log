@@ -429,15 +429,17 @@ function writeCollCache(id, value) {
   } catch { /* 저장 공간 문제면 조용히 넘어간다 (캐시일 뿐) */ }
 }
 
-/* 실패로 기록된 컬렉션들을 지워서 다시 시도할 수 있게 한다 */
-function clearCollFailures() {
+/* 컬렉션 하나의 캐시(성공·실패 모두)를 지운다.
+   TMDB에서 사라진 컬렉션을 복구한 뒤, 아무 기록도 안 쓰게 된 흔적을 치우는 데 쓴다. */
+function dropCollCache(id) {
+  _collCache.delete(id);
+  _collCache.delete(Number(id));
   try {
     const c = getCollCache();
-    let n = 0;
-    Object.keys(c).forEach(k => { if (c[k] && c[k].failed) { delete c[k]; n++; } });
+    if (!(id in c)) return;
+    delete c[id];
     localStorage.setItem(LS_COLL, JSON.stringify(c));
-    return n;
-  } catch { return 0; }
+  } catch { /* 캐시일 뿐이라 조용히 넘어간다 */ }
 }
 
 /* 자동 매칭 (일괄 채우기용) */
