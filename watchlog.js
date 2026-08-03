@@ -1137,6 +1137,8 @@ function closeEdit() {
   $("#editModal").classList.add("hidden");
   State.editingId = null;
   State.selectedTmdb = null;
+  // 편집 중에 다른 기기의 변경이 왔다면 미뤄뒀다가 지금 받는다
+  if (window.flushPendingPull) flushPendingPull();
 }
 
 function saveItem() {

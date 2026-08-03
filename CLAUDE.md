@@ -199,6 +199,25 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 - 안전장치: 서버 데이터가 로컬의 50% 미만이면 confirm으로 확인
 - 헤더 구름 아이콘이 상태 표시 (idle/pending/saving/saved/error)
 
+### 실시간 동기화 (2026-08-03)
+
+예전에는 **서버를 페이지 열 때 한 번만 읽었다.** 그래서 폰이 열려 있는 동안 PC에서 고쳐도 폰은 몰랐고,
+그 상태에서 폰이 뭘 하나 고치면 **폰의 옛 문서 전체가 PC 변경분을 덮어썼다**(시드 사고와 같은 구조).
+
+- Firebase RTDB는 **REST로도 스트리밍을 지원**한다(`EventSource`, SDK 불필요).
+  `Access-Control-Allow-Origin: *`이라 브라우저에서 바로 붙는다.
+- **`updatedAt` 한 줄만 구독**한다(`startRealtime`). 전체 문서를 흘려보내면 저장할 때마다 수 MB가
+  오간다. 시각이 바뀌면 그때 평소처럼 전체를 `pullFromServer`로 받는다.
+- **에코 방지**: 받은 stamp가 내 `watchlog_modified` 이하면 무시한다 (내가 방금 올린 것).
+- **편집 중에는 미룬다**: 등록/수정 모달이 열려 있으면 `_pullPending`에 표시했다가 `closeEdit`에서 받는다.
+  안 그러면 입력하던 폼이 날아간다.
+- **탭 복귀 시 재확인**(`initVisibilitySync`): 폰은 백그라운드에서 스트림이 자주 끊긴다.
+  `visibilitychange`·`focus`에서 재연결 + 한 번 비교.
+- **덮어쓰기 방지**(`serverChangedBehindUs`): 올리기 직전에 서버 `updatedAt`이
+  `State.serverStamp`보다 새로우면 **올리지 않고** 알린다. 스트림이 끊겼던 동안의 변경을 놓칠 수 있어서,
+  실시간이 있어도 이 확인은 남겨둔다. 확인 자체가 실패하면(오프라인) 막지 않는다.
+- `State.serverStamp` — 마지막으로 알고 있는 서버 시각. 채택·저장할 때마다 갱신한다.
+
 디버깅용 전역 함수: `testConnection()`, `showStorage()`, `restoreBackup()`
 
 ## TMDB 연동

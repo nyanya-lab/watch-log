@@ -63,6 +63,7 @@ const State = {
   selectedTmdb: null,
   online: true,
   syncing: false,
+  serverStamp: "",   // 마지막으로 알고 있는 서버 updatedAt (덮어쓰기 방지용)
   autoSync: true
 };
 
@@ -162,11 +163,30 @@ function loadLocal() {
 }
 
 /* ---------- 서버 통신 (Realtime Database REST) ---------- */
+/* 서버에 내가 모르는 변경이 있는지 확인.
+   실시간 구독이 있어도 끊겨 있던 동안의 변경은 놓칠 수 있어서, 올리기 직전에 한 번 더 본다.
+   있으면 **덮어쓰지 않는다** — 조용히 덮는 게 8월 1일 사고의 본질이었다. */
+async function serverChangedBehindUs() {
+  try {
+    const d = await fetchServer();
+    if (!d || !d.updatedAt) return false;
+    const known = State.serverStamp || localStorage.getItem(LS_MODIFIED) || "";
+    return d.updatedAt > known;
+  } catch { return false; }   // 확인 실패는 막지 않는다 (오프라인에서도 저장은 되어야 함)
+}
+
 async function autoPush() {
   _syncTimer = null;
   if (State.syncing) return;
   const url = getDataUrl();
   if (!url) { setSyncIcon("local"); return; }   // 비밀번호 없음 → 로컬 전용
+
+  if (await serverChangedBehindUs()) {
+    setSyncIcon("error");
+    toast("다른 기기에서 먼저 저장했어요. 구름 아이콘을 눌러 확인하세요", "error");
+    return;
+  }
+
   State.syncing = true;
   setSyncIcon("saving");
   try {
@@ -182,6 +202,7 @@ async function autoPush() {
       })
     });
     if (!res.ok) throw new Error(describeHttp(res.status));
+    State.serverStamp = localStorage.getItem(LS_MODIFIED) || "";
     setSyncIcon("saved");
     State.lastError = "";
   } catch (e) {
@@ -205,6 +226,7 @@ async function pushToServer() {
   }
   State.syncing = true;
   setSyncIcon("saving");
+  const stamp = new Date().toISOString();
   try {
     const res = await fetch(url, {
       method: "PUT",
@@ -213,11 +235,13 @@ async function pushToServer() {
         items: State.items,
         wishes: State.wishes,
         hides: State.hides,
-        updatedAt: new Date().toISOString(),
+        updatedAt: stamp,
         count: State.items.length
       })
     });
     if (!res.ok) throw new Error(describeHttp(res.status));
+    localStorage.setItem(LS_MODIFIED, stamp);
+    State.serverStamp = stamp;
     setSyncIcon("saved");
     State.lastError = "";
     toast(`서버에 저장 완료 (${State.items.length}개)`, "success");
@@ -269,6 +293,7 @@ async function pullFromServer(silent) {
     adoptLists(d);
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_MODIFIED, d.updatedAt || new Date().toISOString());
+    State.serverStamp = d.updatedAt || "";
     setSyncIcon("saved");
     if (!silent) toast(`서버에서 불러옴 (${State.items.length}개)`, "success");
     return true;
@@ -308,6 +333,7 @@ async function syncOnBoot() {
       adoptLists(d);
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod || new Date().toISOString());
+      State.serverStamp = serverMod || "";
       markSeed(false);
       applyFilters();
       if (window.renderDiscover) renderDiscover();
@@ -331,6 +357,7 @@ async function syncOnBoot() {
       adoptLists(d);
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod);
+      State.serverStamp = serverMod;
       applyFilters();
       if (window.renderDiscover) renderDiscover();
       setSyncIcon("saved");
@@ -347,6 +374,89 @@ async function syncOnBoot() {
     setSyncIcon("error");
     toast("서버 연결 실패 — 이 기기에만 저장됩니다", "error");
   }
+}
+
+/* ============================================
+   실시간 동기화
+   Firebase Realtime Database는 REST로도 스트리밍을 지원한다(EventSource).
+   전체 문서를 흘려보내면 저장할 때마다 수 MB가 오가므로, **`updatedAt` 한 줄만 구독**하고
+   그게 바뀌면 그때 평소처럼 전체를 받아온다.
+
+   이게 없을 때의 문제: 서버를 페이지 열 때 한 번만 읽어서, 폰이 열려 있는 동안 PC에서 고치면
+   폰은 모른다. 그 상태로 폰에서 뭘 하나 고치면 폰의 옛 문서 전체가 PC 변경분을 덮어썼다. */
+let _es = null;
+let _pullPending = false;
+
+function realtimeUrl() {
+  const pw = getSyncPassword();
+  if (!pw) return null;
+  return `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${encodeURIComponent(pw)}/updatedAt.json`;
+}
+
+function startRealtime() {
+  stopRealtime();
+  const url = realtimeUrl();
+  if (!url || typeof EventSource === "undefined") return;
+  try {
+    _es = new EventSource(url);
+    _es.addEventListener("put", onRemoteStamp);
+    _es.addEventListener("patch", onRemoteStamp);
+    _es.onerror = () => { /* 끊기면 브라우저가 자동 재연결. 탭 복귀 시에도 한 번 확인한다 */ };
+  } catch (e) {
+    console.warn("실시간 동기화를 켜지 못했습니다", e);
+  }
+}
+
+function stopRealtime() {
+  if (_es) { try { _es.close(); } catch {} _es = null; }
+}
+
+/* 서버의 updatedAt이 바뀌었을 때 */
+function onRemoteStamp(e) {
+  let stamp = null;
+  try { stamp = (JSON.parse(e.data || "{}") || {}).data; } catch { return; }
+  if (!stamp) return;
+
+  // 내가 방금 올린 것이거나 이미 최신이면 받을 필요 없다 (에코 방지)
+  const localMod = localStorage.getItem(LS_MODIFIED) || "";
+  if (stamp <= localMod) return;
+
+  // 편집 중이면 폼이 날아가므로 미뤘다가 닫힐 때 받는다
+  const editing = $("#editModal") && !$("#editModal").classList.contains("hidden");
+  if (editing) { _pullPending = true; return; }
+
+  applyRemoteUpdate();
+}
+
+async function applyRemoteUpdate() {
+  _pullPending = false;
+  const ok = await pullFromServer(true);
+  if (!ok) return;
+  applyFilters();
+  if (window.renderDiscover) renderDiscover();
+  toast("다른 기기의 변경을 받아왔습니다");
+}
+
+/* 편집을 끝냈을 때 밀어둔 갱신이 있으면 그때 받는다 */
+function flushPendingPull() {
+  if (_pullPending) applyRemoteUpdate();
+}
+window.flushPendingPull = flushPendingPull;
+
+/* 탭으로 돌아오면 한 번 확인 — 폰은 백그라운드에서 스트림이 끊기는 일이 잦다 */
+function initVisibilitySync() {
+  const check = async () => {
+    if (document.visibilityState !== "visible") return;
+    if (!hasSyncPassword()) return;
+    startRealtime();                       // 끊겼으면 다시 연결
+    try {
+      const d = await fetchServer();
+      const localMod = localStorage.getItem(LS_MODIFIED) || "";
+      if (d && d.updatedAt && d.updatedAt > localMod) await applyRemoteUpdate();
+    } catch { /* 네트워크가 없으면 조용히 넘어간다 */ }
+  };
+  document.addEventListener("visibilitychange", check);
+  window.addEventListener("focus", check);
 }
 
 /* 저장 대기 중 페이지 닫기 방지 */
@@ -443,6 +553,7 @@ async function saveSyncPw() {
   await firstSyncAfterPw();
   applyFilters();
   updateSyncPwStatus();
+  startRealtime();          // 방이 바뀌었으니 구독도 새 경로로
 }
 
 /* 비밀번호를 처음(또는 새로) 설정한 직후의 동기화 처리.
@@ -575,6 +686,7 @@ function bootApp() {
 
   initTabs();
   initEscapeKey();
+  initVisibilitySync();
   initWatchlog();
   initTmdb();
   initDiscover();
@@ -587,6 +699,7 @@ function bootApp() {
 
 async function bootSync() {
   await syncOnBoot();
+  startRealtime();
   if (State.items.length) return;
   if (!window.SEED_DATA) return;
 
