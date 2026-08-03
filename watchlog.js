@@ -738,26 +738,28 @@ function openDetail(id) {
   const seasons = seasonsOf(i);
   const siblings = seasons.filter(s => s.id !== i.id);
 
-  const reviewBox = (s) => s.review
-    ? `<div class="mt-2 p-3 rounded-lg border" style="background:#fdf6e3;border-color:#fde68a">
-         <div class="text-xs font-semibold text-slate-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i>한줄평</div>
-         <div class="text-sm text-slate-700 leading-relaxed">${esc(s.review)}</div></div>`
-    : "";
-
-  const recordRows = (s) => `
-    <div class="flex justify-between"><span class="text-slate-500 font-medium">처음 본 날</span>
-      <span class="font-semibold text-slate-700">${fmtRange(s.startDate, s.endDate) || "-"}</span></div>
-    ${s.lastWatchStart ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">마지막 시청</span>
-      <span class="font-semibold text-slate-700">${fmtRange(s.lastWatchStart, s.lastWatchEnd)}</span></div>` : ""}
-    <div class="flex justify-between"><span class="text-slate-500 font-medium">시청 횟수</span>
-      <span class="font-semibold text-slate-700">${s.watchCount || 1}회</span></div>`;
-
-  /* 상세는 이 기록 하나만 보여준다. 같은 시리즈의 다른 편은 아래 "이 시리즈의 다른 편"으로 이동. */
-  const recordsHtml = `
-    <div class="space-y-2 text-sm border-t border-slate-100 pt-4">
-      ${recordRows(i)}
-    </div>
-    ${reviewBox(i)}`;
+  /* ---- 내 기록 블록 ----
+     별점·본 날짜·한줄평은 이 앱에서 유일하게 "내가 만든" 정보다.
+     예전에는 TMDB 정보(방영일·제작사)와 똑같은 label-value 줄로 섞여 있어 구분이 안 됐다.
+     하나의 면으로 묶고 맨 위에 두어, 모달을 열면 이게 먼저 읽히게 한다. */
+  const mineHtml = `
+    <div class="dt-mine">
+      <div class="dt-mine-top">
+        ${i.rating
+          ? `<div class="dt-rate">${hearts(i.rating, true)}<span class="dt-rate-max">/ 5</span></div>`
+          : `<button class="dt-rate-empty" onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')">
+               <i class="fa-regular fa-heart"></i>별점 매기기</button>`}
+        <div class="dt-when">
+          <div class="dt-when-main">${fmtRange(i.startDate, i.endDate) || "본 날짜 없음"}</div>
+          <div class="dt-when-sub">
+            ${(i.watchCount || 1) > 1 ? `${i.watchCount}번 봄` : "처음 본 날"}
+            ${i.lastWatchStart ? ` · 마지막 ${fmtRange(i.lastWatchStart, i.lastWatchEnd)}` : ""}
+          </div>
+        </div>
+      </div>
+      ${i.review && i.review.trim()
+        ? `<p class="dt-review">${esc(i.review)}</p>` : ""}
+    </div>`;
 
   /* 관람등급: 숫자만 저장돼 있어(15, 12, 19...) 회차와 헷갈리므로 "15세"로 풀어서 제목 옆에 표시 */
   const certLabel = (c) => {
@@ -768,10 +770,16 @@ function openDetail(id) {
     return s;
   };
 
-  const infoChips = [];
-  if (i.voteAverage) infoChips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>`);
-  if (i.runtime) infoChips.push(`<span class="badge badge-time"><i class="fa-solid fa-clock mr-1"></i>${i.runtime}분</span>`);
-  if (i.totalEpisodes) infoChips.push(`<span class="badge badge-time"><i class="fa-solid fa-list-ol mr-1"></i>총 ${i.totalEpisodes}화</span>`);
+  /* 작품 정보는 배지 대신 가운뎃점 텍스트 한 줄로 (카드에서 쓴 방식과 같다).
+     배지 9개가 세 줄로 흩어져 있던 게 "평평함"의 큰 원인이었다. */
+  const factLine = [
+    i.type,
+    i.country,
+    ...visibleGenres(i.genres),
+    i.runtime ? `${i.runtime}분` : "",
+    i.totalEpisodes ? `총 ${i.totalEpisodes}화` : "",
+    (i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear) || ""
+  ].filter(Boolean).join(" · ");
 
   /* 배우·감독 배지는 클릭하면 그 사람 작품만 조회된다 */
   const personBadge = (name, cls, title) =>
@@ -785,14 +793,14 @@ function openDetail(id) {
        </div>` : "";
 
   const castHtml = (i.cast || []).length
-    ? `<div class="mt-4 border-t border-slate-100 pt-4">
-         <div class="text-xs font-semibold text-slate-500 mb-2"><i class="fa-solid fa-users mr-1 text-pink-400"></i>출연진</div>
+    ? `<div class="dt-sec">
+         <div class="dt-sec-h"><i class="fa-solid fa-users mr-1 text-pink-400"></i>출연진</div>
          <div class="flex flex-wrap gap-1.5">
            ${i.cast.map(c => personBadge(c.name, "badge-cast", c.character ? c.character + " · " : "")).join("")}
          </div>
          ${directorHtml}
        </div>`
-    : (i.director ? `<div class="mt-4 border-t border-slate-100 pt-4">${directorHtml}</div>` : "");
+    : (i.director ? `<div class="dt-sec">${directorHtml}</div>` : "");
 
   const header = i.backdrop
     ? `<div class="relative h-32 bg-cover bg-center" style="background-image:url('${i.backdrop}')">
@@ -811,45 +819,42 @@ function openDetail(id) {
     <div class="p-5 ${i.backdrop ? "-mt-12 relative" : ""}">
       <div class="flex gap-4 mb-4">
         ${i.poster
-          ? `<img src="${i.poster}" class="w-28 rounded-lg object-cover self-start shadow-md" alt="">`
-          : `<div class="w-28 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
+          ? `<img src="${i.poster}" class="w-24 rounded-lg object-cover self-start" alt="">`
+          : `<div class="w-24 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
         <div class="flex-1 min-w-0 ${i.backdrop ? "pt-12" : ""}">
-          <h4 class="text-lg font-bold text-slate-800 leading-snug">
+          <h4 class="dt-title">
             ${esc(i.title)}
             ${i.cert ? `<span class="badge badge-cert align-middle ml-1">${esc(certLabel(i.cert))}</span>` : ""}
           </h4>
-          ${i.originalTitle && i.originalTitle !== i.title ? `<div class="text-xs text-slate-400 font-medium">${esc(i.originalTitle)}</div>` : ""}
-          ${i.rating ? `<div class="mt-1">${hearts(i.rating, true)}</div>` : ""}
+          ${i.originalTitle && i.originalTitle !== i.title ? `<div class="dt-orig">${esc(i.originalTitle)}</div>` : ""}
+          <div class="dt-facts">${esc(factLine)}</div>
           <div class="flex flex-wrap gap-1 mt-2">
             ${seriesLabel(i) ? `<span class="badge badge-season">
               ${i.collectionId ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
             </span>` : ""}
-            ${i.type ? `<span class="badge badge-type">${esc(i.type)}</span>` : ""}
-            ${i.country ? `<span class="badge badge-country">${esc(i.country)}</span>` : ""}
             ${ottBadges(i)}
+            ${i.voteAverage ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>` : ""}
           </div>
-          ${infoChips.length ? `<div class="flex flex-wrap gap-1 mt-1.5">${infoChips.join("")}</div>` : ""}
         </div>
       </div>
 
-      ${visibleGenres(i.genres).length ? `<div class="flex flex-wrap gap-1 mb-3">
-        ${visibleGenres(i.genres).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}</div>` : ""}
+      ${mineHtml}
 
-      ${i.overview ? `<p class="text-sm text-slate-600 leading-relaxed mb-4">${esc(i.overview)}</p>` : ""}
-
-      ${recordsHtml}
-
-      <div class="space-y-2 text-sm border-t border-slate-100 pt-4 mt-4">
-        ${(i.releaseDate || i.releaseYear) ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">${i.type === "영화" ? "개봉일" : "첫 방영일"}</span>
-          <span class="font-semibold text-slate-700">${i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear}</span></div>` : ""}
-        ${(i.companies || []).length ? `<div class="flex justify-between"><span class="text-slate-500 font-medium">제작사</span>
-          <span class="font-semibold text-slate-700 text-right">${esc(i.companies.join(", "))}</span></div>` : ""}
-      </div>
+      ${i.overview ? `<div class="dt-sec">
+        <p class="dt-overview" id="dtOverview">${esc(i.overview)}</p>
+        <button class="dt-more" onclick="this.previousElementSibling.classList.toggle('open');
+          this.textContent = this.previousElementSibling.classList.contains('open') ? '접기' : '더 보기';">더 보기</button>
+      </div>` : ""}
 
       ${castHtml}
 
-      ${siblings.length ? `<div class="mt-4 border-t border-slate-100 pt-4">
-        <div class="text-xs font-semibold text-slate-500 mb-2">
+      ${(i.companies || []).length ? `<div class="dt-sec">
+        <div class="dt-sec-h"><i class="fa-solid fa-building mr-1 text-slate-400"></i>제작사</div>
+        <div class="dt-facts" style="margin-top:0">${esc(i.companies.join(" · "))}</div>
+      </div>` : ""}
+
+      ${siblings.length ? `<div class="dt-sec">
+        <div class="dt-sec-h">
           <i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>이 시리즈의 다른 편 ${siblings.length}개
         </div>
         <div class="flex flex-wrap gap-1.5">
