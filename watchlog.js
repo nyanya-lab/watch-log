@@ -589,7 +589,12 @@ function applyFilters() {
     return true;
   });
 
-  const dkey = (i) => i.lastWatchStart || i.startDate || "0000-00-00";
+  /* 정렬용 날짜. 본 날짜가 없으면 개봉/방영일로 대신한다 —
+     `0000-00-00`으로 두면 날짜 없는 기록이 전부 목록 맨 끝에 몰린다.
+     **데이터에는 쓰지 않는다.** startDate에 개봉일을 넣으면 히트맵·월별 통계·올해 시청이
+     "본 적 없는 해"에 잡히고, 어느 게 진짜 기억인지 구분할 수 없게 된다. */
+  const dkey = (i) => i.lastWatchStart || i.startDate || i.releaseDate ||
+                      (i.releaseYear ? i.releaseYear + "-01-01" : "0000-00-00");
   if (F.sort === "date-desc") list.sort((a, b) => dkey(b).localeCompare(dkey(a)));
   else if (F.sort === "date-asc") list.sort((a, b) => dkey(a).localeCompare(dkey(b)));
   else if (F.sort === "title") list.sort((a, b) => (a.title || "").localeCompare(b.title || "", "ko"));
