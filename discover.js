@@ -658,7 +658,8 @@ function dcCardHtml(e) {
 /* 카드에서 바로 "지금 볼 수 있는 곳"을 찾는다.
    추천·이어보기 카드에는 OTT 배지가 없다 — 작품마다 별도 호출이 필요해서 60장을 그릴 때
    같이 붙이면 ~19초가 걸린다. 그래서 궁금한 카드만 눌러 1건씩 받는다.
-   상세 모달의 [OTT 찾기](`findOtt`)와 같은 조각을 그리고, 결과는 저장하지 않는다. */
+   상세 모달은 열 때마다 자동으로 받지만(`loadWatchInfo`) 거긴 한 번에 하나뿐이라 사정이 다르다.
+   같은 `watchInfoHtml` 조각을 그리고, 결과는 저장하지 않는다. */
 async function dcFindOtt(btn, tmdbId, mediaType, title) {
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
   const card = btn.closest(".dc-card");

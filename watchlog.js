@@ -85,7 +85,6 @@ function initWatchlog() {
   $("#cancelBtn").addEventListener("click", closeEdit);
   $("#saveBtn").addEventListener("click", saveItem);
   $("#deleteBtn").addEventListener("click", deleteItem);
-  $("#refreshTmdbBtn").addEventListener("click", refreshTmdbInEdit);
   $("#syncBtn").addEventListener("click", async () => { await pushToServer(); });
 
   $("#searchInput").addEventListener("input", debounce(() => {
@@ -886,7 +885,7 @@ function openDetail(id) {
             ${seriesLabel(i) ? `<span class="badge badge-season">
               ${i.collectionId ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
             </span>` : ""}
-            ${ottBadges(i)}
+            ${i.ott ? `<span class="badge badge-ott"><i class="fa-solid ${i.ott === "영화관" ? "fa-film" : "fa-user-check"} mr-1"></i>${esc(i.ott)}</span>` : ""}
             ${i.voteAverage ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>` : ""}
           </div>
         </div>
@@ -921,8 +920,8 @@ function openDetail(id) {
       <div id="dtWatch"></div>
     </div>
     <div class="modal-foot">
-      ${i.tmdbId ? `<button onclick="findOtt(this, '${i.id}')" class="btn btn-ghost">
-        <i class="fa-solid fa-tv mr-1"></i>OTT 찾기</button>` : ""}
+      ${i.tmdbId ? `<button onclick="refreshTmdbInDetail(this, '${i.id}')" class="btn btn-ghost">
+        <i class="fa-solid fa-rotate mr-1"></i>TMDB 새로고침</button>` : ""}
       <div class="flex-1"></div>
       <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
         class="btn btn-primary">
@@ -930,30 +929,83 @@ function openDetail(id) {
     </div>`;
 
   $("#detailModal").classList.remove("hidden");
+  loadWatchInfo(i);        // 지금 볼 수 있는 곳은 열자마자 받아 아래에 붙인다
 }
 
-/* ---------- 지금 볼 수 있는 곳 찾기 ----------
-   저장된 `otts`는 등록 시점의 정액제 목록이라 시간이 지나면 어긋난다. 이 버튼은 **지금** 값을
-   다시 받아 대여·구매까지 보여준다. 작품마다 별도 호출이 필요해서(카드 60장이면 ~19초)
-   자동으로 부르지 않고 눌렀을 때만 조회한다. 조회 결과는 저장하지 않는다 — 보여주기만 한다. */
-async function findOtt(btn, itemId) {
-  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+/* ---------- 지금 볼 수 있는 곳 (상세를 열면 자동으로) ----------
+   저장된 `otts`는 등록 시점의 정액제 목록이라 시간이 지나면 어긋난다. 그래서 상세를 열 때마다
+   **지금** 값을 다시 받아 대여·구매까지 아래에 붙인다. 상세는 한 번에 하나만 열리므로 호출도
+   1건이다 — 탐색 카드에서 버튼으로 두는 이유(60장이면 ~19초)가 여기엔 해당하지 않는다.
+   조회 결과는 저장하지 않는다. 보여주기만 한다. */
+let _watchReq = 0;
+async function loadWatchInfo(i) {
   const box = $("#dtWatch");
-  /* 제목까지 필요해서(가격 링크가 제목 검색이다) id로 기록을 찾아 쓴다 —
-     제목을 onclick 속성에 그대로 넣으면 따옴표가 든 제목에서 깨진다. */
-  const i = State.items.find(x => x.id === itemId);
-  if (!box || !i || !i.tmdbId) return;
+  if (!box || !i.tmdbId || !getTmdbKey()) return;
 
-  btn.disabled = true;
+  const my = ++_watchReq;         // 상세를 빠르게 옮겨 다닐 때 늦게 온 응답이 덮어쓰지 않도록
   box.innerHTML = `<div class="wi-box"><div class="wi-empty">
     <i class="fa-solid fa-spinner fa-spin mr-1"></i>볼 수 있는 곳 찾는 중...</div></div>`;
   try {
     const w = await tmdbWatchInfo(i.tmdbId, i.type === "영화" ? "movie" : "tv", i.title);
+    if (my !== _watchReq) return;
     box.innerHTML = `<div class="wi-box">${watchInfoHtml(w)}</div>`;
   } catch (e) {
-    box.innerHTML = `<div class="wi-box"><div class="wi-empty">조회 실패: ${esc(e.message)}</div></div>`;
-  } finally {
+    if (my !== _watchReq) return;
+    box.innerHTML = `<div class="wi-box"><div class="wi-empty">볼 수 있는 곳을 못 받았어요 — ${esc(e.message)}</div></div>`;
+  }
+}
+
+/* ---------- 상세에서 TMDB 정보 새로 받기 ----------
+   포스터·평점·OTT·출연진은 시간이 지나면 바뀌는데 저장된 값은 등록 시점 그대로다.
+   여기서는 **바로 갱신하고 저장한다**(사용자 선택) — 별점·본 날짜·한줄평·시청 횟수·시즌 같은
+   내 기록은 건드리지 않는다. 되돌리려면 콘솔 `restoreBackup()`. */
+async function refreshTmdbInDetail(btn, itemId) {
+  const i = State.items.find(x => x.id === itemId);
+  if (!i || !i.tmdbId) return;
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+
+  const mediaType = i.type === "영화" ? "movie" : "tv";
+  const before = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>갱신 중...`;
+  try {
+    const d = await tmdbDetail(i.tmdbId, mediaType);
+    d.otts = await tmdbProviders(i.tmdbId, mediaType);
+    await applyKoreanNames(d);
+
+    // 시리즈 편 번호까지 다시 맞춘다 (컬렉션이 바뀌었을 수 있다)
+    let coll = null;
+    if (d.collectionId) {
+      try { coll = await tmdbCollection(d.collectionId); saveCollInfo(coll); } catch { /* 편 번호는 없어도 갱신은 계속 */ }
+    }
+
+    Object.assign(i, {
+      title: d.title || i.title,
+      type: d.type || i.type,
+      country: d.country || i.country,
+      poster: d.poster, backdrop: d.backdrop,
+      genres: d.genres, overview: d.overview,
+      originalTitle: d.originalTitle,
+      releaseDate: d.releaseDate, releaseYear: d.releaseYear,
+      runtime: d.runtime, totalSeasons: d.totalSeasons, totalEpisodes: d.totalEpisodes,
+      cert: d.cert, voteAverage: d.voteAverage,
+      companies: d.companies, cast: d.cast, director: d.director,
+      otts: d.otts || [],
+      collectionId: d.collectionId || null,
+      collectionName: d.collectionName || "",
+      seriesNo: coll ? (coll.order.get(d.tmdbId) || null) : i.seriesNo,
+      seriesTotal: coll ? coll.total : i.seriesTotal
+    });
+
+    saveLocal();
+    applyFilters();
+    renderDiscover();
+    openDetail(i.id);              // 갱신된 값으로 상세를 다시 그린다
+    toast("TMDB 정보를 새로 받았습니다", "success");
+  } catch (e) {
     btn.disabled = false;
+    btn.innerHTML = before;
+    toast("갱신 실패: " + e.message, "error");
   }
 }
 
@@ -1161,8 +1213,6 @@ function openEdit(id) {
       $("#tmdbQuery").value = i.title || "";
     }
     $("#deleteBtn").classList.remove("hidden");
-    // TMDB에 연결된 기록만 새로 받을 수 있다
-    $("#refreshTmdbBtn").classList.toggle("hidden", !i.tmdbId);
   } else {
     $("#modalTitle").textContent = "새로 등록";
     ["fTitle", "fCountry", "fStart", "fEnd", "fReview", "fLastStart", "fLastEnd"]
@@ -1175,33 +1225,10 @@ function openEdit(id) {
     $("#rewatchToggle").checked = false;
     $("#rewatchFields").classList.add("hidden");
     $("#deleteBtn").classList.add("hidden");
-    $("#refreshTmdbBtn").classList.add("hidden");
   }
 
   updateStepperLabel("fCount");
   $("#editModal").classList.remove("hidden");
-}
-
-/* 수정창 — 같은 작품을 TMDB에서 다시 받아 폼을 최신값으로 되돌린다.
-   OTT·평점·포스터·출연진은 시간이 지나면 바뀌는데 저장된 값은 등록 시점 그대로다.
-   `selectTmdb`가 상세·OTT·한글 이름·컬렉션까지 한 번에 처리하므로 그대로 재사용한다.
-   제목·구분·국가까지 TMDB 값으로 덮어쓴다 — 저장을 눌러야 실제로 반영된다. */
-async function refreshTmdbInEdit() {
-  const i = State.items.find(x => x.id === State.editingId);
-  if (!i || !i.tmdbId) { toast("TMDB에 연결된 기록이 아닙니다", "error"); return; }
-  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
-
-  const btn = $("#refreshTmdbBtn");
-  btn.disabled = true;
-  State.selectedTmdb = null;
-  try {
-    await selectTmdb({ tmdbId: i.tmdbId, mediaType: i.type === "영화" ? "movie" : "tv" });
-    /* selectTmdb는 실패를 검색 결과칸에 그리고 삼킨다. 그래서 결과로 성패를 가린다. */
-    if (State.selectedTmdb) toast("TMDB 정보를 새로 받았습니다 — 저장을 눌러야 반영됩니다", "success");
-    else toast("정보를 받지 못했습니다", "error");
-  } finally {
-    btn.disabled = false;
-  }
 }
 
 function closeEdit() {
