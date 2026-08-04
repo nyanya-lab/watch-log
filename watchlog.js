@@ -921,8 +921,7 @@ function openDetail(id) {
       <div id="dtWatch"></div>
     </div>
     <div class="modal-foot">
-      ${i.tmdbId ? `<button onclick="findOtt(this, ${i.tmdbId}, '${i.type === "영화" ? "movie" : "tv"}')"
-        class="btn btn-ghost">
+      ${i.tmdbId ? `<button onclick="findOtt(this, '${i.id}')" class="btn btn-ghost">
         <i class="fa-solid fa-tv mr-1"></i>OTT 찾기</button>` : ""}
       <div class="flex-1"></div>
       <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
@@ -937,16 +936,19 @@ function openDetail(id) {
    저장된 `otts`는 등록 시점의 정액제 목록이라 시간이 지나면 어긋난다. 이 버튼은 **지금** 값을
    다시 받아 대여·구매까지 보여준다. 작품마다 별도 호출이 필요해서(카드 60장이면 ~19초)
    자동으로 부르지 않고 눌렀을 때만 조회한다. 조회 결과는 저장하지 않는다 — 보여주기만 한다. */
-async function findOtt(btn, tmdbId, mediaType) {
+async function findOtt(btn, itemId) {
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
   const box = $("#dtWatch");
-  if (!box) return;
+  /* 제목까지 필요해서(가격 링크가 제목 검색이다) id로 기록을 찾아 쓴다 —
+     제목을 onclick 속성에 그대로 넣으면 따옴표가 든 제목에서 깨진다. */
+  const i = State.items.find(x => x.id === itemId);
+  if (!box || !i || !i.tmdbId) return;
 
   btn.disabled = true;
   box.innerHTML = `<div class="wi-box"><div class="wi-empty">
     <i class="fa-solid fa-spinner fa-spin mr-1"></i>볼 수 있는 곳 찾는 중...</div></div>`;
   try {
-    const w = await tmdbWatchInfo(tmdbId, mediaType);
+    const w = await tmdbWatchInfo(i.tmdbId, i.type === "영화" ? "movie" : "tv", i.title);
     box.innerHTML = `<div class="wi-box">${watchInfoHtml(w)}</div>`;
   } catch (e) {
     box.innerHTML = `<div class="wi-box"><div class="wi-empty">조회 실패: ${esc(e.message)}</div></div>`;

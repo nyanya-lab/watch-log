@@ -659,7 +659,7 @@ function dcCardHtml(e) {
    추천·이어보기 카드에는 OTT 배지가 없다 — 작품마다 별도 호출이 필요해서 60장을 그릴 때
    같이 붙이면 ~19초가 걸린다. 그래서 궁금한 카드만 눌러 1건씩 받는다.
    상세 모달의 [OTT 찾기](`findOtt`)와 같은 조각을 그리고, 결과는 저장하지 않는다. */
-async function dcFindOtt(btn, tmdbId, mediaType) {
+async function dcFindOtt(btn, tmdbId, mediaType, title) {
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
   const card = btn.closest(".dc-card");
   const box = card && card.querySelector(".dc-watch");
@@ -669,7 +669,7 @@ async function dcFindOtt(btn, tmdbId, mediaType) {
   box.innerHTML = `<div class="wi-box"><div class="wi-empty">
     <i class="fa-solid fa-spinner fa-spin mr-1"></i>찾는 중...</div></div>`;
   try {
-    const w = await tmdbWatchInfo(+tmdbId, mediaType);
+    const w = await tmdbWatchInfo(+tmdbId, mediaType, title);
     box.innerHTML = `<div class="wi-box">${watchInfoHtml(w)}</div>`;
   } catch (e) {
     box.innerHTML = `<div class="wi-box"><div class="wi-empty">조회 실패: ${esc(e.message)}</div></div>`;
@@ -1255,7 +1255,7 @@ function initDiscover() {
     else if (act === "hide") dcHide(tid);
     else if (act === "unhide") { removeHide(+tid); toast("관심없음을 해제했습니다"); renderDiscover(); }
     else if (act === "open") openDetail(btn.dataset.id);
-    else if (act === "ott") dcFindOtt(btn, tid, entry ? entry.mediaType : "movie");
+    else if (act === "ott") dcFindOtt(btn, tid, entry ? entry.mediaType : "movie", entry ? entry.title : "");
     else if (act === "add") addFromDiscover(tid, entry ? entry.mediaType : "movie", btn.dataset.season);
   });
 

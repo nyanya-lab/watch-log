@@ -194,7 +194,7 @@ async function tmdbProviders(id, mediaType) {
    ⚠ TMDB는 **가격을 주지 않는다** — 제공사 이름·로고·id·표시순서가 전부다.
    TMDB 사이트에서 보이는 "대여 최저가"는 그 웹페이지가 따로 그리는 것이라
    우리가 쓸 수 있는 건 `link`(그 페이지 주소)뿐이다. */
-async function tmdbWatchInfo(id, mediaType) {
+async function tmdbWatchInfo(id, mediaType, title) {
   const key = getTmdbKey();
   const url = `${TMDB_BASE}/${mediaType}/${id}/watch/providers?api_key=${key}`;
   const res = await fetch(url);
@@ -215,10 +215,13 @@ async function tmdbWatchInfo(id, mediaType) {
     flatrate: names([...(kr.flatrate || []), ...(kr.free || []), ...(kr.ads || [])]),
     rent: names(kr.rent),
     buy: names(kr.buy),
-    /* 응답의 `kr.link`를 쓰지 않고 직접 조립한다 — 그 값을 그대로 열면 작품에 따라
-       TMDB 메인으로 튕기는 일이 있었다. 이 형식은 제목 슬러그 없이도 그 작품의
-       watch 페이지로 바로 가고, 거기서 제공사별 대여·구매 가격이 보인다. */
-    link: `https://www.themoviedb.org/${mediaType}/${id}/watch?locale=KR`
+    /* 가격은 JustWatch에서 본다 — TMDB 페이지도 결국 JustWatch 데이터를 받아 그리는 것이라
+       원본이 더 자세하다. 응답의 `kr.link`(TMDB 페이지)는 작품에 따라 메인으로 튕겼다.
+
+       작품 페이지 직링크(`/kr/영화/{영문슬러그}`) 대신 **검색**으로 보낸다. 슬러그는 영문 제목
+       기반이라 한국 영화나 동명 작품에서 우리가 조립하면 404가 난다. 검색은 제목이 안 걸려도
+       검색 페이지에는 도착하므로 거기서 바로 고쳐 찾을 수 있다(막다른 404가 아니다). */
+    link: title ? `https://www.justwatch.com/kr/검색?q=${encodeURIComponent(title)}` : ""
   };
 }
 
@@ -233,10 +236,10 @@ function watchInfoHtml(w) {
              + row("대여", w.rent, "badge-time")
              + row("구매", w.buy, "badge-genre");
 
-  /* 가격은 API로 안 오므로 TMDB 페이지로 넘긴다 */
+  /* 가격은 API로 안 오므로 JustWatch로 넘긴다 */
   const link = w.link
     ? `<div class="wi-link"><a href="${esc(w.link)}" target="_blank" rel="noopener">
-         <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>TMDB에서 가격 보기</a></div>`
+         <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>JustWatch에서 가격 보기</a></div>`
     : "";
 
   return body
