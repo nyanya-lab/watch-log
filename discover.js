@@ -741,8 +741,13 @@ function renderDcNext() {
       year: (p.releaseDate || "").slice(0, 4),
       voteAverage: null,
       flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${p.no}편 안 봄</span>`,
-      note: `<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>${esc(c.info.name)} ${p.no}편</span>
-             <span class="badge badge-type">본 편 ${c.seenNos.length ? c.seenNos.map(n => "S" + n).join("·") : `${c.watched}편`}</span>
+      /* 배지 구성을 TV 카드와 같게 맞춘다: 본 것 · 안 본 것 · 총 개수.
+         시리즈명과 미개봉은 영화에만 있는 정보라 앞뒤에 덧붙인다.
+         이 카드가 몇 편인지는 포스터 위 띠에 이미 있으므로 시리즈명만 둔다. */
+      note: `<span class="badge badge-genre"><i class="fa-solid fa-layer-group mr-1"></i>${esc(c.info.name)}</span>
+             <span class="badge badge-season">본 편 ${c.seenNos.length ? c.seenNos.map(n => "S" + n).join("·") : `${c.watched}편`}</span>
+             <span class="badge badge-cert">안 본 편 ${c.missing.map(m => "S" + m.no).join("·")}</span>
+             <span class="wl-meta ml-1">총 ${c.info.total}편</span>
              ${c.upcoming ? `<span class="badge badge-genre">미개봉 ${c.upcoming}편 제외</span>` : ""}`,
       actions: [
         { act: "add", label: "기록하기", icon: "fa-plus", cls: "dc-btn-main" },
