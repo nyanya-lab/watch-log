@@ -247,6 +247,28 @@ function watchInfoHtml(w) {
     : `<div class="wi-empty"><i class="fa-solid fa-circle-info mr-1"></i>지금 한국에서 볼 수 있는 곳이 없어요</div>` + link;
 }
 
+/* 조회해서 `box`에 그린다. 내 기록 상세와 탐색 미리보기가 열릴 때마다 부른다.
+   상세는 한 번에 하나뿐이라 호출도 1건이다(목록에 다 붙이면 60건이 된다).
+
+   순번을 **box마다** 따로 둔다 — 탐색 모달에서 [내 기록]으로 넘어가면 두 모달의 조회가
+   겹치는데, 공용 순번이면 늦게 시작한 쪽이 먼저 것을 취소해 "찾는 중..."에서 멈춘다. */
+async function renderWatchInto(box, id, mediaType, title) {
+  if (!box || !id || !getTmdbKey()) return;
+
+  const my = String(Date.now()) + ":" + Math.random();
+  box.dataset.req = my;
+  box.innerHTML = `<div class="wi-box"><div class="wi-empty">
+    <i class="fa-solid fa-spinner fa-spin mr-1"></i>볼 수 있는 곳 찾는 중...</div></div>`;
+  try {
+    const w = await tmdbWatchInfo(id, mediaType, title);
+    if (box.dataset.req !== my) return;      // 그 사이 다른 작품을 열었다
+    box.innerHTML = `<div class="wi-box">${watchInfoHtml(w)}</div>`;
+  } catch (e) {
+    if (box.dataset.req !== my) return;
+    box.innerHTML = `<div class="wi-box"><div class="wi-empty">볼 수 있는 곳을 못 받았어요 — ${esc(e.message)}</div></div>`;
+  }
+}
+
 /* 관람등급 (한국 기준 우선) */
 function extractCert(d, mediaType) {
   try {

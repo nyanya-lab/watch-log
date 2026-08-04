@@ -929,30 +929,8 @@ function openDetail(id) {
     </div>`;
 
   $("#detailModal").classList.remove("hidden");
-  loadWatchInfo(i);        // 지금 볼 수 있는 곳은 열자마자 받아 아래에 붙인다
-}
-
-/* ---------- 지금 볼 수 있는 곳 (상세를 열면 자동으로) ----------
-   저장된 `otts`는 등록 시점의 정액제 목록이라 시간이 지나면 어긋난다. 그래서 상세를 열 때마다
-   **지금** 값을 다시 받아 대여·구매까지 아래에 붙인다. 상세는 한 번에 하나만 열리므로 호출도
-   1건이다 — 탐색 카드에서 버튼으로 두는 이유(60장이면 ~19초)가 여기엔 해당하지 않는다.
-   조회 결과는 저장하지 않는다. 보여주기만 한다. */
-let _watchReq = 0;
-async function loadWatchInfo(i) {
-  const box = $("#dtWatch");
-  if (!box || !i.tmdbId || !getTmdbKey()) return;
-
-  const my = ++_watchReq;         // 상세를 빠르게 옮겨 다닐 때 늦게 온 응답이 덮어쓰지 않도록
-  box.innerHTML = `<div class="wi-box"><div class="wi-empty">
-    <i class="fa-solid fa-spinner fa-spin mr-1"></i>볼 수 있는 곳 찾는 중...</div></div>`;
-  try {
-    const w = await tmdbWatchInfo(i.tmdbId, i.type === "영화" ? "movie" : "tv", i.title);
-    if (my !== _watchReq) return;
-    box.innerHTML = `<div class="wi-box">${watchInfoHtml(w)}</div>`;
-  } catch (e) {
-    if (my !== _watchReq) return;
-    box.innerHTML = `<div class="wi-box"><div class="wi-empty">볼 수 있는 곳을 못 받았어요 — ${esc(e.message)}</div></div>`;
-  }
+  /* 저장된 `otts`는 등록 시점 값이라 시간이 지나면 어긋난다. 열자마자 지금 값을 받아 아래에 붙인다 */
+  renderWatchInto($("#dtWatch"), i.tmdbId, i.type === "영화" ? "movie" : "tv", i.title);
 }
 
 /* ---------- 상세에서 TMDB 정보 새로 받기 ----------
