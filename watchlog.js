@@ -1361,6 +1361,36 @@ function initSettings() {
     applyFilters();
     toast(`${State.items.length}개 불러왔습니다`, "success");
   });
+
+  $("#clearOttBtn").addEventListener("click", runClearOttField);
+}
+
+/* ---------- "내가 본 곳"(ott) 비우기 ----------
+   등록 폼의 옛 기본값 "넷플릭스"가 어디서 봤든 저장돼서, 넷플릭스에 없는 작품이
+   넷플릭스로 보였다. 스트리밍 목록은 TMDB(`otts`)가 채우므로 이 필드는 없어도 표시가 멀쩡하다.
+   **영화관만 남긴다** — TMDB가 절대 알 수 없는 정보라 지우면 되살릴 방법이 없다. */
+function runClearOttField() {
+  const targets = State.items.filter(i => i.ott && i.ott !== "영화관");
+  if (!targets.length) { toast("지울 값이 없습니다", "success"); return; }
+
+  // 뭐가 지워지는지 값별로 세어서 보여준다
+  const byVal = {};
+  targets.forEach(i => { byVal[i.ott] = (byVal[i.ott] || 0) + 1; });
+  const lines = Object.entries(byVal).sort((a, b) => b[1] - a[1]).map(([v, n]) => `· ${v} — ${n}개`);
+
+  const ok = confirm(
+    `"내가 본 곳"에 적힌 값을 기록 ${targets.length}개에서 지웁니다.\n` +
+    `영화관 기록과 TMDB가 가져온 스트리밍 목록은 그대로입니다.\n` +
+    `되돌리려면 콘솔에서 restoreBackup()\n\n` +
+    lines.join("\n")
+  );
+  if (!ok) { toast("취소했습니다"); return; }
+
+  targets.forEach(i => { i.ott = null; });
+  saveLocal();
+  applyFilters();
+  renderDiscover();
+  toast(`${targets.length}개에서 지웠습니다`, "success");
 }
 
 function updateKeyStatus() {
