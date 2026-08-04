@@ -215,7 +215,10 @@ async function tmdbWatchInfo(id, mediaType) {
     flatrate: names([...(kr.flatrate || []), ...(kr.free || []), ...(kr.ads || [])]),
     rent: names(kr.rent),
     buy: names(kr.buy),
-    link: kr.link || ""
+    /* 응답의 `kr.link`를 쓰지 않고 직접 조립한다 — 그 값을 그대로 열면 작품에 따라
+       TMDB 메인으로 튕기는 일이 있었다. 이 형식은 제목 슬러그 없이도 그 작품의
+       watch 페이지로 바로 가고, 거기서 제공사별 대여·구매 가격이 보인다. */
+    link: `https://www.themoviedb.org/${mediaType}/${id}/watch?locale=KR`
   };
 }
 
