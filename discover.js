@@ -662,8 +662,9 @@ function dcCardHtml(e) {
    같은 `watchInfoHtml` 조각을 그리고, 결과는 저장하지 않는다. */
 async function dcFindOtt(btn, tmdbId, mediaType, title) {
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+  /* 카드에서 눌렀으면 그 카드 안, 미리보기 모달에서 눌렀으면 모달 안에 그린다 */
   const card = btn.closest(".dc-card");
-  const box = card && card.querySelector(".dc-watch");
+  const box = card ? card.querySelector(".dc-watch") : $("#dcWatch");
   if (!box) return;
 
   btn.disabled = true;
@@ -1135,8 +1136,12 @@ function renderDcDetail(d, mediaType) {
 
       ${seasonsHtml}
       ${castHtml}
+      <div id="dcWatch"></div>
     </div>
     <div class="modal-foot">
+      <button onclick="dcModalFindOtt(this)" class="btn btn-ghost">
+        <i class="fa-solid fa-tv mr-1"></i>OTT 찾기
+      </button>
       <button onclick="dcModalWish(${d.tmdbId},'${mediaType}')"
         class="px-4 py-2.5 rounded-lg border text-sm font-semibold ${wished
           ? "border-amber-400 bg-amber-50 text-amber-700"
@@ -1159,6 +1164,14 @@ function renderDcDetail(d, mediaType) {
 
   // 모달에서 담기/빼기를 눌렀을 때 쓰려고 방금 조회한 정보를 들고 있는다
   Discover._detail = { ...d, mediaType };
+}
+
+/* 미리보기 모달의 [OTT 찾기] — 방금 조회해둔 정보(`Discover._detail`)에서 제목까지 가져온다.
+   제목을 onclick 속성에 그대로 넣으면 따옴표가 든 제목에서 깨진다. */
+function dcModalFindOtt(btn) {
+  const d = Discover._detail;
+  if (!d) return;
+  dcFindOtt(btn, d.tmdbId, d.mediaType, d.title);
 }
 
 function dcModalWish(tmdbId, mediaType) {
