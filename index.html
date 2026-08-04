@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260803m">
+<link rel="stylesheet" href="style.css?v=20260803n">
 </head>
 <body>
 
@@ -392,13 +392,19 @@
         <!-- 어디서 봤나요 — 스트리밍 목록은 TMDB가 자동으로 채우므로 영화관/기타만 직접 기록 -->
         <div class="sm:col-span-2">
           <label class="form-label"><i class="fa-solid fa-tv mr-1 text-emerald-400"></i>어디서 봤나요?</label>
-          <label class="flex items-center gap-2 text-sm font-semibold cursor-pointer px-3 py-2 rounded-lg w-fit" style="background:#f2f5ee;color:#4f5c49">
-            <input type="checkbox" id="fTheater" class="w-4 h-4 rounded"><i class="fa-solid fa-film text-slate-400"></i> 영화관에서 봤어요
-          </label>
-          <div id="ottWrap" class="mt-2">
-            <input type="text" id="fOtt" class="form-input" placeholder="기타 (직접 입력 — 비워도 됩니다)">
-            <div id="ottHint" class="hidden text-xs font-semibold text-emerald-600 mt-1.5"></div>
+          <div class="flex gap-2 flex-wrap">
+            <label class="flex items-center gap-2 text-sm font-semibold cursor-pointer px-3 py-2 rounded-lg w-fit" style="background:#f2f5ee;color:#4f5c49">
+              <input type="checkbox" id="fTheater" class="w-4 h-4 rounded"><i class="fa-solid fa-film text-slate-400"></i> 영화관에서 봤어요
+            </label>
+            <label class="flex items-center gap-2 text-sm font-semibold cursor-pointer px-3 py-2 rounded-lg w-fit" style="background:#f2f5ee;color:#4f5c49">
+              <input type="checkbox" id="fOttEtc" class="w-4 h-4 rounded"><i class="fa-solid fa-pen text-slate-400"></i> 기타 (직접 입력)
+            </label>
           </div>
+          <!-- 기타를 체크했을 때만 나타난다. 스트리밍은 TMDB(otts)가 채우므로 평소엔 적을 게 없다 -->
+          <div id="ottWrap" class="mt-2 hidden">
+            <input type="text" id="fOtt" class="form-input" placeholder="어디서 봤는지 (예: 비행기, DVD)">
+          </div>
+          <div id="ottHint" class="hidden text-xs font-semibold text-emerald-600 mt-1.5"></div>
         </div>
 
         <!-- 시즌은 TMDB 시즌 목록에서 고르기만 한다. 목록이 없는 작품(영화·단일시즌)은
@@ -551,11 +557,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260803m"></script>
-<script src="core.js?v=20260803m"></script>
-<script src="tmdb.js?v=20260803m"></script>
-<script src="watchlog.js?v=20260803m"></script>
-<script src="discover.js?v=20260803m"></script>
-<script src="stats.js?v=20260803m"></script>
+<script src="seed-data.js?v=20260803n"></script>
+<script src="core.js?v=20260803n"></script>
+<script src="tmdb.js?v=20260803n"></script>
+<script src="watchlog.js?v=20260803n"></script>
+<script src="discover.js?v=20260803n"></script>
+<script src="stats.js?v=20260803n"></script>
 </body>
 </html>

@@ -166,16 +166,16 @@ function initWatchlog() {
     });
   });
 
-  /* 영화관 체크박스 — 체크하면 기타 입력칸은 잠근다 */
+  /* 영화관 / 기타 체크박스 — `ott`는 값이 하나뿐이라 둘 중 하나만 켜진다.
+     둘 다 끄면 "직접 적을 게 없음"이고, 스트리밍 목록은 TMDB(`otts`)가 채운다. */
   $("#fTheater").addEventListener("change", e => {
-    const on = e.target.checked;
-    const ottWrap = $("#ottWrap");
-    if (on) {
-      $("#fOtt").value = "";
-      ottWrap.classList.add("opacity-40", "pointer-events-none");
-    } else {
-      ottWrap.classList.remove("opacity-40", "pointer-events-none");
-    }
+    if (e.target.checked) $("#fOttEtc").checked = false;
+    syncOttFields();
+  });
+  $("#fOttEtc").addEventListener("change", e => {
+    if (e.target.checked) $("#fTheater").checked = false;
+    syncOttFields();
+    if (e.target.checked) $("#fOtt").focus();
   });
 
   /* 재시청 토글 */
@@ -356,6 +356,15 @@ function ottList(i) {
 }
 function ottBadges(i) {
   return ottList(i).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join("");
+}
+
+/* 체크 상태에 맞춰 기타 입력칸을 보이거나 감춘다.
+   기타를 끄면 값도 비운다 — 안 비우면 **안 보이는 칸의 값이 그대로 저장된다.**
+   예전 기본값 "넷플릭스" 사고가 바로 그 구조였다. */
+function syncOttFields() {
+  const etc = $("#fOttEtc").checked;
+  $("#ottWrap").classList.toggle("hidden", !etc);
+  if (!etc) $("#fOtt").value = "";
 }
 
 /* ---------- OTT 옵션 세팅 (자동판별 후보 + 폴백) ---------- */
@@ -1100,7 +1109,8 @@ function openEdit(id) {
   $("#selectedInfo").classList.add("hidden");
   $("#tmdbSearchArea").classList.remove("hidden");
   $("#fTheater").checked = false;
-  $("#ottWrap").classList.remove("opacity-40", "pointer-events-none");
+  $("#fOttEtc").checked = false;
+  syncOttFields();
   $("#ottHint").classList.add("hidden");
   setOttOptions([], null);
   buildSeasonSelect(null);
@@ -1111,9 +1121,11 @@ function openEdit(id) {
     $("#fTitle").value = i.title || "";
     $("#fType").value = i.type || "영화";
     $("#fCountry").value = i.country || "";
+    /* 저장된 `ott`가 "영화관"이면 그 체크, 다른 값이 있으면 기타 체크 + 그 값을 칸에 */
     $("#fTheater").checked = (i.ott === "영화관");
-    $("#fOtt").value = (i.ott === "영화관") ? "" : (i.ott || "");
-    if (i.ott === "영화관") $("#ottWrap").classList.add("opacity-40", "pointer-events-none");
+    $("#fOttEtc").checked = !!(i.ott && i.ott !== "영화관");
+    $("#fOtt").value = (i.ott && i.ott !== "영화관") ? i.ott : "";
+    syncOttFields();
     $("#fCount").value = i.watchCount || 1;
     $("#fSeason").value = parseInt(String(i.season || "").replace(/\D/g, "")) || 0;
     $("#fStart").value = i.startDate || "";
@@ -1154,10 +1166,7 @@ function openEdit(id) {
     ["fTitle", "fCountry", "fStart", "fEnd", "fReview", "fLastStart", "fLastEnd"]
       .forEach(f => $("#" + f).value = "");
     $("#fType").value = "영화";
-    /* 이 칸은 "기타 (직접 입력)"이다. 예전 드롭다운 시절의 기본값 "넷플릭스"가 남아 있어서,
-       손대지 않고 저장하면 어디서 봤든 `ott="넷플릭스"`로 저장됐다. 스트리밍 목록은
-       TMDB(`otts`)가 채우므로 여기 기본값이 있으면 안 된다. */
-    $("#fOtt").value = "";
+    $("#fOtt").value = "";        // 기본값 없음 — 스트리밍 목록은 TMDB(otts)가 채운다
     $("#fCount").value = 1;
     $("#fSeason").value = 0;
     $("#fRating").value = "";
@@ -1211,7 +1220,9 @@ function saveItem() {
   const lastS = useRe ? ($("#fLastStart").value || null) : null;
   const lastE = useRe ? ($("#fLastEnd").value || lastS) : null;
   const seasonNum = parseInt($("#fSeason").value) || 0;
-  const ott = $("#fTheater").checked ? "영화관" : ($("#fOtt").value.trim() || null);
+  /* 둘 다 안 켰으면 "직접 적을 게 없음"(null) — 스트리밍은 TMDB `otts`가 맡는다 */
+  const ott = $("#fTheater").checked ? "영화관"
+            : ($("#fOttEtc").checked ? ($("#fOtt").value.trim() || null) : null);
 
   const base = {
     title,
