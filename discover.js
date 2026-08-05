@@ -7,7 +7,9 @@
    ============================================ */
 
 const Discover = {
-  view: "reco",      // reco=추천 | next=이어보기 | wish=보고싶어요 | search=검색 결과
+  view: "reco",      // reco=추천 | next=이어보기 | wish=보고싶어요 | search=검색 결과 | fr=시리즈
+  frKey: "mcu",      // 시리즈 뷰에서 보고 있는 프랜차이즈
+  frStory: false,    // 스토리 시간순으로 볼지 (기본은 개봉일 순)
   recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
   reco: null,        // 캐시된 추천 결과
   query: "",
@@ -612,6 +614,159 @@ async function runFixDeadColls() {
   }
 }
 
+/* ============================================
+   프랜차이즈 (얽힌 시리즈)
+
+   TMDB의 컬렉션은 **계층이 없다.** 영화 하나가 컬렉션 하나에만 속하고 그 위를 묶는 개념이
+   없어서, 아이언맨·토르·어벤져스 컬렉션은 서로 남남이다. 그래서 "MCU 전체"처럼 여러 컬렉션에
+   걸친 묶음은 **여기에 직접 적어야** 한다.
+
+   묶는 방법이 둘이다:
+     · `keyword`    — TMDB 키워드로 조회 (MCU는 `marvel cinematic universe (mcu)`가 실제로 있다).
+                      단 키워드는 커뮤니티가 붙이는 태그라 작품마다 제각각이다 —
+                      반지의 제왕엔 `tolkien`이 있는데 호빗엔 없어서 이 방법을 못 쓴다.
+     · `collections` — 컬렉션 id를 직접 나열. 키워드가 없는 시리즈는 이쪽.
+
+   ⚠ **시청 순서(스토리 시간순)는 TMDB에 없다.** 개봉일 순이 전부다. 그래서 스토리 순은
+   `storyOrder`에 **컬렉션 단위로만** 적는다("호빗 다음 반지"). 영화 하나하나 순서를 적으면
+   새 작품이 나올 때마다 어긋나지만, 컬렉션 순서는 그럴 일이 없다.
+   키워드로 묶은 프랜차이즈는 컬렉션이 없으니 스토리 순을 만들 수 없다(= 개봉일 순만).
+   ============================================ */
+const FRANCHISES = [
+  {
+    key: "mcu",
+    name: "마블 시네마틱 유니버스",
+    short: "마블",
+    icon: "fa-shield-halved",
+    keyword: 180547
+    // 키워드 조회라 컬렉션이 없다 → 스토리 순 없음(개봉일 순만)
+  },
+  {
+    key: "middleearth",
+    name: "미들어스",
+    short: "미들어스",
+    icon: "fa-ring",
+    collections: [119, 121938],      // 반지의 제왕 / 호빗
+    storyOrder: [121938, 119]        // 호빗(3차시대 이전) → 반지의 제왕
+  },
+  {
+    key: "wizarding",
+    name: "위저딩 월드",
+    short: "위저딩",
+    icon: "fa-wand-sparkles",
+    collections: [1241, 435259],     // 해리 포터 / 신비한 동물사전
+    storyOrder: [435259, 1241]       // 신비한 동물사전(1926~) → 해리 포터(1991~)
+  }
+];
+
+/* 조회 결과 캐시. TMDB로 다시 만들 수 있는 정보라 서버 동기화는 안 한다. */
+const LS_FR = "watchlog_franchises";
+
+function getFrCache() {
+  try { return JSON.parse(localStorage.getItem(LS_FR) || "{}"); }
+  catch { return {}; }
+}
+
+function saveFrCache(key, parts) {
+  try {
+    const c = getFrCache();
+    c[key] = { parts, updatedAt: new Date().toISOString() };
+    localStorage.setItem(LS_FR, JSON.stringify(c));
+  } catch { /* 캐시일 뿐이라 조용히 넘어간다 */ }
+}
+
+function franchiseOf(key) {
+  return FRANCHISES.find(f => f.key === key) || FRANCHISES[0];
+}
+
+/* 키워드로 묶은 프랜차이즈의 영화 목록.
+   다큐(장르 99)와 70분 미만을 빼서 `Marvel One-Shot` 단편·메이킹 다큐를 걸러낸다
+   (MCU 기준 82편 → 39편). 페이지가 여러 장이라 끝까지 받는다. */
+async function fetchByKeyword(keywordId) {
+  const key = getTmdbKey();
+  const out = [];
+  for (let page = 1; page <= 5; page++) {
+    const url = `${TMDB_BASE}/discover/movie?api_key=${key}&language=ko-KR`
+      + `&with_keywords=${keywordId}&without_genres=99&with_runtime.gte=70`
+      + `&sort_by=release_date.asc&page=${page}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`시리즈 조회 실패 (${res.status})`);
+    const d = await res.json();
+    (d.results || []).forEach(r => out.push({
+      tmdbId: r.id,
+      title: r.title || r.name || "",
+      poster: r.poster_path ? TMDB_IMG + r.poster_path : null,
+      releaseDate: r.release_date || "",
+      voteAverage: r.vote_average ? Math.round(r.vote_average * 10) / 10 : null,
+      collectionId: null
+    }));
+    if (page >= (d.total_pages || 1)) break;
+    await new Promise(r => setTimeout(r, 240));
+  }
+  return out;
+}
+
+/* 컬렉션들로 묶은 프랜차이즈의 영화 목록 */
+async function fetchByCollections(ids) {
+  const out = [];
+  for (const cid of ids) {
+    const coll = await tmdbCollection(cid);
+    saveCollInfo(coll);              // 이어보기가 쓰는 캐시도 겸사겸사 채운다
+    coll.parts.forEach(p => out.push({
+      tmdbId: p.tmdbId,
+      title: p.title,
+      poster: p.poster,
+      releaseDate: p.releaseDate,
+      voteAverage: null,
+      collectionId: cid
+    }));
+    await new Promise(r => setTimeout(r, 240));
+  }
+  return out;
+}
+
+let _frLoading = false;
+async function loadFranchise(key, force) {
+  const f = franchiseOf(key);
+  const cache = getFrCache();
+  if (!force && cache[key] && cache[key].parts) return cache[key].parts;
+  if (_frLoading) return null;
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return null; }
+
+  _frLoading = true;
+  const bar = $("#dcFrMsg");
+  if (bar) bar.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>${esc(f.name)} 목록을 받아오는 중...`;
+  try {
+    const parts = f.keyword
+      ? await fetchByKeyword(f.keyword)
+      : await fetchByCollections(f.collections);
+    saveFrCache(key, parts);
+    return parts;
+  } catch (e) {
+    toast("시리즈를 받지 못했습니다: " + e.message, "error");
+    return null;
+  } finally {
+    _frLoading = false;
+  }
+}
+
+/* 미개봉 편은 목록에서 뺀다 — 이어보기와 같은 이유로, 볼 수 없는 걸 "안 봤다"고 띄우지 않는다 */
+function frOrder(parts, f, story) {
+  const today = new Date().toISOString().slice(0, 10);
+  const list = parts.filter(p => p.releaseDate && p.releaseDate <= today);
+  const byDate = (a, b) => (a.releaseDate || "").localeCompare(b.releaseDate || "");
+
+  if (!story || !f.storyOrder) return list.slice().sort(byDate);
+
+  // 스토리 순 = storyOrder에 적힌 컬렉션 차례대로, 각 컬렉션 안에서는 개봉일 순
+  return list.slice().sort((a, b) => {
+    const ia = f.storyOrder.indexOf(a.collectionId);
+    const ib = f.storyOrder.indexOf(b.collectionId);
+    if (ia !== ib) return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    return byDate(a, b);
+  });
+}
+
 /* ---------- 카드 ---------- */
 /* e = { tmdbId, mediaType, title, poster, year, voteAverage, note, flag, actions[] } */
 function dcCardHtml(e) {
@@ -670,11 +825,13 @@ function renderDiscover() {
   updateDcNav();
   if (Discover.view !== "reco") $("#dcRecoBar").classList.add("hidden");
   if (Discover.view !== "next") $("#dcPartsBar").classList.add("hidden");
+  if (Discover.view !== "fr") $("#dcFrBar").classList.add("hidden");
 
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "search") return renderDcSearch();
   if (Discover.view === "wish") return renderDcWish();
   if (Discover.view === "hide") return renderDcHide();
+  if (Discover.view === "fr") return renderDcFranchise();
   return renderDcNext();
 }
 window.renderDiscover = renderDiscover;
@@ -791,6 +948,72 @@ function renderDcNext() {
     <i class="fa-solid fa-circle-check text-4xl mb-3"></i>
     <p class="font-medium">안 본 시즌·편이 없어요</p>
     <p class="text-sm mt-1">시즌이나 시리즈 중 일부만 본 게 있으면 여기에 모입니다.</p>`);
+}
+
+/* 프랜차이즈 — 얽힌 시리즈를 순서대로 늘어놓고, 본 것/안 본 것을 겹쳐서 보여준다.
+   기존 기록은 건드리지 않는다. 이 화면은 보여주기만 한다. */
+async function renderDcFranchise() {
+  $("#dcHint").classList.add("hidden");
+  const f = franchiseOf(Discover.frKey);
+
+  // 프랜차이즈 고르는 칩 + 순서 전환
+  $("#dcFrBar").classList.remove("hidden");
+  $("#dcFrChips").innerHTML = FRANCHISES.map(x => `
+    <button class="dc-type ${x.key === f.key ? "active" : ""}" data-fr="${x.key}">
+      <i class="fa-solid ${x.icon} mr-1"></i>${esc(x.short)}
+    </button>`).join("");
+
+  /* 스토리 순은 컬렉션 단위로만 만들 수 있다 — 키워드로 묶은 프랜차이즈(MCU)엔 없으므로
+     그때는 전환 버튼 자체를 숨긴다. 있지도 않은 선택지를 보여주지 않는다. */
+  const canStory = !!f.storyOrder;
+  $("#dcFrSort").classList.toggle("hidden", !canStory);
+  if (canStory) {
+    $$("#dcFrSort .dc-type").forEach(b =>
+      b.classList.toggle("active", (b.dataset.order === "story") === Discover.frStory));
+  }
+
+  const cached = getFrCache()[f.key];
+  if (!cached || !cached.parts) {
+    $("#dcFrMsg").innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>
+      <b>${esc(f.name)}</b> 목록을 아직 안 받았어요. [불러오기]를 누르면 TMDB에서 받아옵니다.`;
+    paintDcCards([], `<i class="fa-solid fa-layer-group text-4xl mb-3"></i>
+      <p class="font-medium">${esc(f.name)} 목록이 없어요</p>
+      <p class="text-sm mt-1">위 [불러오기]를 눌러주세요.</p>`);
+    return;
+  }
+
+  const ordered = frOrder(cached.parts, f, canStory && Discover.frStory);
+  const seen = ordered.filter(p => myStatus(p.tmdbId).watched).length;
+  $("#dcFrMsg").innerHTML = `<i class="fa-solid ${f.icon} mr-1"></i><b>${esc(f.name)}</b>
+    — ${ordered.length}편 중 <b>${seen}편</b> 봄
+    ${canStory && Discover.frStory ? " · 스토리 시간순" : " · 개봉일 순"}`;
+
+  const list = ordered.map((p, idx) => {
+    const st = myStatus(p.tmdbId);
+    const acts = [];
+    if (st.watched) {
+      acts.push({ act: "open", id: st.recs[0].id, label: "내 기록", icon: "fa-clock-rotate-left" });
+    } else {
+      acts.push({ act: "add", label: "기록하기", icon: "fa-plus", cls: "dc-btn-main" });
+      acts.push({ act: "wish", label: isWished(p.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
+        cls: isWished(p.tmdbId) ? "dc-btn-on" : "" });
+      acts.push({ act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음" });
+    }
+    return {
+      tmdbId: p.tmdbId,
+      mediaType: "movie",
+      title: p.title,
+      poster: p.poster,
+      year: (p.releaseDate || "").slice(0, 4),
+      voteAverage: p.voteAverage,
+      // 순서가 이 화면의 핵심이라 몇 번째인지 배지로 먼저 보여준다
+      note: `<span class="badge badge-season">${idx + 1}번째</span>`,
+      actions: acts
+    };
+  });
+
+  paintDcCards(list, `<i class="fa-solid fa-layer-group text-4xl mb-3"></i>
+    <p class="font-medium">표시할 작품이 없어요</p>`);
 }
 
 /* 보고싶어요 */
@@ -1209,12 +1432,34 @@ function initDiscover() {
   /* 아직 안 가져온 게 있으면 가져오기, 실패만 남았으면 연결 고치기 */
   $("#dcPartsBtn").addEventListener("click", (e) =>
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
-  $$(".dc-type").forEach(btn => {
+  $$(".dc-type[data-type]").forEach(btn => {
     btn.addEventListener("click", () => {
       Discover.recoType = btn.dataset.type;
-      $$(".dc-type").forEach(b => b.classList.toggle("active", b === btn));
+      $$(".dc-type[data-type]").forEach(b => b.classList.toggle("active", b === btn));
       renderDiscover();
     });
+  });
+
+  /* 시리즈 뷰 — 프랜차이즈 칩은 그릴 때마다 새로 만들어지므로 위임으로 받는다 */
+  $("#dcFrChips").addEventListener("click", e => {
+    const b = e.target.closest("[data-fr]");
+    if (!b) return;
+    Discover.frKey = b.dataset.fr;
+    renderDiscover();
+  });
+  $("#dcFrSort").addEventListener("click", e => {
+    const b = e.target.closest("[data-order]");
+    if (!b) return;
+    Discover.frStory = b.dataset.order === "story";
+    renderDiscover();
+  });
+  $("#dcFrLoadBtn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const got = await loadFranchise(Discover.frKey, true);   // 눌렀으면 캐시가 있어도 새로 받는다
+    btn.disabled = false;
+    if (got) toast(`${franchiseOf(Discover.frKey).name} ${got.length}편을 받았습니다`, "success");
+    renderDiscover();
   });
 
   /* 카드/버튼 클릭은 위임으로 한 번에 처리 */

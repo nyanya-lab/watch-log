@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260803u">
+<link rel="stylesheet" href="style.css?v=20260803v">
 </head>
 <body>
 
@@ -144,6 +144,7 @@
           <button class="dc-nav hidden" data-view="search"><i class="fa-solid fa-magnifying-glass mr-1.5"></i>검색 결과</button>
           <button class="dc-nav active" data-view="reco"><i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i>추천</button>
           <button class="dc-nav" data-view="next"><i class="fa-solid fa-forward mr-1.5"></i>이어보기 <span id="dcNextCount" class="dc-num">0</span></button>
+          <button class="dc-nav" data-view="fr"><i class="fa-solid fa-layer-group mr-1.5"></i>시리즈</button>
           <button class="dc-nav" data-view="wish"><i class="fa-solid fa-bookmark mr-1.5"></i>보고싶어요 <span id="dcWishCount" class="dc-num">0</span></button>
           <button class="dc-nav hidden" data-view="hide"><i class="fa-solid fa-ban mr-1.5"></i>관심없음 <span id="dcHideCount" class="dc-num">0</span></button>
         </div>
@@ -175,6 +176,24 @@
           내가 별점을 높게 준 작품·재시청한 작품과 <b>비슷한 작품</b>, 그리고 <b>내 취향 장르</b>에서 함께 골라옵니다.
           이미 기록한 작품은 빠집니다.
         </p>
+      </div>
+
+      <!-- 시리즈(프랜차이즈) 뷰 전용 바 — 어느 시리즈를 볼지 + 순서 전환 -->
+      <div id="dcFrBar" class="hidden rounded-xl border border-lime-200 bg-white/70 px-4 py-3 space-y-2.5">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div id="dcFrChips" class="flex gap-1 flex-wrap"></div>
+          <div class="flex items-center gap-2 shrink-0">
+            <!-- 스토리 순은 컬렉션 단위로 정의한 시리즈에만 있다 (MCU는 키워드 기반이라 없음) -->
+            <div id="dcFrSort" class="flex gap-1">
+              <button class="dc-type active" data-order="release">개봉일 순</button>
+              <button class="dc-type" data-order="story">스토리 순</button>
+            </div>
+            <button id="dcFrLoadBtn" class="btn btn-sm btn-primary shrink-0">
+              <i class="fa-solid fa-download mr-1"></i>불러오기
+            </button>
+          </div>
+        </div>
+        <div id="dcFrMsg" class="text-xs font-semibold text-slate-600"></div>
       </div>
 
       <!-- 이어보기: 영화 시리즈의 편 정보가 없을 때 안내 -->
@@ -557,11 +576,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260803u"></script>
-<script src="core.js?v=20260803u"></script>
-<script src="tmdb.js?v=20260803u"></script>
-<script src="watchlog.js?v=20260803u"></script>
-<script src="discover.js?v=20260803u"></script>
-<script src="stats.js?v=20260803u"></script>
+<script src="seed-data.js?v=20260803v"></script>
+<script src="core.js?v=20260803v"></script>
+<script src="tmdb.js?v=20260803v"></script>
+<script src="watchlog.js?v=20260803v"></script>
+<script src="discover.js?v=20260803v"></script>
+<script src="stats.js?v=20260803v"></script>
 </body>
 </html>
