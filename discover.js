@@ -11,6 +11,9 @@ const Discover = {
   frKey: "mcu",      // 시리즈 뷰에서 보고 있는 프랜차이즈
   frStory: false,    // 스토리 시간순으로 볼지 (기본은 개봉일 순)
   recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
+  recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
+  recoSort: "score", // score=추천순 | vote=TMDB 평점순
+  recoDir: "desc",
   reco: null,        // 캐시된 추천 결과
   query: "",
   usedQuery: "",
@@ -302,6 +305,15 @@ async function runReco() {
       return { ...c.card, score: c.score + gm * 0.5 + vote, reason: c.reasons[0] || "" };
     }).sort((a, b) => b.score - a.score).slice(0, 60);
 
+    /* 볼 수 있는 곳을 카드마다 조회한다. TMDB는 스트리밍 정보를 목록 응답에 안 주고
+       작품별 `/watch/providers`에만 주기 때문에 60건이면 호출도 60번이다(약 15초).
+       그래도 여기서 받아두면 결과가 캐시에 남아, 다음부터는 기다림 없이 OTT 필터·배지를 쓴다. */
+    for (let n = 0; n < list.length; n++) {
+      setStatus(`볼 수 있는 곳 확인 ${n + 1} / ${list.length}`, 60 + (n + 1) / list.length * 38);
+      list[n].otts = await tmdbProviders(list[n].tmdbId, list[n].mediaType);
+      await new Promise(r => setTimeout(r, 240));
+    }
+
     const data = { generatedAt: new Date().toISOString(), basis: genreNames, list };
     localStorage.setItem(LS_RECO, JSON.stringify(data));
     Discover.reco = data;
@@ -326,6 +338,35 @@ function loadReco() {
   return Discover.reco;
 }
 
+/* 추천 뷰의 OTT·정렬 칩.
+   OTT는 **추천 결과에 실제로 있는 것만** 그린다 — 목록에 없는 OTT를 눌러 0건을 보는 일이 없게.
+   추천을 만들기 전(otts 없음)이면 OTT 줄 자체를 숨긴다. */
+function renderRecoFilters(all) {
+  const box = $("#dcRecoFilters");
+  if (!box) return;
+
+  const otts = [...new Set(all.flatMap(c => c.otts || []))].sort((a, b) => a.localeCompare(b, "ko"));
+  const arrow = (k) => Discover.recoSort === k
+    ? `<span class="fdir">${Discover.recoDir === "asc" ? "↑" : "↓"}</span>` : "";
+
+  box.innerHTML = `
+    ${otts.length ? `<div class="fsec">
+      <div class="fsec-h">볼 수 있는 곳 <span class="fsec-hint">(여러 개)</span></div>
+      <div class="fchips">
+        <button class="fchip ${Discover.recoOtt.length ? "" : "on"}" data-rott="">전체</button>
+        ${otts.map(o => `<button class="fchip ${Discover.recoOtt.includes(o) ? "on" : ""}"
+          data-rott="${esc(o)}">${esc(o)}</button>`).join("")}
+      </div>
+    </div>` : ""}
+    <div class="fsec">
+      <div class="fsec-h">정렬 <span class="fsec-hint">(같은 칩을 한 번 더 누르면 ↕)</span></div>
+      <div class="fchips">
+        <button class="fchip ${Discover.recoSort === "score" ? "on" : ""}" data-rsort="score">추천순${arrow("score")}</button>
+        <button class="fchip ${Discover.recoSort === "vote" ? "on" : ""}" data-rsort="vote">★ TMDB 평점${arrow("vote")}</button>
+      </div>
+    </div>`;
+}
+
 /* 추천 목록 */
 function renderDcReco() {
   $("#dcHint").classList.add("hidden");
@@ -345,15 +386,28 @@ function renderDcReco() {
   }
 
   const mt = Discover.recoType;   // "" | movie | tv
-  const list = (data ? data.list : [])
+  const all = (data ? data.list : [])
     // 캐시를 만든 뒤에 기록하거나 관심없음으로 넘긴 작품은 빼고 보여준다
     .filter(c => !State.items.some(i => i.tmdbId === c.tmdbId))
-    .filter(c => !isHidden(c.tmdbId))
+    .filter(c => !isHidden(c.tmdbId));
+
+  renderRecoFilters(all);
+
+  const list = all
     .filter(c => !mt || c.mediaType === mt)
+    /* OTT 필터 — 고른 게 없으면 통과, 있으면 그중 하나라도 있어야 한다 */
+    .filter(c => !Discover.recoOtt.length || (c.otts || []).some(o => Discover.recoOtt.includes(o)))
+    .sort((a, b) => {
+      const sgn = Discover.recoDir === "asc" ? 1 : -1;
+      return Discover.recoSort === "vote"
+        ? sgn * ((a.voteAverage || 0) - (b.voteAverage || 0))
+        : sgn * ((a.score || 0) - (b.score || 0));
+    })
     .map(c => ({
       tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
       poster: c.poster, year: c.year, voteAverage: c.voteAverage,
-      note: c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "",
+      note: (c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "")
+        + (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
       actions: [
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
@@ -1438,6 +1492,25 @@ function initDiscover() {
       $$(".dc-type[data-type]").forEach(b => b.classList.toggle("active", b === btn));
       renderDiscover();
     });
+  });
+
+  /* 추천 뷰의 OTT·정렬 칩 (그릴 때마다 새로 만들어지므로 위임) */
+  $("#dcRecoFilters").addEventListener("click", e => {
+    const chip = e.target.closest(".fchip");
+    if (!chip) return;
+    if (chip.dataset.rott !== undefined) {
+      const v = chip.dataset.rott;
+      if (v === "") Discover.recoOtt = [];
+      else Discover.recoOtt = Discover.recoOtt.includes(v)
+        ? Discover.recoOtt.filter(x => x !== v)
+        : Discover.recoOtt.concat([v]);
+    } else if (chip.dataset.rsort) {
+      const v = chip.dataset.rsort;
+      // 같은 칩을 다시 누르면 방향만 뒤집는다 (목록 탭 정렬과 같은 규칙)
+      if (Discover.recoSort === v) Discover.recoDir = Discover.recoDir === "asc" ? "desc" : "asc";
+      else { Discover.recoSort = v; Discover.recoDir = "desc"; }
+    }
+    renderDiscover();
   });
 
   /* 시리즈 뷰 — 프랜차이즈 칩은 그릴 때마다 새로 만들어지므로 위임으로 받는다 */
