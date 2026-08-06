@@ -1450,6 +1450,41 @@ function initSettings() {
   });
 
   $("#clearOttBtn").addEventListener("click", runClearOttField);
+  $("#restoreBtn").addEventListener("click", runRestoreBackup);
+}
+
+/* ---------- 백업에서 되돌리기 ----------
+   `saveLocal()`이 덮어쓰기 직전 상태를 `watchlog_items_backup`에 하나 남긴다.
+   **서버 데이터를 채택할 때는 백업을 갱신하지 않으므로**, 다른 기기가 서버를 망가뜨린 뒤에도
+   이 기기의 백업에는 그 전 상태가 남아 있는 경우가 많다.
+   콘솔을 못 쓰는 상황(폰 등)에서도 복구할 수 있어야 해서 버튼으로 둔다. */
+function runRestoreBackup() {
+  let bak;
+  try { bak = JSON.parse(localStorage.getItem("watchlog_items_backup") || "null"); }
+  catch { bak = null; }
+  if (!Array.isArray(bak) || !bak.length) { toast("백업이 없습니다", "error"); return; }
+
+  /* 개수만으로는 뭐가 나은지 알 수 없다 — 별점·한줄평처럼 되살리려는 게 뭔지 같이 보여준다 */
+  const cnt = (arr, f) => arr.filter(f).length;
+  const now = State.items;
+  const lines = [
+    `기록 수:    지금 ${now.length}개  →  백업 ${bak.length}개`,
+    `별점:      지금 ${cnt(now, i => i.rating)}개  →  백업 ${cnt(bak, i => i.rating)}개`,
+    `한줄평:    지금 ${cnt(now, i => i.review)}개  →  백업 ${cnt(bak, i => i.review)}개`
+  ];
+
+  const ok = confirm(
+    `저장 직전 상태로 되돌립니다.\n지금 데이터는 사라지고, 되돌린 내용이 서버에도 올라갑니다.\n\n` +
+    lines.join("\n") +
+    `\n\n※ 다른 기기의 앱은 닫아두세요 — 열려 있으면 그쪽 내용이 다시 덮어쓸 수 있습니다.`
+  );
+  if (!ok) { toast("취소했습니다"); return; }
+
+  State.items = bak;
+  saveLocal();
+  applyFilters();
+  renderDiscover();
+  toast(`백업 ${bak.length}개로 되돌렸습니다`, "success");
 }
 
 /* ---------- "내가 본 곳"(ott) 비우기 ----------
