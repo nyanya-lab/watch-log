@@ -1149,6 +1149,10 @@ function renderQuickRate() {
         ${visibleGenres(i.genres).length
           ? `<div class="flex flex-wrap gap-1 mt-2">
                ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}</div>` : ""}
+        <!-- 줄거리는 3줄까지만. 여기선 "이게 뭐였더라"를 떠올리는 게 목적이라 다 읽을 필요가 없고,
+             길면 카드가 밀려 입력칸이 화면 밖으로 나간다. -->
+        ${i.overview
+          ? `<div class="text-xs text-slate-500 font-medium mt-2 leading-relaxed line-clamp-3">${esc(i.overview)}</div>` : ""}
         <!-- TMDB 평점은 일부러 안 보여준다 — 남의 점수가 눈에 있으면 내 점수가 그쪽으로 끌려간다.
              여기서 받아야 하는 건 "내가 어떻게 봤나"지 "평균이 몇 점인가"가 아니다. -->
       </div>
