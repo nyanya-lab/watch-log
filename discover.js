@@ -349,9 +349,18 @@ function renderRecoFilters(all) {
   const arrow = (k) => Discover.recoSort === k
     ? `<span class="fdir">${Discover.recoDir === "asc" ? "↑" : "↓"}</span>` : "";
 
+  const TYPES = [["", "전체"], ["movie", "영화"], ["tv", "TV"]];
+
   box.innerHTML = `
+    <div class="fsec">
+      <div class="fsec-h">구분</div>
+      <div class="fchips">
+        ${TYPES.map(t => `<button class="fchip ${Discover.recoType === t[0] ? "on" : ""}"
+          data-rtype="${t[0]}">${t[1]}</button>`).join("")}
+      </div>
+    </div>
     ${otts.length ? `<div class="fsec">
-      <div class="fsec-h">볼 수 있는 곳 <span class="fsec-hint">(여러 개)</span></div>
+      <div class="fsec-h">볼 수 있는 곳 <span class="fsec-hint">(여러 개 · 정액제 기준)</span></div>
       <div class="fchips">
         <button class="fchip ${Discover.recoOtt.length ? "" : "on"}" data-rott="">전체</button>
         ${otts.map(o => `<button class="fchip ${Discover.recoOtt.includes(o) ? "on" : ""}"
@@ -365,6 +374,11 @@ function renderRecoFilters(all) {
         <button class="fchip ${Discover.recoSort === "vote" ? "on" : ""}" data-rsort="vote">★ TMDB 평점${arrow("vote")}</button>
       </div>
     </div>`;
+
+  // 접혀 있어도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
+  const on = Discover.recoType || Discover.recoOtt.length || Discover.recoSort !== "score" || Discover.recoDir !== "desc";
+  const dot = $("#dcRecoDot");
+  if (dot) dot.classList.toggle("hidden", !on);
 }
 
 /* 추천 목록 */
@@ -1486,19 +1500,18 @@ function initDiscover() {
   /* 아직 안 가져온 게 있으면 가져오기, 실패만 남았으면 연결 고치기 */
   $("#dcPartsBtn").addEventListener("click", (e) =>
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
-  $$(".dc-type[data-type]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      Discover.recoType = btn.dataset.type;
-      $$(".dc-type[data-type]").forEach(b => b.classList.toggle("active", b === btn));
-      renderDiscover();
-    });
+  /* 필터·정렬은 접어두고 아이콘으로 펼친다 */
+  $("#dcRecoFilterBtn").addEventListener("click", () => {
+    $("#dcRecoFilters").classList.toggle("hidden");
   });
 
   /* 추천 뷰의 OTT·정렬 칩 (그릴 때마다 새로 만들어지므로 위임) */
   $("#dcRecoFilters").addEventListener("click", e => {
     const chip = e.target.closest(".fchip");
     if (!chip) return;
-    if (chip.dataset.rott !== undefined) {
+    if (chip.dataset.rtype !== undefined) {
+      Discover.recoType = chip.dataset.rtype;
+    } else if (chip.dataset.rott !== undefined) {
       const v = chip.dataset.rott;
       if (v === "") Discover.recoOtt = [];
       else Discover.recoOtt = Discover.recoOtt.includes(v)
