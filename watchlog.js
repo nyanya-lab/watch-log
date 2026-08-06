@@ -3,13 +3,20 @@
    ============================================ */
 
 /* 여러 개 고를 수 있는 필터. 값은 **배열**이고 빈 배열 = 전체 */
-const MULTI = ["type", "country", "ott", "genre", "rating"];
+const MULTI = ["type", "country", "ott", "genre"];
+
+/* 별점은 칸이 11개나 되고 "8점 이상" 같은 조회가 더 자연스러워서 **범위**로 받는다.
+   내 별점과 TMDB 평점을 각각 둔다 — 카드에 나란히 보이는 두 점수라 따로 걸 수 있어야 한다.
+   별점을 안 매긴 기록은 0으로 친다(기본 범위 0~10이면 그대로 다 보인다). */
+const RANGE0 = { rMin: 0, rMax: 10, vMin: 0, vMax: 10 };
 
 /* 정렬 기준마다 자연스러운 기본 방향이 다르다 — 날짜·별점은 높은(최근) 쪽, 제목은 가나다 */
 const SORT_DIR0 = { date: "desc", title: "asc", rating: "desc", vote: "desc" };
 
 const Filters = {
-  q: "", type: [], country: [], ott: [], genre: [], rating: [],
+  q: "", type: [], country: [], ott: [], genre: [],
+  rMin: 0, rMax: 10,                // 내 별점 범위
+  vMin: 0, vMax: 10,                // TMDB 평점 범위
   year: "",                         // 연도는 해마다 늘어나 칩으로 두기 어렵다 (드롭다운 유지)
   person: "",                       // 배우/감독 (배지 클릭 전용)
   sort: "date", sortDir: "desc", pendingOnly: false,
@@ -132,6 +139,19 @@ function initWatchlog() {
     buildFilterOptions();
   });
 
+  /* 별점 범위 — 비우면 양 끝값으로 되돌린다 (빈 칸이 "제한 없음"이 되게) */
+  ["rMin", "rMax", "vMin", "vMax"].forEach(k => {
+    const el = $("#f_" + k);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      const raw = parseFloat(el.value);
+      Filters[k] = isFinite(raw) ? Math.min(10, Math.max(0, raw)) : RANGE0[k];
+      applyFilters();
+      const pv = $("#filterPreview");
+      if (pv) pv.textContent = `${State.filtered.length}개 표시`;
+    });
+  });
+
   $("#filterYear").addEventListener("change", () => {
     Filters.year = $("#filterYear").value;
     applyFilters();
@@ -140,7 +160,7 @@ function initWatchlog() {
 
   $("#resetFilter").addEventListener("click", () => {
     MULTI.forEach(k => { Filters[k] = []; });
-    Object.assign(Filters, { year: "", sort: "date", sortDir: "desc" });
+    Object.assign(Filters, RANGE0, { year: "", sort: "date", sortDir: "desc" });
     applyFilters();
     buildFilterOptions();
   });
@@ -455,12 +475,10 @@ function buildFilterOptions() {
   chips("fcOtt", "ott", uniq(State.items.flatMap(i => ottList(i))));
   chips("fcGenre", "genre", uniq(State.items.flatMap(i => visibleGenres(i.genres))));
 
-  /* 별점은 기록에 실제로 있는 점수만 (소수는 올림해 그 칸으로 — 통계 분포와 같은 기준).
-     0은 "별점 없음"이라 항상 마지막에 둔다. */
-  const scores = [...new Set(State.items.filter(i => i.rating).map(i => Math.ceil(i.rating)))]
-    .sort((a, b) => b - a).map(String);
-  if (State.items.some(i => !i.rating)) scores.push("0");
-  chips("fcRating", "rating", scores, v => v === "0" ? "별점 없음" : "♥ " + v);
+  ["rMin", "rMax", "vMin", "vMax"].forEach(k => {
+    const el = $("#f_" + k);
+    if (el && document.activeElement !== el) el.value = Filters[k];   // 입력 중인 칸은 건드리지 않는다
+  });
 
   const arrow = (k) => Filters.sort === k
     ? `<span class="fdir">${Filters.sortDir === "asc" ? "↑" : "↓"}</span>` : "";
@@ -481,7 +499,8 @@ function buildFilterOptions() {
 }
 
 function hasActiveFilter() {
-  return !!(MULTI.some(k => Filters[k].length) || Filters.year || Filters.person ||
+  const ranged = Object.keys(RANGE0).some(k => Filters[k] !== RANGE0[k]);
+  return !!(MULTI.some(k => Filters[k].length) || ranged || Filters.year || Filters.person ||
             Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.engNameOnly ||
             Filters.dupOnly || Filters.group ||
             Filters.seriesView ||
@@ -491,7 +510,7 @@ function hasActiveFilter() {
 /* 모든 필터 해제 (검색어·미등록 토글 포함) */
 function clearAllFilters() {
   MULTI.forEach(k => { Filters[k] = []; });
-  Object.assign(Filters, {
+  Object.assign(Filters, RANGE0, {
     q: "", year: "", person: "", sort: "date", sortDir: "desc",
     pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
     group: "", seriesView: false
@@ -511,7 +530,7 @@ function jumpToList(patch) {
   });
   const cleared = {};
   MULTI.forEach(k => { cleared[k] = []; });
-  Object.assign(Filters, cleared,
+  Object.assign(Filters, cleared, RANGE0,
     { year: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false, group: "", seriesView: false },
     norm);
   applyFilters();
@@ -644,8 +663,11 @@ function applyFilters() {
     if (F.ott.length && !ottList(i).some(o => F.ott.includes(o))) return false;
     if (F.year && (i.startDate || "").slice(0, 4) !== F.year) return false;
     if (F.genre.length && !visibleGenres(i.genres).some(g => F.genre.includes(g))) return false;
-    /* 소수 별점은 올림해 그 칸에 넣는다 (9.5 → ♥10). 통계 분포와 같은 기준 */
-    if (F.rating.length && !F.rating.includes(String(i.rating ? Math.ceil(i.rating) : 0))) return false;
+    /* 별점 범위. 안 매긴 기록은 0으로 쳐서 기본 범위(0~10)에는 그대로 들어온다 */
+    const myR = i.rating || 0;
+    if (myR < F.rMin || myR > F.rMax) return false;
+    const tmR = i.voteAverage || 0;
+    if (tmR < F.vMin || tmR > F.vMax) return false;
     if (F.person && !(i.director === F.person || (i.cast || []).some(c => c.name === F.person))) return false;
     return true;
   });

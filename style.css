@@ -556,6 +556,11 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .fchip.on { background: #e8f4dd; border-color: #7ba64f; color: #3b6d11; }
 .fchip .fdir { margin-left: 4px; opacity: .75; }
 
+/* 별점 범위 — 칸이 11개나 되는 칩보다 "8 ~ 10" 쪽이 읽기도 고르기도 쉽다 */
+.frange { display: flex; align-items: center; gap: 8px; max-width: 260px; }
+.frange .form-input { text-align: center; }
+.frange-sep { color: #9aa694; font-size: 13px; }
+
 /* ===== 볼 수 있는 곳 (OTT 찾기) =====
    상세 모달과 탐색 카드가 같은 조각을 쓴다 (watchInfoHtml in tmdb.js) */
 .wi-box { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eef2ea; }
