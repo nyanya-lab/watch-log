@@ -625,6 +625,7 @@ function initEscapeKey() {
     { sel: "#dcModal" },
     { sel: "#detailModal" },
     { sel: "#filterModal", close: () => closeFilterModal() },
+    { sel: "#dcRecoModal" },
     { sel: "#syncPwModal", close: () => closeSyncPwModal() },
     { sel: "#editModal", close: () => closeEdit() }
   ];

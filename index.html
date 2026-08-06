@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260806g">
+<link rel="stylesheet" href="style.css?v=20260806h">
 </head>
 <body>
 
@@ -172,8 +172,6 @@
             <div id="dcRecoBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
           </div>
         </div>
-        <!-- 추천 결과에 거는 구분·OTT·정렬 (renderRecoFilters가 채운다). 아이콘 버튼으로 펼친다 -->
-        <div id="dcRecoFilters" class="hidden mt-3 pt-3 border-t border-lime-200"></div>
         <p class="text-xs text-slate-400 mt-3 leading-relaxed">
           내가 별점을 높게 준 작품·재시청한 작품과 <b>비슷한 작품</b>, 그리고 <b>내 취향 장르</b>에서 함께 골라옵니다.
           이미 기록한 작품은 빠집니다.
@@ -314,6 +312,25 @@
       </div>
     </section>
   </main>
+</div>
+
+<!-- ===== 추천 필터 팝업 ===== -->
+<div id="dcRecoModal" class="modal-back hidden">
+  <div class="modal-card max-w-2xl">
+    <div class="modal-head">
+      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-sliders mr-2 text-lime-700"></i>추천 필터 · 정렬</h3>
+      <button id="closeRecoFilter" class="modal-x"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <!-- renderRecoFilters가 채운다 -->
+    <div id="dcRecoFilters" class="p-5"></div>
+    <div class="modal-foot">
+      <button id="resetRecoFilter" class="btn btn-ghost">
+        <i class="fa-solid fa-rotate-left mr-1"></i>초기화
+      </button>
+      <div class="flex-1"></div>
+      <button id="applyRecoFilter" class="btn btn-primary">확인</button>
+    </div>
+  </div>
 </div>
 
 <!-- ===== 필터 팝업 ===== -->
@@ -595,11 +612,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260806g"></script>
-<script src="core.js?v=20260806g"></script>
-<script src="tmdb.js?v=20260806g"></script>
-<script src="watchlog.js?v=20260806g"></script>
-<script src="discover.js?v=20260806g"></script>
-<script src="stats.js?v=20260806g"></script>
+<script src="seed-data.js?v=20260806h"></script>
+<script src="core.js?v=20260806h"></script>
+<script src="tmdb.js?v=20260806h"></script>
+<script src="watchlog.js?v=20260806h"></script>
+<script src="discover.js?v=20260806h"></script>
+<script src="stats.js?v=20260806h"></script>
 </body>
 </html>

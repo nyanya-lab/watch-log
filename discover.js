@@ -12,6 +12,7 @@ const Discover = {
   frStory: false,    // 스토리 시간순으로 볼지 (기본은 개봉일 순)
   recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
   recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
+  recoAvail: "",     // "" 전체 | "any" 어디든 볼 수 있는 것만 | "none" 국내에 없는 것만
   recoSort: "score", // score=추천순 | vote=TMDB 평점순
   recoDir: "desc",
   reco: null,        // 캐시된 추천 결과
@@ -359,8 +360,15 @@ function renderRecoFilters(all) {
           data-rtype="${t[0]}">${t[1]}</button>`).join("")}
       </div>
     </div>
+    <div class="fsec">
+      <div class="fsec-h">국내 시청 <span class="fsec-hint">(정액제·무료 기준 — 대여·구매는 안 셈)</span></div>
+      <div class="fchips">
+        ${[["", "전체"], ["any", "볼 수 있는 것만"], ["none", "국내에 없는 것만"]].map(a =>
+          `<button class="fchip ${Discover.recoAvail === a[0] ? "on" : ""}" data-ravail="${a[0]}">${a[1]}</button>`).join("")}
+      </div>
+    </div>
     ${otts.length ? `<div class="fsec">
-      <div class="fsec-h">볼 수 있는 곳 <span class="fsec-hint">(여러 개 · 정액제 기준)</span></div>
+      <div class="fsec-h">OTT <span class="fsec-hint">(여러 개)</span></div>
       <div class="fchips">
         <button class="fchip ${Discover.recoOtt.length ? "" : "on"}" data-rott="">전체</button>
         ${otts.map(o => `<button class="fchip ${Discover.recoOtt.includes(o) ? "on" : ""}"
@@ -375,8 +383,9 @@ function renderRecoFilters(all) {
       </div>
     </div>`;
 
-  // 접혀 있어도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
-  const on = Discover.recoType || Discover.recoOtt.length || Discover.recoSort !== "score" || Discover.recoDir !== "desc";
+  // 팝업을 닫아둬도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
+  const on = Discover.recoType || Discover.recoOtt.length || Discover.recoAvail
+    || Discover.recoSort !== "score" || Discover.recoDir !== "desc";
   const dot = $("#dcRecoDot");
   if (dot) dot.classList.toggle("hidden", !on);
 }
@@ -409,6 +418,13 @@ function renderDcReco() {
 
   const list = all
     .filter(c => !mt || c.mediaType === mt)
+    /* 한국에서 볼 수 있는 곳이 아예 없는 작품도 추천에 섞인다 — 그것만/그것 빼고를 고를 수 있게 한다 */
+    .filter(c => {
+      const has = (c.otts || []).length > 0;
+      if (Discover.recoAvail === "any" && !has) return false;
+      if (Discover.recoAvail === "none" && has) return false;
+      return true;
+    })
     /* OTT 필터 — 고른 게 없으면 통과, 있으면 그중 하나라도 있어야 한다 */
     .filter(c => !Discover.recoOtt.length || (c.otts || []).some(o => Discover.recoOtt.includes(o)))
     .sort((a, b) => {
@@ -1500,10 +1516,22 @@ function initDiscover() {
   /* 아직 안 가져온 게 있으면 가져오기, 실패만 남았으면 연결 고치기 */
   $("#dcPartsBtn").addEventListener("click", (e) =>
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
-  /* 필터·정렬은 접어두고 아이콘으로 펼친다 */
+  /* 필터·정렬은 팝업으로 (바에 다 펼치면 결과보다 바가 길어진다) */
+  const closeRecoFilter = () => $("#dcRecoModal").classList.add("hidden");
   $("#dcRecoFilterBtn").addEventListener("click", () => {
-    $("#dcRecoFilters").classList.toggle("hidden");
+    renderDiscover();                       // 열기 전에 칩 상태를 최신으로
+    $("#dcRecoModal").classList.remove("hidden");
   });
+  $("#closeRecoFilter").addEventListener("click", closeRecoFilter);
+  $("#applyRecoFilter").addEventListener("click", closeRecoFilter);
+  $("#dcRecoModal").addEventListener("click", e => {
+    if (e.target.id === "dcRecoModal") closeRecoFilter();
+  });
+  $("#resetRecoFilter").addEventListener("click", () => {
+    Object.assign(Discover, { recoType: "", recoOtt: [], recoAvail: "", recoSort: "score", recoDir: "desc" });
+    renderDiscover();
+  });
+  window.closeRecoFilterModal = closeRecoFilter;   // Escape 처리용
 
   /* 추천 뷰의 OTT·정렬 칩 (그릴 때마다 새로 만들어지므로 위임) */
   $("#dcRecoFilters").addEventListener("click", e => {
@@ -1511,6 +1539,8 @@ function initDiscover() {
     if (!chip) return;
     if (chip.dataset.rtype !== undefined) {
       Discover.recoType = chip.dataset.rtype;
+    } else if (chip.dataset.ravail !== undefined) {
+      Discover.recoAvail = chip.dataset.ravail;
     } else if (chip.dataset.rott !== undefined) {
       const v = chip.dataset.rott;
       if (v === "") Discover.recoOtt = [];
