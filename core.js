@@ -697,8 +697,31 @@ function bootApp() {
   bootSync();
 }
 
+/* ---------- 별점 10점 만점 전환 (2026-08-06) ----------
+   5점 만점으로 매긴 값을 그대로 두면 4.5점이 10점 만점의 4.5점(45%)으로 읽힌다.
+   2배로 환산하는 대신 **비우고 다시 매기기로 했다**(사용자 결정) — 5점 기준으로 매긴 감각과
+   10점 기준은 다르고, 환산된 어중간한 숫자가 남으면 다시 매길 때 기준이 흔들리기 때문.
+   목록 탭 "별점 채우기"로 한 장씩 넘기며 채우면 된다.
+
+   **서버 데이터를 채택한 뒤에** 부른다. 먼저 지우면 서버에서 온 별점이 그대로 살아남는다.
+   플래그로 딱 한 번만 실행한다 — 안 그러면 새로 매긴 별점도 새로고침마다 지워진다. */
+const LS_RATE10 = "watchlog_rating10";
+
+function clearOldRatings() {
+  if (localStorage.getItem(LS_RATE10)) return;
+  const n = State.items.filter(i => i.rating).length;
+  localStorage.setItem(LS_RATE10, "1");
+  if (!n) return;
+
+  State.items.forEach(i => { i.rating = null; });
+  saveLocal();               // 덮어쓰기 직전 상태는 watchlog_items_backup에 남는다
+  applyFilters();
+  toast(`별점을 10점 만점으로 바꿨습니다 — 예전 별점 ${n}개는 비웠어요`, "success");
+}
+
 async function bootSync() {
   await syncOnBoot();
+  clearOldRatings();          // 서버 것을 채택한 다음에 비운다
   startRealtime();
   if (State.items.length) return;
   if (!window.SEED_DATA) return;

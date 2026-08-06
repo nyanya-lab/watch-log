@@ -169,11 +169,11 @@ function josa(word, withBatchim, without) {
 function seedWeight(i) {
   const r = i.rating || 0;
   let w;
-  if (r >= 5) w = 3.0;
-  else if (r >= 4.5) w = 2.6;
-  else if (r >= 4) w = 2.2;
-  else if (r >= 3.5) w = 1.4;
-  else if (r >= 3) w = 0.9;
+  if (r >= 10) w = 3.0;
+  else if (r >= 9) w = 2.6;
+  else if (r >= 8) w = 2.2;
+  else if (r >= 7) w = 1.4;
+  else if (r >= 6) w = 0.9;
   else if (r > 0) return 0;          // 낮게 준 작품은 취향 신호로 쓰지 않는다
   else w = 0.6;                       // 별점 없음 = 중립
 

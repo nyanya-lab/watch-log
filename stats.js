@@ -239,10 +239,10 @@ function renderStats() {
 
   // 별점
   // 소수 별점(4.5 등)은 올림해서 해당 구간에 넣는다 (예: 4.5 → ♥5 구간)
-  const rCount = [1, 2, 3, 4, 5].map(n => items.filter(i => i.rating && Math.ceil(i.rating) === n).length);
+  const rCount = [1,2,3,4,5,6,7,8,9,10].map(n => items.filter(i => i.rating && Math.ceil(i.rating) === n).length);
   _charts.push(new Chart($("#chartRating"), {
     type: "bar",
-    data: { labels: ["♥1", "♥2", "♥3", "♥4", "♥5"], datasets: [{ data: rCount, backgroundColor: "#f43f5e", borderRadius: 6 }] },
+    data: { labels: ["♥1","♥2","♥3","♥4","♥5","♥6","♥7","♥8","♥9","♥10"], datasets: [{ data: rCount, backgroundColor: "#f43f5e", borderRadius: 6 }] },
     options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 

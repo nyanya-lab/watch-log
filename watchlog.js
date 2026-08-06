@@ -147,7 +147,7 @@ function initWatchlog() {
 
   $("#loadMoreBtn").addEventListener("click", () => { State.page++; renderCards(); });
 
-  /* 별점 (숫자 입력, 5점 만점 소수 가능) */
+  /* 별점 (숫자 입력, 10점 만점 소수 가능) */
   $("#clearStar").addEventListener("click", () => { $("#fRating").value = ""; });
 
   /* 스테퍼 */
@@ -799,7 +799,7 @@ function openDetail(id) {
     <div class="dt-mine">
       <div class="dt-mine-top">
         ${i.rating
-          ? `<div class="dt-rate">${hearts(i.rating, true)}<span class="dt-rate-max">/ 5</span></div>`
+          ? `<div class="dt-rate">${hearts(i.rating, true)}<span class="dt-rate-max">/ 10</span></div>`
           : `<button class="dt-rate-empty" onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')">
                <i class="fa-regular fa-heart"></i>별점 매기기</button>`}
         <div class="dt-when">
@@ -991,7 +991,7 @@ async function refreshTmdbInDetail(btn, itemId) {
 function readRating() {
   const v = parseFloat($("#fRating").value);
   if (!isFinite(v) || v <= 0) return null;
-  return Math.min(5, Math.round(v * 10) / 10);   // 5점 만점, 소수 첫째자리까지
+  return Math.min(10, Math.round(v * 10) / 10);  // 10점 만점, 소수 첫째자리까지
 }
 
 /* ---------- 별점 몰아넣기 ----------
@@ -1082,10 +1082,10 @@ function renderQuickRate() {
       <div class="flex items-center gap-2">
         <div class="relative flex-1">
           <i class="fa-solid fa-heart absolute left-3 top-1/2 -translate-y-1/2 text-rose-400"></i>
-          <input type="number" id="qrInput" class="form-input pl-9 text-lg font-semibold" min="0" max="5" step="0.1"
-            placeholder="0 ~ 5 (소수점 가능)" value="${i.rating || ""}" autocomplete="off">
+          <input type="number" id="qrInput" class="form-input pl-9 text-lg font-semibold" min="0" max="10" step="0.1"
+            placeholder="0 ~ 10 (소수점 가능)" value="${i.rating || ""}" autocomplete="off">
         </div>
-        <span class="text-sm font-semibold text-slate-400">/ 5</span>
+        <span class="text-sm font-semibold text-slate-400">/ 10</span>
       </div>
       <p class="text-xs text-slate-400 font-medium mt-2">
         <b>Enter</b>로 저장하고 다음 · 빈 칸으로 <b>Enter</b>면 건너뛰기 · <b>Esc</b>로 닫기
@@ -1121,7 +1121,7 @@ function quickRateSubmit() {
   const item = QuickRate.queue[QuickRate.idx];
   const raw = parseFloat($("#qrInput").value);
   if (isFinite(raw) && raw > 0) {
-    const v = Math.min(5, Math.round(raw * 10) / 10);
+    const v = Math.min(10, Math.round(raw * 10) / 10);
     const isNew = !item.rating;
     item.rating = v;
     if (isNew) QuickRate.done++;
