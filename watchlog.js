@@ -1149,7 +1149,8 @@ function renderQuickRate() {
         ${visibleGenres(i.genres).length
           ? `<div class="flex flex-wrap gap-1 mt-2">
                ${visibleGenres(i.genres).slice(0, 3).map(g => `<span class="badge badge-genre">${esc(g)}</span>`).join("")}</div>` : ""}
-        ${i.voteAverage ? `<div class="mt-2"><span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span></div>` : ""}
+        <!-- TMDB 평점은 일부러 안 보여준다 — 남의 점수가 눈에 있으면 내 점수가 그쪽으로 끌려간다.
+             여기서 받아야 하는 건 "내가 어떻게 봤나"지 "평균이 몇 점인가"가 아니다. -->
       </div>
     </div>
 
