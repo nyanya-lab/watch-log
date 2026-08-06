@@ -2,10 +2,17 @@
    watchlog.js — 카드 목록, 필터, 등록/수정
    ============================================ */
 
+/* 여러 개 고를 수 있는 필터. 값은 **배열**이고 빈 배열 = 전체 */
+const MULTI = ["type", "country", "ott", "genre", "rating"];
+
+/* 정렬 기준마다 자연스러운 기본 방향이 다르다 — 날짜·별점은 높은(최근) 쪽, 제목은 가나다 */
+const SORT_DIR0 = { date: "desc", title: "asc", rating: "desc", vote: "desc" };
+
 const Filters = {
-  q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
+  q: "", type: [], country: [], ott: [], genre: [], rating: [],
+  year: "",                         // 연도는 해마다 늘어나 칩으로 두기 어렵다 (드롭다운 유지)
   person: "",                       // 배우/감독 (배지 클릭 전용)
-  sort: "date-desc", pendingOnly: false,
+  sort: "date", sortDir: "desc", pendingOnly: false,
   noSeasonOnly: false,              // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
   engNameOnly: false,               // 배우·감독 이름이 영문으로 남은 항목만
   dupOnly: false,                   // 제목이 다른데 tmdbId가 같은 항목만 (매칭 오류 의심)
@@ -105,25 +112,37 @@ function initWatchlog() {
   $("#applyFilterBtn").addEventListener("click", closeFilterModal);
   $("#filterModal").addEventListener("click", e => { if (e.target.id === "filterModal") closeFilterModal(); });
 
-  ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating", "sortBy"]
-    .forEach(id => $("#" + id).addEventListener("change", () => {
-      Filters.type = $("#filterType").value;
-      Filters.country = $("#filterCountry").value;
-      Filters.ott = $("#filterOtt").value;
-      Filters.year = $("#filterYear").value;
-      Filters.genre = $("#filterGenre").value;
-      Filters.rating = $("#filterRating").value;
-      Filters.sort = $("#sortBy").value;
-      applyFilters();
-      $("#filterPreview").textContent = `${State.filtered.length}개 표시`;
-    }));
+  /* 칩은 열 때마다 다시 그리므로 위임으로 받는다 */
+  $("#filterModal").addEventListener("click", e => {
+    const chip = e.target.closest(".fchip");
+    if (!chip) return;
+    const fkey = chip.dataset.fkey, fval = chip.dataset.fval;
+
+    if (fkey === "sort") {
+      // 같은 칩을 다시 누르면 방향만 뒤집는다
+      if (Filters.sort === fval) Filters.sortDir = Filters.sortDir === "asc" ? "desc" : "asc";
+      else { Filters.sort = fval; Filters.sortDir = SORT_DIR0[fval] || "desc"; }
+    } else if (fval === "") {
+      Filters[fkey] = [];                     // 각 줄 맨 앞 [전체] = 그 줄 해제
+    } else {
+      const cur = Filters[fkey];
+      Filters[fkey] = cur.includes(fval) ? cur.filter(v => v !== fval) : cur.concat([fval]);
+    }
+    applyFilters();
+    buildFilterOptions();
+  });
+
+  $("#filterYear").addEventListener("change", () => {
+    Filters.year = $("#filterYear").value;
+    applyFilters();
+    buildFilterOptions();
+  });
 
   $("#resetFilter").addEventListener("click", () => {
-    Object.assign(Filters, { type: "", country: "", ott: "", year: "", genre: "", rating: "", sort: "date-desc" });
-    ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"].forEach(id => $("#" + id).value = "");
-    $("#sortBy").value = "date-desc";
+    MULTI.forEach(k => { Filters[k] = []; });
+    Object.assign(Filters, { year: "", sort: "date", sortDir: "desc" });
     applyFilters();
-    $("#filterPreview").textContent = `${State.filtered.length}개 표시`;
+    buildFilterOptions();
   });
 
   /* 유지보수 칩 토글 — 서로 배타적으로 켜진다 (하나 켜면 나머지는 꺼짐) */
@@ -419,48 +438,82 @@ function closeFilterModal() { $("#filterModal").classList.add("hidden"); }
 
 function buildFilterOptions() {
   const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "ko"));
-  const fill = (id, values) => {
-    const sel = $("#" + id);
-    const cur = sel.value;
-    sel.innerHTML = `<option value="">전체</option>` +
-      values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
-    sel.value = cur;
+
+  /* 값 칩 한 줄. 맨 앞 [전체]는 아무것도 안 고른 상태를 뜻하고, 누르면 그 줄이 풀린다 */
+  const chips = (boxId, fkey, values, label) => {
+    const box = $("#" + boxId);
+    if (!box) return;
+    const on = Filters[fkey];
+    box.innerHTML =
+      `<button class="fchip ${on.length ? "" : "on"}" data-fkey="${fkey}" data-fval="">전체</button>` +
+      values.map(v => `<button class="fchip ${on.includes(String(v)) ? "on" : ""}"
+        data-fkey="${fkey}" data-fval="${esc(v)}">${esc(label ? label(v) : v)}</button>`).join("");
   };
-  fill("filterType", uniq(State.items.map(i => i.type)));
-  fill("filterCountry", uniq(State.items.map(i => i.country)));
-  fill("filterOtt", uniq(State.items.flatMap(i => ottList(i))));
-  fill("filterYear", uniq(State.items.map(i => (i.startDate || "").slice(0, 4))).reverse());
-  fill("filterGenre", uniq(State.items.flatMap(i => visibleGenres(i.genres))));
+
+  chips("fcType", "type", uniq(State.items.map(i => i.type)));
+  chips("fcCountry", "country", uniq(State.items.map(i => i.country)));
+  chips("fcOtt", "ott", uniq(State.items.flatMap(i => ottList(i))));
+  chips("fcGenre", "genre", uniq(State.items.flatMap(i => visibleGenres(i.genres))));
+
+  /* 별점은 기록에 실제로 있는 점수만 (소수는 올림해 그 칸으로 — 통계 분포와 같은 기준).
+     0은 "별점 없음"이라 항상 마지막에 둔다. */
+  const scores = [...new Set(State.items.filter(i => i.rating).map(i => Math.ceil(i.rating)))]
+    .sort((a, b) => b - a).map(String);
+  if (State.items.some(i => !i.rating)) scores.push("0");
+  chips("fcRating", "rating", scores, v => v === "0" ? "별점 없음" : "♥ " + v);
+
+  const arrow = (k) => Filters.sort === k
+    ? `<span class="fdir">${Filters.sortDir === "asc" ? "↑" : "↓"}</span>` : "";
+  const sorts = [["date", "본 날짜"], ["title", "가나다"], ["rating", "♥ 내 별점"], ["vote", "★ TMDB 평점"]];
+  $("#fcSort").innerHTML = sorts.map(pair =>
+    `<button class="fchip ${Filters.sort === pair[0] ? "on" : ""}" data-fkey="sort" data-fval="${pair[0]}">${pair[1]}${arrow(pair[0])}</button>`).join("");
+
+  const ysel = $("#filterYear");
+  if (ysel) {
+    ysel.innerHTML = `<option value="">전체</option>` +
+      uniq(State.items.map(i => (i.startDate || "").slice(0, 4))).reverse()
+        .map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+    ysel.value = Filters.year;
+  }
+
+  const pv = $("#filterPreview");
+  if (pv) pv.textContent = `${State.filtered.length}개 표시`;
 }
 
 function hasActiveFilter() {
-  return !!(Filters.type || Filters.country || Filters.ott || Filters.year ||
-            Filters.genre || Filters.rating || Filters.person ||
+  return !!(MULTI.some(k => Filters[k].length) || Filters.year || Filters.person ||
             Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.engNameOnly ||
             Filters.dupOnly || Filters.group ||
             Filters.seriesView ||
-            Filters.sort !== "date-desc");
+            Filters.sort !== "date" || Filters.sortDir !== "desc");
 }
 
 /* 모든 필터 해제 (검색어·미등록 토글 포함) */
 function clearAllFilters() {
+  MULTI.forEach(k => { Filters[k] = []; });
   Object.assign(Filters, {
-    q: "", type: "", country: "", ott: "", year: "", genre: "", rating: "",
-    person: "", sort: "date-desc", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false, group: "", seriesView: false, seriesView: false
+    q: "", year: "", person: "", sort: "date", sortDir: "desc",
+    pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
+    group: "", seriesView: false
   });
   const s = $("#searchInput"); if (s) s.value = "";
-  ["filterType", "filterCountry", "filterOtt", "filterYear", "filterGenre", "filterRating"]
-    .forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
-  const sb = $("#sortBy"); if (sb) sb.value = "date-desc";
   applyFilters();
 }
 
 /* 통계 차트 클릭 → 해당 조건으로 목록 탭 조회 */
 function jumpToList(patch) {
   const backup = { ...Filters };
-  Object.assign(Filters,
-    { type: "", country: "", ott: "", year: "", genre: "", rating: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false, group: "", seriesView: false },
-    patch);
+  /* 차트는 `{genre:"액션"}`처럼 값 하나를 넘긴다 — 다중 선택 필터는 배열이라 감싸준다 */
+  const norm = {};
+  Object.entries(patch || {}).forEach(pair => {
+    const k = pair[0], v = pair[1];
+    norm[k] = (MULTI.indexOf(k) >= 0 && !Array.isArray(v)) ? [String(v)] : v;
+  });
+  const cleared = {};
+  MULTI.forEach(k => { cleared[k] = []; });
+  Object.assign(Filters, cleared,
+    { year: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false, group: "", seriesView: false },
+    norm);
   applyFilters();
 
   if (State.filtered.length === 0) {   // 조회 결과 없으면(예: '기타' 집계) 원복
@@ -470,14 +523,7 @@ function jumpToList(patch) {
     return;
   }
 
-  // 필터 모달 셀렉트 동기화
-  buildFilterOptions();
-  $("#filterType").value = Filters.type;
-  $("#filterCountry").value = Filters.country;
-  $("#filterOtt").value = Filters.ott;
-  $("#filterYear").value = Filters.year;
-  $("#filterGenre").value = Filters.genre;
-  $("#filterRating").value = Filters.rating;
+  buildFilterOptions();      // 필터 모달의 칩·연도 상태를 맞춰둔다
 
   // 목록 탭으로 전환
   const listTab = document.querySelector('.tab-btn[data-tab="list"]');
@@ -592,12 +638,14 @@ function applyFilters() {
     if (F.dupOnly && !isDupTmdb(i)) return false;
     if (F.group && groupKeyOf(i) !== F.group) return false;
     if (F.q && !matchesQuery(i, F.q)) return false;
-    if (F.type && i.type !== F.type) return false;
-    if (F.country && i.country !== F.country) return false;
-    if (F.ott && !ottList(i).includes(F.ott)) return false;
+    /* 다중 선택: 고른 게 없으면 통과, 있으면 그중 하나라도 맞아야 한다 */
+    if (F.type.length && !F.type.includes(i.type)) return false;
+    if (F.country.length && !F.country.includes(i.country)) return false;
+    if (F.ott.length && !ottList(i).some(o => F.ott.includes(o))) return false;
     if (F.year && (i.startDate || "").slice(0, 4) !== F.year) return false;
-    if (F.genre && !visibleGenres(i.genres).includes(F.genre)) return false;
-    if (F.rating && (i.rating || 0) !== +F.rating) return false;
+    if (F.genre.length && !visibleGenres(i.genres).some(g => F.genre.includes(g))) return false;
+    /* 소수 별점은 올림해 그 칸에 넣는다 (9.5 → ♥10). 통계 분포와 같은 기준 */
+    if (F.rating.length && !F.rating.includes(String(i.rating ? Math.ceil(i.rating) : 0))) return false;
     if (F.person && !(i.director === F.person || (i.cast || []).some(c => c.name === F.person))) return false;
     return true;
   });
@@ -608,10 +656,15 @@ function applyFilters() {
      "본 적 없는 해"에 잡히고, 어느 게 진짜 기억인지 구분할 수 없게 된다. */
   const dkey = (i) => i.lastWatchStart || i.startDate || i.releaseDate ||
                       (i.releaseYear ? i.releaseYear + "-01-01" : "0000-00-00");
-  if (F.sort === "date-desc") list.sort((a, b) => dkey(b).localeCompare(dkey(a)));
-  else if (F.sort === "date-asc") list.sort((a, b) => dkey(a).localeCompare(dkey(b)));
-  else if (F.sort === "title") list.sort((a, b) => (a.title || "").localeCompare(b.title || "", "ko"));
-  else if (F.sort === "rating") list.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  const CMP = {
+    date: (a, b) => dkey(a).localeCompare(dkey(b)),
+    title: (a, b) => (a.title || "").localeCompare(b.title || "", "ko"),
+    rating: (a, b) => (a.rating || 0) - (b.rating || 0),
+    vote: (a, b) => (a.voteAverage || 0) - (b.voteAverage || 0)
+  };
+  const base = CMP[F.sort] || CMP.date;
+  const sgn = F.sortDir === "asc" ? 1 : -1;
+  list.sort((a, b) => sgn * base(a, b));
 
   State.filtered = list;
   State.groups = groupItems(list);   // 시즌 묶기(표시 전용)

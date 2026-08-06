@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260806a">
+<link rel="stylesheet" href="style.css?v=20260806b">
 </head>
 <body>
 
@@ -321,37 +321,37 @@
       <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-sliders mr-2 text-lime-700"></i>필터 · 정렬</h3>
       <button id="closeFilter" class="modal-x"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <div class="p-5 space-y-4">
-      <div><label class="form-label">구분</label><select id="filterType" class="form-input"><option value="">전체</option></select></div>
-      <div><label class="form-label">국가</label><select id="filterCountry" class="form-input"><option value="">전체</option></select></div>
-      <div><label class="form-label">OTT</label><select id="filterOtt" class="form-input"><option value="">전체</option></select></div>
-      <div><label class="form-label">기간(연도)</label><select id="filterYear" class="form-input"><option value="">전체</option></select></div>
-      <div><label class="form-label">장르</label><select id="filterGenre" class="form-input"><option value="">전체</option></select></div>
-      <div><label class="form-label">내 별점</label>
-        <select id="filterRating" class="form-input">
-          <option value="">전체</option>
-          <option value="10">♥ 10</option>
-          <option value="9">♥ 9</option>
-          <option value="8">♥ 8</option>
-          <option value="7">♥ 7</option>
-          <option value="6">♥ 6</option>
-          <option value="5">♥ 5</option>
-          <option value="4">♥ 4</option>
-          <option value="3">♥ 3</option>
-          <option value="2">♥ 2</option>
-          <option value="1">♥ 1</option>
-          <option value="0">별점 없음</option>
-        </select>
+    <!-- 칩은 기록에 실제로 있는 값만 buildFilterOptions가 채운다 (연도만 드롭다운 — 해마다 늘어나서) -->
+    <div class="p-5">
+      <div class="fsec">
+        <div class="fsec-h">구분 <span class="fsec-hint">(여러 개)</span></div>
+        <div class="fchips" id="fcType"></div>
       </div>
-      <div><label class="form-label">정렬</label>
-        <select id="sortBy" class="form-input">
-          <option value="date-desc">최근 본 순</option>
-          <option value="date-asc">오래된 순</option>
-          <option value="title">가나다순</option>
-          <option value="rating">별점 높은순</option>
-        </select>
+      <div class="fsec">
+        <div class="fsec-h">국가 <span class="fsec-hint">(여러 개)</span></div>
+        <div class="fchips" id="fcCountry"></div>
       </div>
-      <div id="filterPreview" class="text-sm font-semibold text-lime-700 text-center pt-1"></div>
+      <div class="fsec">
+        <div class="fsec-h">OTT <span class="fsec-hint">(여러 개)</span></div>
+        <div class="fchips" id="fcOtt"></div>
+      </div>
+      <div class="fsec">
+        <div class="fsec-h">장르 <span class="fsec-hint">(여러 개)</span></div>
+        <div class="fchips" id="fcGenre"></div>
+      </div>
+      <div class="fsec">
+        <div class="fsec-h">내 별점 <span class="fsec-hint">(여러 개)</span></div>
+        <div class="fchips" id="fcRating"></div>
+      </div>
+      <div class="fsec">
+        <div class="fsec-h">기간(연도)</div>
+        <select id="filterYear" class="form-input"><option value="">전체</option></select>
+      </div>
+      <div class="fsec">
+        <div class="fsec-h">정렬 기준 <span class="fsec-hint">(같은 칩을 한 번 더 누르면 ↕ 방향 전환)</span></div>
+        <div class="fchips" id="fcSort"></div>
+      </div>
+      <div id="filterPreview" class="text-sm font-semibold text-lime-700 text-center pt-4"></div>
     </div>
     <div class="modal-foot">
       <button id="resetFilter" class="btn btn-ghost">
@@ -581,11 +581,11 @@
     }
   })();
 </script>
-<script src="seed-data.js?v=20260806a"></script>
-<script src="core.js?v=20260806a"></script>
-<script src="tmdb.js?v=20260806a"></script>
-<script src="watchlog.js?v=20260806a"></script>
-<script src="discover.js?v=20260806a"></script>
-<script src="stats.js?v=20260806a"></script>
+<script src="seed-data.js?v=20260806b"></script>
+<script src="core.js?v=20260806b"></script>
+<script src="tmdb.js?v=20260806b"></script>
+<script src="watchlog.js?v=20260806b"></script>
+<script src="discover.js?v=20260806b"></script>
+<script src="stats.js?v=20260806b"></script>
 </body>
 </html>
