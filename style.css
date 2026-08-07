@@ -581,12 +581,27 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 
 /* ===== 갱신 미리보기 =====
    조회는 끝났고 아직 저장 전인 상태의 변경 목록. 항목이 많을 수 있어 이 영역만 스크롤한다. */
-.rf-list { margin-top: 14px; max-height: 52vh; overflow-y: auto; }
+.rf-list { margin-top: 8px; max-height: 50vh; overflow-y: auto; }
+.rf-allrow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 14px; padding: 0 2px;
+}
+.rf-all { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #3b4a35; }
+.rf-all input { width: 16px; height: 16px; border-radius: 4px; accent-color: #4d7c2a; }
+.rf-picked { font-size: 12.5px; color: #8a9683; }
+/* 카드 전체가 라벨이라 아무 데나 눌러도 체크가 토글된다 (폰에서 체크박스만 노리기 어렵다) */
 .rf-item {
+  display: flex; gap: 10px; align-items: flex-start;
   border: 1px solid #e6ecdd; border-radius: 10px;
   padding: 10px 12px; background: #fff; margin-bottom: 8px;
+  cursor: pointer; transition: background .12s, border-color .12s, opacity .12s;
 }
-.rf-item.rf-skip { border-color: #f0d3a8; background: #fffaf1; }
+label.rf-item:hover { background: #f7faf3; border-color: #cddcbc; }
+.rf-cb { width: 16px; height: 16px; margin-top: 2px; flex: none; border-radius: 4px; accent-color: #4d7c2a; }
+.rf-body { min-width: 0; flex: 1; }
+/* 체크를 푼 항목은 흐리게 — 목록에 남아 있되 "이건 안 바뀐다"가 보여야 한다 */
+.rf-item:has(.rf-cb:not(:checked)) { opacity: .45; background: #fafbf8; }
+.rf-item.rf-skip { display: block; border-color: #f0d3a8; background: #fffaf1; cursor: default; }
 .rf-name { font-size: 13.5px; color: #2f3a2a; }
 .rf-diff { font-size: 12.5px; color: #5d6b57; margin-top: 5px; line-height: 1.65; }
 .rf-diff .rf-k { color: #8a9683; margin-right: 6px; }

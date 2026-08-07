@@ -1513,6 +1513,14 @@ function initSettings() {
   $("#refreshPreviewModal").addEventListener("click", e => {
     if (e.target.id === "refreshPreviewModal") closePreview();
   });
+  /* 항목은 열 때마다 새로 그리므로 체크 변화는 위임으로 받는다 */
+  $("#rfList").addEventListener("change", e => {
+    if (e.target.classList.contains("rf-cb")) syncRefreshPicked();
+  });
+  $("#rfAll").addEventListener("change", e => {
+    document.querySelectorAll("#rfList .rf-cb").forEach(b => { b.checked = e.target.checked; });
+    syncRefreshPicked();
+  });
 }
 
 /* ---------- 백업에서 되돌리기 ----------
@@ -1880,14 +1888,19 @@ function showRefreshPreview(plan, unsure, fail) {
     + (n(p => "mediaType" in p.patch) ? ` · 영화/TV 구분 새로 저장 ${n(p => "mediaType" in p.patch)}` : "")
     + (fail ? ` · 조회 실패 ${fail}` : "");
 
+  /* 카드를 `<label>`로 감싸 아무 데나 눌러도 체크가 토글되게 한다 (폰에서 네모만 노리기 어렵다).
+     기본은 전부 켜짐 — 대개 다 적용할 거고, 걸리는 것만 풀면 된다. */
   const val = (v) => (v === "" || v == null) ? "(없음)" : esc(String(v));
-  const rows = plan.map(p => `
-    <div class="rf-item">
-      <div class="rf-name">${esc(p.title)}${p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</div>
-      <div class="rf-diff">${p.diff.map(c =>
-        `<div><span class="rf-k">${esc(c.label)}</span><span class="rf-a">${val(c.from)}</span>
-         <span class="rf-k">→</span><span class="rf-b">${val(c.to)}</span></div>`).join("")}</div>
-    </div>`).join("");
+  const rows = plan.map((p, n) => `
+    <label class="rf-item">
+      <input type="checkbox" class="rf-cb" data-idx="${n}" checked>
+      <div class="rf-body">
+        <div class="rf-name">${esc(p.title)}${p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</div>
+        <div class="rf-diff">${p.diff.map(c =>
+          `<div><span class="rf-k">${esc(c.label)}</span><span class="rf-a">${val(c.from)}</span>
+           <span class="rf-k">→</span><span class="rf-b">${val(c.to)}</span></div>`).join("")}</div>
+      </div>
+    </label>`).join("");
 
   /* 건너뛴 건 **어떤 작품이 왔는지까지** 보여준다 — 제목만 알려주면 뭐가 문제인지 알 수가 없다. */
   const skipped = unsure.length ? `
@@ -1899,16 +1912,34 @@ function showRefreshPreview(plan, unsure, fail) {
     </div>` : "";
 
   $("#rfList").innerHTML = skipped + rows;
+  $("#rfAll").checked = true;
+  syncRefreshPicked();
   $("#refreshPreviewModal").classList.remove("hidden");
 }
 
-/* [적용] — 여기서 처음으로 State가 바뀐다 */
-function applyRefreshPlan() {
-  $("#refreshPreviewModal").classList.add("hidden");
-  if (!RefreshPlan.length) { toast("적용할 변경이 없습니다"); return; }
+/* 고른 개수를 버튼과 안내에 반영한다 — 몇 개가 적용될지 누르기 전에 보여야 한다 */
+function syncRefreshPicked() {
+  const boxes = [...document.querySelectorAll("#rfList .rf-cb")];
+  const on = boxes.filter(b => b.checked).length;
+  const all = $("#rfAll");
+  all.checked = on === boxes.length && on > 0;
+  all.indeterminate = on > 0 && on < boxes.length;   // 일부만 골랐을 때
+  $("#rfPicked").textContent = `${on} / ${boxes.length}개 선택`;
+  const btn = $("#applyRefreshPreview");
+  btn.textContent = on ? `적용 (${on}개)` : "적용";
+  btn.disabled = !on;
+}
 
-  RefreshPlan.forEach(p => Object.assign(p.obj, p.patch));
-  const cnt = RefreshPlan.length;
+/* [적용] — 여기서 처음으로 State가 바뀐다. 체크된 것만 반영한다. */
+function applyRefreshPlan() {
+  const picked = [...document.querySelectorAll("#rfList .rf-cb")]
+    .filter(b => b.checked).map(b => RefreshPlan[+b.dataset.idx]).filter(Boolean);
+
+  $("#refreshPreviewModal").classList.add("hidden");
+  if (!picked.length) { toast("고른 항목이 없습니다"); RefreshPlan = []; return; }
+
+  picked.forEach(p => Object.assign(p.obj, p.patch));
+  const cnt = picked.length, skipped = RefreshPlan.length - cnt;
   RefreshPlan = [];
 
   saveLocal();
@@ -1917,7 +1948,8 @@ function applyRefreshPlan() {
   markUpd("refresh");
 
   const status = $("#enrichStatus");
-  status.textContent = `적용 완료 — ${cnt}개 갱신됨`;
+  status.textContent = `적용 완료 — ${cnt}개 갱신됨`
+    + (skipped ? `, ${skipped}개는 체크를 풀어 그대로 뒀습니다` : "");
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast(`${cnt}개를 갱신했습니다`, "success");
 }

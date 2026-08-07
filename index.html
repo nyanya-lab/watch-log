@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260807p">
+<link rel="stylesheet" href="style.css?v=20260807q">
 </head>
 <body>
 
@@ -343,10 +343,15 @@
     </div>
     <div class="p-5">
       <div id="rfSummary" class="rst-now"></div>
+      <!-- 기본은 전체 선택. 마음에 안 드는 항목만 체크를 풀면 그건 그대로 남는다 -->
+      <div class="rf-allrow">
+        <label class="rf-all"><input type="checkbox" id="rfAll" checked><span>전체 선택</span></label>
+        <span id="rfPicked" class="rf-picked"></span>
+      </div>
       <!-- runRefreshAll이 채운다 -->
       <div id="rfList" class="rf-list"></div>
       <p class="text-xs text-slate-400 font-medium mt-4 leading-relaxed">
-        <b>[적용]을 눌러야 저장됩니다.</b> 취소하면 아무것도 바뀌지 않아요.
+        <b>[적용]을 눌러야 저장됩니다.</b> 체크를 푼 항목과 취소한 항목은 그대로 남아요.
         제목·포스터·줄거리·장르·출연진과 별점·본 날짜·한줄평은 애초에 갱신 대상이 아닙니다.
       </p>
     </div>
@@ -656,10 +661,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260807p"></script>
-<script src="tmdb.js?v=20260807p"></script>
-<script src="watchlog.js?v=20260807p"></script>
-<script src="discover.js?v=20260807p"></script>
-<script src="stats.js?v=20260807p"></script>
+<script src="core.js?v=20260807q"></script>
+<script src="tmdb.js?v=20260807q"></script>
+<script src="watchlog.js?v=20260807q"></script>
+<script src="discover.js?v=20260807q"></script>
+<script src="stats.js?v=20260807q"></script>
 </body>
 </html>
