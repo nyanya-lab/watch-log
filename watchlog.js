@@ -443,7 +443,11 @@ function buildSeasonSelect(seasons) {
       seasons.map(s => `<option value="${s.number}">시즌 ${s.number}${s.year ? " (" + s.year + ")" : ""}${s.episodes ? " · " + s.episodes + "화" : ""}</option>`).join("");
     sel.value = $("#fSeason").value || "0";
     field.classList.remove("hidden");
-    sel.onchange = () => { $("#fSeason").value = sel.value; };
+    sel.onchange = () => {
+      $("#fSeason").value = sel.value;
+      // 고른 시즌의 포스터·연도·화수가 정보 카드에 바로 보이게 (저장되는 값도 그것이다)
+      if (State.selectedTmdb) renderSelected(State.selectedTmdb);
+    };
   } else {
     field.classList.add("hidden");
   }
@@ -1416,6 +1420,7 @@ function openEdit(id) {
       };
       renderSelected(State.selectedTmdb);
       buildSeasonSelect(seasonListFor(i));
+      loadSeasonsForEdit(i);          // 진짜 시즌 목록으로 갈아끼운다 (아래 참고)
     } else {
       $("#tmdbQuery").value = i.title || "";
     }
@@ -1436,6 +1441,27 @@ function openEdit(id) {
 
   updateStepperLabel("fCount");
   $("#editModal").classList.remove("hidden");
+}
+
+/* ---------- 수정창을 열 때 진짜 시즌 목록 받아오기 ----------
+   저장된 기록에는 시즌 목록이 없고 `totalSeasons` 숫자만 있다. 그것만으로 만든 임시 목록
+   (`seasonListFor`)은 번호뿐이라 ① 드롭다운에 방영연도·화수가 안 나오고
+   ② 시즌을 바꿔 저장해도 **그 시즌의 포스터·방영일을 쓸 수 없다**(`saveItem`이 `seasons`를 본다).
+   그래서 TV 기록을 열 때 한 번 받아온다. 모달은 먼저 뜨고 목록만 나중에 갈아끼운다. */
+async function loadSeasonsForEdit(i) {
+  if (mediaTypeOf(i) !== "tv" || (i.totalSeasons || 0) < 2) return;
+  if (!i.tmdbId || !getTmdbKey()) return;
+  try {
+    const d = await tmdbDetail(i.tmdbId, "tv");
+    /* 그 사이 창을 닫았거나 다른 기록으로 옮겼으면 버린다.
+       받아온 게 같은 작품이 아니면(짐작이 틀린 경우) 엉뚱한 시즌 목록을 얹지 않는다. */
+    if (State.editingId !== i.id || !State.selectedTmdb) return;
+    if (!sameWork(i, d) || !(d.seasons || []).length) return;
+
+    State.selectedTmdb.seasons = d.seasons;
+    buildSeasonSelect(d.seasons);
+    renderSelected(State.selectedTmdb);      // 고른 시즌의 포스터로 갱신
+  } catch { /* 못 받아와도 번호만 있는 임시 목록으로 시즌은 고를 수 있다 */ }
 }
 
 function closeEdit() {

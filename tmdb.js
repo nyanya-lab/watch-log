@@ -672,16 +672,27 @@ function applyTmdbToForm(d) {
 }
 
 function renderSelected(d) {
-  $("#selPoster").src = d.poster || "";
-  $("#selPoster").style.display = d.poster ? "" : "none";
-  $("#selTitle").textContent = d.title || "";
+  /* 시즌을 골랐으면 **그 시즌의** 포스터·연도·화수를 보여준다.
+     안 그러면 시즌을 바꿔도 화면이 그대로라 뭘 골랐는지 확인할 방법이 없다
+     (그리고 실제로 저장되는 것도 시즌 값이다 — `saveItem` 참고). */
+  const selNo = parseInt(($("#fSeason") || {}).value) || 0;
+  const s = selNo && (d.seasons || []).find(x => x.number === selNo);
+
+  const poster = (s && s.poster) || d.poster;
+  $("#selPoster").src = poster || "";
+  $("#selPoster").style.display = poster ? "" : "none";
+  /* 제목에 이미 시즌 표기가 있으면 덧붙이지 않는다 ("킹덤 시즌2 시즌 2"가 되지 않게) */
+  const t = d.title || "";
+  const hasSeasonInTitle = /시즌|season|파트|part|\d+기/i.test(t);
+  $("#selTitle").textContent = t + (s && !hasSeasonInTitle ? ` 시즌 ${s.number}` : "");
 
   const metaBits = [];
   if (d.type) metaBits.push(d.type);
   if (d.country) metaBits.push(d.country);
-  if (d.releaseYear) metaBits.push(d.releaseYear);
+  if (s ? s.year : d.releaseYear) metaBits.push(s ? s.year : d.releaseYear);
   if (d.runtime) metaBits.push(d.runtime + "분");
-  if (d.totalEpisodes) metaBits.push("총 " + d.totalEpisodes + "화");
+  if (s && s.episodes) metaBits.push(`시즌 ${s.episodes}화`);
+  else if (d.totalEpisodes) metaBits.push("총 " + d.totalEpisodes + "화");
   $("#selMeta").textContent = metaBits.join(" · ");
 
   const chips = [];
