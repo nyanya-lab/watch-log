@@ -23,12 +23,11 @@ tmdb.js         489줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
 watchlog.js    1546줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
 discover.js     928줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
 stats.js        379줄  Chart.js 통계 + 히트맵
-seed-data.js   5630줄  노션에서 변환한 초기 데이터 268개
 dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
 .gitignore            dev-local.js 제외
 ```
 
-로드 순서 고정 (index.html 하단): `seed-data → core → tmdb → watchlog → discover → stats`
+로드 순서 고정 (index.html 하단): `core → tmdb → watchlog → discover → stats`
 (discover.js는 watchlog.js의 `visibleGenres`·`hearts`·`openEdit` 등을 쓰므로 그 뒤여야 함)
 
 의존성: Tailwind CDN, FontAwesome 6.5.1, Chart.js 4.4.1, Pretendard
@@ -42,7 +41,6 @@ favicon은 `<link rel="icon">`에 이모지 SVG를 data URI로 넣었다 (파일
 ```js
 const FIREBASE_DB_URL = "https://nyanya-watchlog-default-rtdb.asia-southeast1.firebasedatabase.app";
 const SYNC_BRANCH = "watchlog";
-const LEGACY_KEY = "data";   // 예전 고정 경로 (/watchlog/data). 마이그레이션 참조용.
 const AUTO_SYNC_DELAY = 2500;
 ```
 
@@ -164,8 +162,9 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
   id 없는 사람을 이름으로도 기억하지 않으면 "이름 영문" 목록에서 영원히 안 빠진다.
 - ~~`watchlog_rating10`~~ — 없앴다. 아래 **별점이 폰에서 지워진 사고** 참고
 - `watchlog_modified` — 마지막 수정 ISO 시각 (동기화 비교용)
-- `watchlog_is_seed` — 지금 로컬 데이터가 "부팅 때 자동으로 넣은 시드일 뿐"인지 (`"1"`).
-  아래 **시드 사고** 참고. `saveLocal()`이 호출되면 지워진다(= 사용자가 실제로 뭔가 저장한 순간).
+- `watchlog_is_seed` — 예전에 시드가 들어간 기기에만 남아 있는 표시 (`"1"`).
+  시드를 넣던 코드는 없앴지만(2026-08-07) **그 상태로 남은 기기가 시드를 서버로 올리지 않도록**
+  방어는 유지한다. 새로 붙지 않고, `saveLocal()`이 한 번 돌면 지워진다.
 - `watchlog_tmdb_key`
 - `watchlog_sync_password` — 동기화 비밀번호(= 서버 데이터 경로). 이 기기에만 저장.
 
@@ -194,11 +193,13 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 `firstSyncAfterPw` → `syncOnBoot`이 **"로컬이 서버보다 최신"**이라고 판정 → 시드 268개를 서버로 올려
 진짜 기록 276개를 날렸다. 같은 비밀번호를 다시 넣어도 서버가 이미 시드라 계속 268개가 나왔다.
 
-**막은 방법** — 시드는 사용자가 만든 기록이 아니므로 **절대 서버로 올리지 않는다**:
+**결국 파일째로 없앴다 (2026-08-07).** 서버에 진짜 기록이 있으니 시드를 쓸 일이 없고,
+**앱이 데이터를 스스로 만들어내지 않는 것**이 어떤 방어보다 확실하다. 이제 비어 보이면 그냥 비어
+있는 것이다. `seed-data.js`·설정 탭 [노션 데이터 불러오기]·부팅 시 삽입 코드가 전부 사라졌다.
+같은 이유로 예전 고정 경로(`/watchlog/data`) 마이그레이션 코드도 함께 지웠다.
 
-1. `bootSync`가 시드를 넣을 때 `saveLocal(true)`(서버 전송 안 함) + `markSeed(true)`로 딱지를 붙인다.
-2. **동기화 비밀번호가 있는데 데이터가 비어 있으면 시드를 아예 안 넣는다.** 서버 조회 실패일 수 있고,
-   그때 시드를 넣으면 그게 최신으로 보인다. 대신 오류를 알린다 (필요하면 설정에서 직접 불러오기).
+당시 세웠던 방어 중 아래 두 개는 **예전에 시드가 들어간 채 남아 있는 기기** 때문에 유지한다:
+
 3. `syncOnBoot`: 로컬이 시드면 **시각과 무관하게 무조건 서버를 채택**한다.
 4. `autoPush`로 가는 모든 길목(`syncOnBoot`의 로컬 최신 분기, 서버 빈 분기, `firstSyncAfterPw`)에
    `!isSeedData()` 조건을 걸었다.

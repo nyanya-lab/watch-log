@@ -1440,15 +1440,6 @@ function initSettings() {
     e.target.value = "";
   });
 
-  $("#seedBtn").addEventListener("click", () => {
-    if (!window.SEED_DATA) { toast("시드 데이터가 없습니다", "error"); return; }
-    if (!confirm(`노션 데이터 ${window.SEED_DATA.length}개를 불러옵니다. 기존 데이터를 덮어쓸까요?`)) return;
-    State.items = window.SEED_DATA.map(x => ({ ...x, createdAt: new Date().toISOString() }));
-    saveLocal();
-    applyFilters();
-    toast(`${State.items.length}개 불러왔습니다`, "success");
-  });
-
   $("#clearOttBtn").addEventListener("click", runClearOttField);
   $("#restoreBtn").addEventListener("click", runRestoreBackup);
 }

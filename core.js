@@ -11,8 +11,6 @@ const FIREBASE_DB_URL = "https://nyanya-watchlog-default-rtdb.asia-southeast1.fi
    Firebase 규칙에서 watchlog/$room 만 읽기·쓰기 허용 (부모 목록 열거는 차단). */
 const SYNC_BRANCH = "watchlog";
 
-const LEGACY_KEY = "data";          // 예전 고정 경로 (/watchlog/data). 마이그레이션용으로만 참조.
-
 const AUTO_SYNC_DELAY = 2500;       // 자동 저장 대기시간(ms)
 /* --------------------------------------------- */
 
@@ -23,10 +21,9 @@ const LS_TMDB = "watchlog_tmdb_key";
 const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서버 데이터 경로 (이 기기에만 저장, 깃에는 없음)
 const LS_MODIFIED = "watchlog_modified";
 const LS_BACKUP = "watchlog_items_backup";
-/* 지금 로컬 데이터가 "부팅 때 자동으로 넣은 시드"일 뿐인지 표시.
-   시드는 사용자가 만든 기록이 아니므로 **절대 서버로 올리지 않는다.**
-   (이 표시가 없어서 실제 사고가 났다: 빈 기기에서 앱을 열면 시드 268개가 들어가고,
-    그 뒤 동기화 비밀번호를 넣으면 "로컬이 더 최신"으로 판정돼 서버의 진짜 기록을 덮어썼다.) */
+/* 시드를 넣던 코드는 없앴지만(2026-08-07) 이 표시는 남긴다 —
+   **예전에 시드가 들어간 채로 남아 있는 기기**가 그걸 서버로 올리지 않도록 계속 막아야 한다.
+   새로 붙는 일은 없고, `saveLocal()`이 한 번 돌면 지워진다. */
 const LS_SEED = "watchlog_is_seed";
 
 /* 로컬 데이터가 아직 "시드일 뿐"인지 */
@@ -49,9 +46,6 @@ function getDataUrl() {
   if (!pw) return null;
   return `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${encodeURIComponent(pw)}.json`;
 }
-/* 예전 고정 경로 (/watchlog/data) — 최초 비밀번호 설정 시 데이터 이사용 */
-const LEGACY_URL = `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${LEGACY_KEY}.json`;
-
 const State = {
   items: [],
   wishes: [],        // 보고싶어요 (아직 안 본 작품) — items와 별도
@@ -611,8 +605,7 @@ async function saveSyncPw() {
 }
 
 /* 비밀번호를 처음(또는 새로) 설정한 직후의 동기화 처리.
-   새 방이 비어 있으면 → 예전 고정 경로(/watchlog/data) 데이터를 옮길지 물어보고,
-   그것도 없으면 이 기기 데이터를 새 방에 올린다. */
+   새 방에 데이터가 있으면 평소 부팅 동기화로, 비어 있으면 이 기기 데이터를 올린다. */
 async function firstSyncAfterPw() {
   const url = getDataUrl();
   if (!url) { setSyncIcon("local"); return; }
@@ -622,29 +615,6 @@ async function firstSyncAfterPw() {
 
     // 새 방에 이미 데이터가 있음 → 평소 부팅 동기화 로직으로
     if (d && Array.isArray(d.items)) { await syncOnBoot(); return; }
-
-    // 새 방이 비어 있음 → 예전 고정 경로에 데이터가 있는지 확인 (마이그레이션)
-    let legacy = null;
-    try {
-      const r = await fetch(LEGACY_URL + "?t=" + Date.now());
-      if (r.ok) legacy = await r.json();
-    } catch {}
-
-    if (legacy && Array.isArray(legacy.items) && legacy.items.length) {
-      const ok = confirm(
-        `기존 서버 데이터 ${legacy.items.length}개를 이 비밀번호(방)로 옮길까요?\n\n` +
-        `[확인] 예전 데이터를 이 비밀번호로 복사합니다.\n` +
-        `[취소] 이 기기의 현재 데이터(${State.items.length}개)를 올립니다.`
-      );
-      if (ok) {
-        State.items = legacy.items;
-        localStorage.setItem(LS_KEY, JSON.stringify(State.items));
-        localStorage.setItem(LS_MODIFIED, legacy.updatedAt || new Date().toISOString());
-        await pushToServer();
-        toast(`기존 데이터 ${State.items.length}개를 옮겼습니다`, "success");
-        return;
-      }
-    }
 
     // 이 기기 데이터를 새 방에 올림 — 시드는 올리지 않는다
     if (State.items.length && !isSeedData()) {
@@ -761,23 +731,15 @@ function bootApp() {
 async function bootSync() {
   await syncOnBoot();
   startRealtime();
-  if (State.items.length) return;
-  if (!window.SEED_DATA) return;
 
-  /* 동기화 비밀번호가 있는데 비어 있다면, 서버 조회가 실패했거나 방이 빈 것이다.
-     이때 시드를 넣으면 그게 "최신"으로 보여 서버의 진짜 기록을 덮어쓸 수 있으므로 넣지 않는다.
-     (필요하면 설정 → 노션 데이터 불러오기로 직접 넣을 수 있다) */
-  if (hasSyncPassword()) {
+  /* ⚠ 예전엔 여기서 로컬이 비면 노션 시드 268개를 자동으로 넣었다. **그게 8월 1일 사고의 원인**이다
+     — 빈 기기에서 앱을 열면 시드가 들어가고, 그게 "방금 수정됨"이 되어 서버의 진짜 기록을 덮어썼다.
+     서버에 기록이 있는 지금은 시드를 쓸 일이 없어 `seed-data.js`째로 없앴다(2026-08-07).
+     비어 보이면 그냥 비어 있는 것이다 — **앱이 데이터를 만들어내지 않는다.** */
+  if (!State.items.length && hasSyncPassword()) {
     setSyncIcon("error");
     toast("서버에서 데이터를 가져오지 못했습니다. 새로고침해 보세요", "error");
-    return;
   }
-
-  State.items = window.SEED_DATA.map(x => ({ ...x, createdAt: new Date().toISOString() }));
-  applyFilters();
-  saveLocal(true);     // 서버로 보내지 않음
-  markSeed(true);      // 아직 "시드일 뿐"이라고 표시 (saveLocal이 지우므로 그 뒤에)
-  toast(`노션 데이터 ${State.items.length}개를 불러왔습니다`);
 }
 
 document.addEventListener("DOMContentLoaded", bootApp);
