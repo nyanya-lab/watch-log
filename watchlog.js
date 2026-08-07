@@ -1499,6 +1499,20 @@ function initSettings() {
     const item = e.target.closest(".rst-item");
     if (item) applyRestorePoint(+item.dataset.idx);
   });
+
+  /* 갱신 미리보기 — 닫기/취소는 조회 결과를 버린다 (아직 저장 전이라 잃는 건 시간뿐) */
+  const closePreview = () => {
+    $("#refreshPreviewModal").classList.add("hidden");
+    RefreshPlan = [];
+    $("#enrichStatus").textContent = "취소했습니다 — 아무것도 바뀌지 않았습니다";
+    $("#enrichStatus").className = "text-sm mt-3 font-medium text-slate-500";
+  };
+  $("#closeRefreshPreview").addEventListener("click", closePreview);
+  $("#cancelRefreshPreview").addEventListener("click", closePreview);
+  $("#applyRefreshPreview").addEventListener("click", applyRefreshPlan);
+  $("#refreshPreviewModal").addEventListener("click", e => {
+    if (e.target.id === "refreshPreviewModal") closePreview();
+  });
 }
 
 /* ---------- 백업에서 되돌리기 ----------
@@ -1740,16 +1754,28 @@ async function runRefreshAll() {
   const fill = $("#enrichBarFill");
   bar.classList.remove("hidden");
 
-  let done = 0, changed = 0, fail = 0, mtFilled = 0;
+  let done = 0, fail = 0;
+  const plan = [];                   // 적용 대기 중인 변경 (아직 State에 안 씀)
   const unsure = [];                 // 받아온 게 다른 작품처럼 보여 건너뛴 것
   const step = (label) => {
     done++;
-    status.textContent = `${done} / ${total} — ${label}`;
+    status.textContent = `조회 중 ${done} / ${total} — ${label}`;
     status.className = "text-sm mt-3 font-medium text-slate-600";
     fill.style.width = (done / total * 100).toFixed(1) + "%";
   };
-  const snap = (i) => JSON.stringify([i.otts, i.voteAverage, i.totalSeasons, i.totalEpisodes,
-                                      i.collectionId, i.seriesNo, i.seriesTotal]);
+
+  /* 값 하나가 바뀌면 patch(적용할 것)와 diff(보여줄 것)에 함께 담는다.
+     같은 값이면 아무 데도 안 담기므로 "안 바뀐 항목"은 목록에 뜨지 않는다. */
+  const put = (p, key, cur, next, label, fmt) => {
+    const same = Array.isArray(cur) || Array.isArray(next)
+      ? JSON.stringify(cur || []) === JSON.stringify(next || [])
+      : (cur ?? null) === (next ?? null);
+    if (same) return;
+    p.patch[key] = next;
+    if (label) p.diff.push({ label, from: fmt ? fmt(cur) : cur, to: fmt ? fmt(next) : next });
+  };
+  const ottTxt = (v) => (v && v.length) ? v.join("·") : "";
+  const numTxt = (v) => (v == null || v === "") ? "" : String(v);
 
   for (const i of items) {
     step(i.title);
@@ -1764,42 +1790,48 @@ async function runRefreshAll() {
         if (sameWork(i, d2)) { d = d2; mt = other; }
       }
       /* 둘 다 아니면 **아무것도 바꾸지 않고** 넘어간다. 일괄이라 하나씩 물어볼 수 없고,
-         그냥 두면 기존 값이 그대로 남으므로 잃는 게 없다. 끝에 제목 목록으로 보여준다. */
-      if (!sameWork(i, d)) { unsure.push(i.title); continue; }
-
-      const before = snap(i);
-      /* 확인된 값만 남긴다 — 다음부터는 짐작하지 않는다.
-         `snap`에는 넣지 않고 따로 센다: 화면에 드러나지 않는 값이라 "변경"으로 뭉뚱그리면
-         정작 이게 채워졌는지 알 수가 없다. */
-      if (!i.mediaType) mtFilled++;
-      i.mediaType = mt;
-      i.otts = await tmdbProviders(i.tmdbId, mt);
-      i.voteAverage = d.voteAverage;
-      i.totalSeasons = d.totalSeasons;
-      i.totalEpisodes = d.totalEpisodes;
-
-      /* 시리즈 정보는 **성공했을 때만 덮는다.** 예전 코드는 조회하기 전에 seriesNo/seriesTotal을
-         null로 밀어놔서, 컬렉션 조회가 실패하면 멀쩡하던 "S3 / 총 8편"이 사라졌다. */
-      if (d.collectionId) {
-        i.collectionId = d.collectionId;
-        i.collectionName = d.collectionName || i.collectionName || "";
-        try {
-          const coll = await tmdbCollection(d.collectionId);
-          i.seriesNo = coll.order.get(i.tmdbId) || i.seriesNo || null;
-          i.seriesTotal = coll.total || i.seriesTotal || null;
-          if (coll.name) i.collectionName = coll.name;
-          saveCollInfo(coll);              // 편별 개봉일·제목 (탐색 탭 이어보기용)
-        } catch { /* 편 번호를 못 구해도 컬렉션 연결 자체는 남긴다 */ }
-      } else if (mt === "movie") {
-        /* 영화인데 컬렉션이 없다고 답했으면 연결을 지운다 (시리즈에서 빠졌거나 애초에 없던 것).
-           TV는 TMDB가 컬렉션 개념을 제공하지 않으므로 "없다"가 근거가 못 된다 — 건드리지 않는다. */
-        i.collectionId = null; i.collectionName = ""; i.seriesNo = null; i.seriesTotal = null;
+         그냥 두면 기존 값이 그대로 남으므로 잃는 게 없다. 미리보기에 따로 모아 보여준다. */
+      if (!sameWork(i, d)) {
+        unsure.push({ title: i.title, got: d ? (d.title || "(제목 없음)") : "(조회 실패)" });
+        continue;
       }
 
-      if (snap(i) !== before) changed++;
+      const p = { obj: i, title: i.title, patch: {}, diff: [] };
+      put(p, "mediaType", i.mediaType || null, mt, "영화/TV 구분",
+          v => v === "tv" ? "TV" : v === "movie" ? "영화" : "");
+      put(p, "otts", i.otts || [], await tmdbProviders(i.tmdbId, mt), "볼 수 있는 곳", ottTxt);
+      put(p, "voteAverage", i.voteAverage ?? null, d.voteAverage ?? null, "TMDB 평점", numTxt);
+      put(p, "totalSeasons", i.totalSeasons ?? null, d.totalSeasons ?? null, "시즌 수", numTxt);
+      put(p, "totalEpisodes", i.totalEpisodes ?? null, d.totalEpisodes ?? null, "화수", numTxt);
+
+      /* 시리즈 정보는 **조회에 성공했을 때만 담는다.** 예전 코드는 조회하기 전에 seriesNo/
+         seriesTotal을 null로 밀어놔서, 컬렉션 조회가 실패하면 멀쩡하던 "S3 / 총 8편"이 사라졌다. */
+      if (d.collectionId) {
+        let name = d.collectionName || i.collectionName || "";
+        let no = i.seriesNo ?? null, tot = i.seriesTotal ?? null;
+        try {
+          const coll = await tmdbCollection(d.collectionId);
+          no = coll.order.get(i.tmdbId) || no;
+          tot = coll.total || tot;
+          if (coll.name) name = coll.name;
+          saveCollInfo(coll);            // 편별 개봉일·제목 (탐색 탭 이어보기용)
+        } catch { /* 편 번호를 못 구해도 컬렉션 연결 자체는 담는다 */ }
+        put(p, "collectionId", i.collectionId ?? null, d.collectionId, null);
+        put(p, "collectionName", i.collectionName || "", name, "시리즈");
+        put(p, "seriesNo", i.seriesNo ?? null, no, "시리즈 편", v => v ? "S" + v : "");
+        put(p, "seriesTotal", i.seriesTotal ?? null, tot, "총 편수", v => v ? v + "편" : "");
+      } else if (mt === "movie" && i.collectionId) {
+        /* 영화인데 컬렉션이 없다고 답했으면 연결을 지운다 (시리즈에서 빠졌거나 애초에 없던 것).
+           TV는 TMDB가 컬렉션 개념을 제공하지 않으므로 "없다"가 근거가 못 된다 — 건드리지 않는다. */
+        put(p, "collectionId", i.collectionId, null, null);
+        put(p, "collectionName", i.collectionName || "", "", "시리즈");
+        put(p, "seriesNo", i.seriesNo ?? null, null, "시리즈 편", v => v ? "S" + v : "");
+        put(p, "seriesTotal", i.seriesTotal ?? null, null, "총 편수", v => v ? v + "편" : "");
+      }
+
+      if (Object.keys(p.patch).length) plan.push(p);
     } catch { fail++; }
 
-    if (done % 10 === 0) saveLocal(true);
     await new Promise(r => setTimeout(r, 260));
   }
 
@@ -1807,36 +1839,87 @@ async function runRefreshAll() {
   for (const w of wishes) {
     step(w.title);
     try {
-      const before = JSON.stringify(w.otts || []);
-      w.otts = await tmdbProviders(w.tmdbId, w.mediaType || "movie");
-      if (JSON.stringify(w.otts) !== before) changed++;
+      const p = { obj: w, title: w.title, wish: true, patch: {}, diff: [] };
+      put(p, "otts", w.otts || [], await tmdbProviders(w.tmdbId, w.mediaType || "movie"),
+          "볼 수 있는 곳", ottTxt);
+      if (Object.keys(p.patch).length) plan.push(p);
     } catch { fail++; }
 
-    if (done % 10 === 0) saveLocal(true);
     await new Promise(r => setTimeout(r, 260));
   }
+
+  _enriching = false;
+  bar.classList.add("hidden");
+
+  if (!plan.length && !unsure.length) {
+    status.textContent = `조회 완료 — 바뀔 내용이 없습니다${fail ? ` (실패 ${fail}개)` : ""}`;
+    status.className = "text-sm mt-3 font-medium text-emerald-600";
+    markUpd("refresh");                  // 조회는 실제로 했으니 시각은 남긴다
+    toast("이미 최신 상태입니다", "success");
+    return;
+  }
+
+  status.textContent = `조회 완료 — 바뀔 항목 ${plan.length}개`
+    + (fail ? `, 실패 ${fail}개` : "") + (unsure.length ? `, 확인 필요 ${unsure.length}개` : "")
+    + " · 확인 후 [적용]을 누르세요";
+  status.className = "text-sm mt-3 font-medium text-slate-600";
+  showRefreshPreview(plan, unsure, fail);
+}
+
+/* ---------- 갱신 미리보기 ----------
+   **아직 아무것도 저장되지 않은 상태**에서 뭐가 바뀔지 전부 보여준다.
+   자동 매칭에 여러 번 데인 뒤라, 일괄 작업은 "하고 나서 알려주기"가 아니라
+   "보여주고 나서 하기"여야 한다. 취소하면 조회 결과를 버리고 끝난다. */
+let RefreshPlan = [];
+function showRefreshPreview(plan, unsure, fail) {
+  RefreshPlan = plan;
+
+  const n = (f) => plan.filter(f).length;
+  $("#rfSummary").innerHTML =
+    `<b>바뀔 항목 ${plan.length}개</b> — 기록 ${n(p => !p.wish)} · 보고싶어요 ${n(p => p.wish)}`
+    + (n(p => "mediaType" in p.patch) ? ` · 영화/TV 구분 새로 저장 ${n(p => "mediaType" in p.patch)}` : "")
+    + (fail ? ` · 조회 실패 ${fail}` : "");
+
+  const val = (v) => (v === "" || v == null) ? "(없음)" : esc(String(v));
+  const rows = plan.map(p => `
+    <div class="rf-item">
+      <div class="rf-name">${esc(p.title)}${p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</div>
+      <div class="rf-diff">${p.diff.map(c =>
+        `<div><span class="rf-k">${esc(c.label)}</span><span class="rf-a">${val(c.from)}</span>
+         <span class="rf-k">→</span><span class="rf-b">${val(c.to)}</span></div>`).join("")}</div>
+    </div>`).join("");
+
+  /* 건너뛴 건 **어떤 작품이 왔는지까지** 보여준다 — 제목만 알려주면 뭐가 문제인지 알 수가 없다. */
+  const skipped = unsure.length ? `
+    <div class="rf-item rf-skip">
+      <div class="rf-name"><i class="fa-solid fa-triangle-exclamation mr-1.5" style="color:#c08a2e"></i>확인 필요 ${unsure.length}개 — 건드리지 않습니다</div>
+      <div class="rf-note">저장된 TMDB 번호로 받아온 게 다른 작품처럼 보입니다. 수정창에서 다시 연결해 주세요.</div>
+      <div class="rf-diff">${unsure.map(u =>
+        `<div><span class="rf-b">${esc(u.title)}</span><span class="rf-k"> ← TMDB는 </span><span class="rf-a">${esc(u.got)}</span></div>`).join("")}</div>
+    </div>` : "";
+
+  $("#rfList").innerHTML = skipped + rows;
+  $("#refreshPreviewModal").classList.remove("hidden");
+}
+
+/* [적용] — 여기서 처음으로 State가 바뀐다 */
+function applyRefreshPlan() {
+  $("#refreshPreviewModal").classList.add("hidden");
+  if (!RefreshPlan.length) { toast("적용할 변경이 없습니다"); return; }
+
+  RefreshPlan.forEach(p => Object.assign(p.obj, p.patch));
+  const cnt = RefreshPlan.length;
+  RefreshPlan = [];
 
   saveLocal();
   applyFilters();
   renderDiscover();
-  _enriching = false;
   markUpd("refresh");
 
-  status.textContent = `갱신 완료 — 변경 ${changed}개`
-    + (mtFilled ? `, 영화/TV 구분 ${mtFilled}개 저장` : "")
-    + (fail ? `, 실패 ${fail}개` : "") + (unsure.length ? `, 확인 필요 ${unsure.length}개` : "");
+  const status = $("#enrichStatus");
+  status.textContent = `적용 완료 — ${cnt}개 갱신됨`;
   status.className = "text-sm mt-3 font-medium text-emerald-600";
-
-  /* 건너뛴 건 **제목까지** 보여준다 — 개수만 알려주면 뭘 확인해야 할지 알 수가 없다. */
-  if (unsure.length) {
-    alert(
-      `받아온 정보가 기록과 달라 보여 ${unsure.length}개를 건너뛰었습니다.\n` +
-      `이 항목들은 아무것도 바뀌지 않았습니다 — 수정창에서 TMDB를 다시 연결해 주세요.\n\n` +
-      unsure.slice(0, 30).map(t => "· " + t).join("\n") +
-      (unsure.length > 30 ? `\n… 외 ${unsure.length - 30}개` : "")
-    );
-  }
-  toast(`최신 정보 갱신 완료 (변경 ${changed}개)`, "success");
+  toast(`${cnt}개를 갱신했습니다`, "success");
 }
 
 /* ---------- 시리즈 편 자동 재매칭 ----------

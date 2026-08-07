@@ -752,6 +752,10 @@ function initEscapeKey() {
     { sel: "#dcModal" },
     { sel: "#detailModal" },
     { sel: "#restoreModal" },
+    // Escape로 닫아도 조회 결과를 버려야 한다 — 남겨두면 다음에 [적용]이 옛 계획을 쓴다
+    { sel: "#refreshPreviewModal", close: () => {
+        $("#refreshPreviewModal").classList.add("hidden"); RefreshPlan = [];
+      } },
     { sel: "#filterModal", close: () => closeFilterModal() },
     { sel: "#dcRecoModal" },
     { sel: "#syncPwModal", close: () => closeSyncPwModal() },

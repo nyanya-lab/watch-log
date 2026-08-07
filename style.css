@@ -579,6 +579,22 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .rst-time { font-size: 12px; color: #9aa694; margin-top: 1px; }
 .rst-desc { font-size: 12.5px; color: #5d6b57; margin-top: 5px; }
 
+/* ===== 갱신 미리보기 =====
+   조회는 끝났고 아직 저장 전인 상태의 변경 목록. 항목이 많을 수 있어 이 영역만 스크롤한다. */
+.rf-list { margin-top: 14px; max-height: 52vh; overflow-y: auto; }
+.rf-item {
+  border: 1px solid #e6ecdd; border-radius: 10px;
+  padding: 10px 12px; background: #fff; margin-bottom: 8px;
+}
+.rf-item.rf-skip { border-color: #f0d3a8; background: #fffaf1; }
+.rf-name { font-size: 13.5px; color: #2f3a2a; }
+.rf-diff { font-size: 12.5px; color: #5d6b57; margin-top: 5px; line-height: 1.65; }
+.rf-diff .rf-k { color: #8a9683; margin-right: 6px; }
+/* 이전 → 이후. 지워지는 값은 취소선으로 한눈에 구분되게 둔다 */
+.rf-diff .rf-a { color: #9aa694; text-decoration: line-through; }
+.rf-diff .rf-b { color: #3b6d11; }
+.rf-note { font-size: 12.5px; color: #9a6a1e; margin-top: 4px; }
+
 /* ===== 볼 수 있는 곳 (OTT 찾기) =====
    상세 모달과 탐색 카드가 같은 조각을 쓴다 (watchInfoHtml in tmdb.js) */
 .wi-box { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eef2ea; }
