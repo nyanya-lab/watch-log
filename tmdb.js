@@ -34,6 +34,24 @@ const PROVIDER_MAP = {
   "Apple TV+": "애플TV+"
 };
 
+/* 이 기록이 TMDB의 영화(movie)인지 TV(tv)인지.
+
+   ⚠ TMDB는 둘이 **다른 번호판**이라 `tmdbId`만으로는 작품이 특정되지 않는다 —
+   `movie/12345`와 `tv/12345`는 남남이다. 그래서 등록할 때 `mediaType`을 같이 저장한다.
+
+   예전 기록에는 그 값이 없어 짐작해야 하는데, 구분(`type`)만 보면 **"애니"·"다큐"·"예능"이
+   전부 tv가 되어 애니메이션 영화에서 엉뚱한 TV 시리즈를 받아온다**(실제 사고).
+   `totalSeasons`/`totalEpisodes`는 TV에만 있는 값이라 더 확실한 단서다. */
+function mediaTypeOf(i) {
+  if (i.mediaType) return i.mediaType;
+  if (i.totalSeasons || i.totalEpisodes) return "tv";
+  if (i.type === "영화") return "movie";
+  if (i.type === "드라마" || i.type === "예능") return "tv";
+  /* 애니·다큐·기타는 영화일 수도 시리즈일 수도 있다. 시즌 정보가 없으면 영화 쪽이 맞을 때가 많고,
+     쓰는 쪽에서 결과를 확인하므로(`sameWork`) 틀려도 저장까지 가지 않는다. */
+  return "movie";
+}
+
 function mapType(mediaType, genres) {
   const g = (genres || []).map(x => x.name || x);
   if (g.includes("애니메이션") || g.includes("Animation")) return "애니";

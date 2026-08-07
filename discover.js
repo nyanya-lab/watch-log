@@ -122,11 +122,6 @@ function myStatus(tmdbId) {
   };
 }
 
-/* 저장된 구분(type)으로 TMDB media_type 추정 */
-function mediaTypeOf(item) {
-  return item.type === "영화" ? "movie" : "tv";
-}
-
 /* ---------- 이어보기 목록 ----------
    시즌이 2개 이상인데 일부만 본 작품. (예: 총 2시즌인데 S1만 기록됨 → S2 안 봄) */
 function continueList() {

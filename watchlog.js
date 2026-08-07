@@ -1006,7 +1006,7 @@ function openDetail(id) {
 
   $("#detailModal").classList.remove("hidden");
   /* 저장된 `otts`는 등록 시점 값이라 시간이 지나면 어긋난다. 열자마자 지금 값을 받아 아래에 붙인다 */
-  renderWatchInto($("#dtWatch"), i.tmdbId, i.type === "영화" ? "movie" : "tv", i.title);
+  renderWatchInto($("#dtWatch"), i.tmdbId, mediaTypeOf(i), i.title);
 }
 
 /* ---------- 상세에서 TMDB 정보 새로 받기 ----------
@@ -1037,7 +1037,7 @@ async function refreshTmdbInDetail(btn, itemId) {
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
 
   /* 저장된 mediaType이 있으면 그걸 쓰고, 없으면 구분으로 짐작하되 **결과를 반드시 확인**한다 */
-  let mediaType = i.mediaType || (i.type === "영화" ? "movie" : "tv");
+  let mediaType = mediaTypeOf(i);
   const before = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>갱신 중...`;
@@ -1051,12 +1051,22 @@ async function refreshTmdbInDetail(btn, itemId) {
       if (sameWork(i, d2)) { d = d2; mediaType = other; }
     }
 
-    /* 둘 다 이 기록과 다른 작품이면 **아무것도 저장하지 않는다.** 잘못된 tmdbId일 수 있다 */
+    /* 둘 다 달라 보이면 **뭐가 올지 보여주고 물어본다.** 진짜 엉뚱한 작품일 수도 있지만,
+       제목을 많이 고쳐 적어서 비교가 실패한 것일 수도 있다 — 그건 내가 막을 게 아니라 볼 일이다. */
     if (!sameWork(i, d)) {
-      btn.disabled = false;
-      btn.innerHTML = before;
-      toast(`이 기록과 맞는 TMDB 작품을 찾지 못했어요 — 수정창에서 다시 검색해 연결해주세요`, "error");
-      return;
+      const line = (t, y) => `${t || "(제목 없음)"}${y ? ` (${y})` : ""}`;
+      const ok = d && confirm(
+        `받아온 정보가 이 기록과 달라 보입니다.\n\n` +
+        `이 기록:  ${line(i.title, i.releaseYear)}\n` +
+        `TMDB:     ${line(d.title, d.releaseYear)}\n\n` +
+        `그대로 갱신할까요? (아니면 수정창에서 다시 연결하세요)`
+      );
+      if (!ok) {
+        btn.disabled = false;
+        btn.innerHTML = before;
+        toast(d ? "취소했습니다" : "TMDB에서 이 작품을 찾지 못했어요", d ? "info" : "error");
+        return;
+      }
     }
 
     i.mediaType = mediaType;          // 다음부터는 짐작하지 않아도 되게 남긴다
@@ -1367,7 +1377,10 @@ function saveItem() {
   const t = State.selectedTmdb;
   if (t) {
     Object.assign(base, {
-      tmdbId: t.tmdbId, poster: t.poster, backdrop: t.backdrop,
+      /* TMDB는 영화와 TV가 **다른 번호판**이라 `tmdbId`만으로는 작품이 특정되지 않는다.
+         어느 쪽 번호인지 같이 저장해야 나중에 짐작하지 않는다 (구분으로 짐작하면 애니·다큐가 틀린다). */
+      tmdbId: t.tmdbId, mediaType: t.mediaType || null,
+      poster: t.poster, backdrop: t.backdrop,
       genres: t.genres || [], overview: t.overview || "",
       releaseDate: t.releaseDate, releaseYear: t.releaseYear,
       cast: t.cast || [], director: t.director || "",
@@ -1652,7 +1665,7 @@ async function runRefreshOtts() {
   // 시청 기록 + 보고싶어요를 함께 갱신한다.
   // (위시는 "지금 어디서 볼 수 있나"가 곧 쓸모라 오히려 최신값이 더 필요하다)
   const targets = [
-    ...State.items.filter(i => i.tmdbId).map(i => ({ obj: i, primary: i.type === "영화" ? "movie" : "tv" })),
+    ...State.items.filter(i => i.tmdbId).map(i => ({ obj: i, primary: mediaTypeOf(i) })),
     ...State.wishes.filter(w => w.tmdbId).map(w => ({ obj: w, primary: w.mediaType || "movie" }))
   ];
   if (!targets.length) { toast("갱신할 항목이 없습니다 (TMDB 연동된 항목만 대상)", "success"); return; }
@@ -1813,7 +1826,7 @@ async function runRefreshCollections() {
     status.className = "text-sm mt-3 font-medium text-slate-600";
     fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
 
-    const mediaType = i.type === "영화" ? "movie" : "tv";
+    const mediaType = mediaTypeOf(i);
     try {
       const d = await tmdbDetail(i.tmdbId, mediaType);
       i.collectionId = d.collectionId || null;
@@ -1908,7 +1921,7 @@ async function runFixNames(list) {
       // 저장된 cast에 id가 없으면 크레딧을 다시 받아 id를 채운다
       const needIds = (i.cast || []).some(c => !c.id) || (i.director && !i.directorId);
       if (needIds) {
-        const d = await tmdbDetail(i.tmdbId, i.type === "영화" ? "movie" : "tv");
+        const d = await tmdbDetail(i.tmdbId, mediaTypeOf(i));
         if (d) {
           (i.cast || []).forEach(c => {
             const m = (d.cast || []).find(x => x.name === c.name);
@@ -1963,7 +1976,7 @@ async function runRefreshRatings() {
     status.className = "text-sm mt-3 font-medium text-slate-600";
     fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
 
-    const mediaType = i.type === "영화" ? "movie" : "tv";
+    const mediaType = mediaTypeOf(i);
     try {
       const d = await tmdbDetail(i.tmdbId, mediaType);
       if (d && d.voteAverage != null && d.voteAverage !== i.voteAverage) {
