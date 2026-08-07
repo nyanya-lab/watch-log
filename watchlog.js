@@ -1218,6 +1218,12 @@ function renderQuickRate() {
       <p class="text-xs text-slate-400 font-medium mt-2">
         <b>Enter</b>로 저장하고 다음 · 빈 칸으로 <b>Enter</b>면 건너뛰기 · <b>Esc</b>로 닫기
       </p>
+      <!-- 기억이 안 날 때를 위한 도움닫기. 점수를 **미리 보여주지는 않는다** — 눌러야 칸에 들어온다.
+           평소에 보이면 내 점수가 그쪽으로 끌려가지만, 눌러서 가져오는 건 내가 고른 것이라 다르다.
+           바로 저장하지 않고 입력칸에만 채워서, 보고 조정한 뒤 Enter를 치게 한다. -->
+      ${i.voteAverage ? `<button id="qrUseTmdb" class="btn btn-sm btn-ghost mt-2.5">
+        <i class="fa-solid fa-star mr-1 text-amber-400"></i>기억이 안 나요 — TMDB 평점 가져오기
+      </button>` : ""}
     </div>
 
     <div class="flex items-center gap-2 mt-5 pt-4 border-t border-slate-100">
@@ -1237,6 +1243,13 @@ function renderQuickRate() {
     e.preventDefault();
     quickRateSubmit();
   });
+  const useTmdb = $("#qrUseTmdb");
+  if (useTmdb) useTmdb.addEventListener("click", () => {
+    input.value = i.voteAverage;
+    input.focus();
+    input.select();               // 바로 고쳐 쓸 수 있게 선택해 둔다
+  });
+
   $("#qrSkip").addEventListener("click", () => { QuickRate.idx++; renderQuickRate(); });
   $("#qrPrev").addEventListener("click", () => { QuickRate.idx = Math.max(0, QuickRate.idx - 1); renderQuickRate(); });
 
