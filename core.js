@@ -21,6 +21,7 @@ const LS_TMDB = "watchlog_tmdb_key";
 const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서버 데이터 경로 (이 기기에만 저장, 깃에는 없음)
 const LS_MODIFIED = "watchlog_modified";
 const LS_BACKUP = "watchlog_items_backup";
+const LS_BACKUP_AT = "watchlog_items_backup_at";   // 그 백업이 언제 것인지
 /* 시드를 넣던 코드는 없앴지만(2026-08-07) 이 표시는 남긴다 —
    **예전에 시드가 들어간 채로 남아 있는 기기**가 그걸 서버로 올리지 않도록 계속 막아야 한다.
    새로 붙는 일은 없고, `saveLocal()`이 한 번 돌면 지워진다. */
@@ -85,6 +86,15 @@ function fmtDate(d) {
   return `${y}.${m}.${dd}`;
 }
 
+/* "2026.08.07 14:32" — 백업이 언제 것인지 보여줄 때 쓴다 (날짜만으론 오늘 것끼리 구분이 안 된다) */
+function fmtDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function fmtRange(s, e) {
   if (!s) return "";
   if (!e || s === e) return fmtDate(s);
@@ -119,9 +129,12 @@ let _syncTimer = null;
 
 function saveLocal(skipCloud) {
   try {
-    // 직전 상태를 백업으로 하나 남겨둠 (사고 대비)
+    // 직전 상태를 백업으로 하나 남겨둠 (사고 대비). 언제 것인지 알아야 고를 수 있어 시각도 함께
     const prev = localStorage.getItem(LS_KEY);
-    if (prev && prev.length > 20) localStorage.setItem(LS_BACKUP, prev);
+    if (prev && prev.length > 20) {
+      localStorage.setItem(LS_BACKUP, prev);
+      localStorage.setItem(LS_BACKUP_AT, new Date().toISOString());
+    }
 
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
@@ -734,6 +747,7 @@ function initEscapeKey() {
     { sel: "#quickRateModal", close: () => closeQuickRate() },
     { sel: "#dcModal" },
     { sel: "#detailModal" },
+    { sel: "#restoreModal" },
     { sel: "#filterModal", close: () => closeFilterModal() },
     { sel: "#dcRecoModal" },
     { sel: "#syncPwModal", close: () => closeSyncPwModal() },

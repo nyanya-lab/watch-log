@@ -561,6 +561,24 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .frange .form-input { text-align: center; }
 .frange-sep { color: #9aa694; font-size: 13px; }
 
+/* ===== 백업에서 되돌리기 =====
+   번호를 입력하게 하지 않고 눌러서 고른다 (폰에서 숫자 입력은 특히 불편하다) */
+.rst-now {
+  border: 1px solid #e6ecdd; background: #f8faf5;
+  border-radius: 10px; padding: 10px 12px;
+  font-size: 12.5px; color: #4f5c49;
+}
+.rst-item {
+  display: block; width: 100%; text-align: left;
+  border: 1px solid #cbd5e1; border-radius: 10px;
+  padding: 11px 13px; background: #fff;
+  transition: background .12s, border-color .12s;
+}
+.rst-item:hover { background: #f2f8ec; border-color: #a9cd85; }
+.rst-when { font-size: 13.5px; color: #2f3a2a; }
+.rst-time { font-size: 12px; color: #9aa694; margin-top: 1px; }
+.rst-desc { font-size: 12.5px; color: #5d6b57; margin-top: 5px; }
+
 /* ===== 볼 수 있는 곳 (OTT 찾기) =====
    상세 모달과 탐색 카드가 같은 조각을 쓴다 (watchInfoHtml in tmdb.js) */
 .wi-box { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eef2ea; }

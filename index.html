@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260807j">
+<link rel="stylesheet" href="style.css?v=20260807k">
 </head>
 <body>
 
@@ -321,6 +321,30 @@
   </main>
 </div>
 
+<!-- ===== 백업에서 되돌리기 팝업 ===== -->
+<div id="restoreModal" class="modal-back hidden">
+  <div class="modal-card max-w-lg">
+    <div class="modal-head">
+      <h3 class="font-semibold text-slate-800"><i class="fa-solid fa-clock-rotate-left mr-2 text-lime-700"></i>백업에서 되돌리기</h3>
+      <button id="closeRestore" class="modal-x"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="p-5">
+      <div id="restoreNow" class="rst-now"></div>
+      <div class="text-xs font-semibold text-slate-500 mt-4 mb-2">되돌릴 지점을 고르세요</div>
+      <!-- runRestoreBackup이 채운다 -->
+      <div id="restoreList" class="space-y-2"></div>
+      <p class="text-xs text-slate-400 font-medium mt-4 leading-relaxed">
+        되돌린 내용은 서버에도 올라갑니다. <b>다른 기기의 앱은 닫아두세요</b> —
+        열려 있으면 그쪽 내용이 다시 덮어쓸 수 있습니다.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <div class="flex-1"></div>
+      <button id="cancelRestore" class="btn btn-ghost">취소</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 추천 필터 팝업 ===== -->
 <div id="dcRecoModal" class="modal-back hidden">
   <div class="modal-card max-w-2xl">
@@ -619,10 +643,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260807j"></script>
-<script src="tmdb.js?v=20260807j"></script>
-<script src="watchlog.js?v=20260807j"></script>
-<script src="discover.js?v=20260807j"></script>
-<script src="stats.js?v=20260807j"></script>
+<script src="core.js?v=20260807k"></script>
+<script src="tmdb.js?v=20260807k"></script>
+<script src="watchlog.js?v=20260807k"></script>
+<script src="discover.js?v=20260807k"></script>
+<script src="stats.js?v=20260807k"></script>
 </body>
 </html>

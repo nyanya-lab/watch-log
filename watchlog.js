@@ -1506,6 +1506,16 @@ function initSettings() {
 
   $("#clearOttBtn").addEventListener("click", runClearOttField);
   $("#restoreBtn").addEventListener("click", runRestoreBackup);
+
+  /* 되돌리기 팝업 — 항목은 열 때마다 새로 그리므로 위임으로 받는다 */
+  const closeRestore = () => $("#restoreModal").classList.add("hidden");
+  $("#closeRestore").addEventListener("click", closeRestore);
+  $("#cancelRestore").addEventListener("click", closeRestore);
+  $("#restoreModal").addEventListener("click", e => {
+    if (e.target.id === "restoreModal") { closeRestore(); return; }
+    const item = e.target.closest(".rst-item");
+    if (item) applyRestorePoint(+item.dataset.idx);
+  });
 }
 
 /* ---------- 백업에서 되돌리기 ----------
@@ -1523,7 +1533,11 @@ async function runRestoreBackup() {
   try {
     const local = JSON.parse(localStorage.getItem("watchlog_items_backup") || "null");
     if (Array.isArray(local) && local.length) {
-      points.push({ label: "이 기기 · 저장 직전", items: local, at: "" });
+      points.push({
+        label: "이 기기 · 저장 직전",
+        items: local,
+        at: localStorage.getItem("watchlog_items_backup_at") || ""
+      });
     }
   } catch { /* 깨진 백업은 없는 셈 친다 */ }
 
@@ -1538,27 +1552,35 @@ async function runRestoreBackup() {
 
   /* 개수만으로는 어느 쪽이 나은지 알 수 없다 — 별점·한줄평도 같이 보여준다 */
   const cnt = (arr, f) => arr.filter(f).length;
-  const now = State.items;
   const desc = (items) =>
     `기록 ${items.length} · 별점 ${cnt(items, i => i.rating)} · 한줄평 ${cnt(items, i => i.review)}`;
-  const when = (at) => at ? ` (${fmtDate(at.slice(0, 10))})` : "";
 
-  const menu = points.map((p, n) => `${n + 1}. ${p.label}${when(p.at)}\n     ${desc(p.items)}`).join("\n");
-  const answer = prompt(
-    `어느 시점으로 되돌릴까요? 번호를 입력하세요.\n\n` +
-    `지금:  ${desc(now)}\n\n${menu}\n\n` +
-    `※ 다른 기기의 앱은 닫아두세요 — 열려 있으면 그쪽 내용이 다시 덮어쓸 수 있습니다.`,
-    ""
-  );
-  if (answer === null) { toast("취소했습니다"); return; }
+  $("#restoreNow").innerHTML = `<b>지금</b> — ${esc(desc(State.items))}`;
+  $("#restoreList").innerHTML = points.map((p, n) => `
+    <button class="rst-item" data-idx="${n}">
+      <div class="rst-when">${esc(p.label)}</div>
+      ${p.at ? `<div class="rst-time">${esc(fmtDateTime(p.at))}</div>` : ""}
+      <div class="rst-desc">${esc(desc(p.items))}</div>
+    </button>`).join("");
 
-  const pick = points[parseInt(answer, 10) - 1];
-  if (!pick) { toast("번호를 잘못 입력했습니다", "error"); return; }
+  RestorePoints = points;
+  $("#restoreModal").classList.remove("hidden");
+}
 
-  if (!confirm(`「${pick.label}」로 되돌립니다.\n\n${desc(pick.items)}\n\n지금 데이터는 사라집니다. 계속할까요?`)) {
-    toast("취소했습니다"); return;
+/* 목록에서 고른 지점으로 되돌린다 (모달의 항목 클릭) */
+let RestorePoints = [];
+function applyRestorePoint(idx) {
+  const pick = RestorePoints[idx];
+  if (!pick) return;
+
+  const cnt = (arr, f) => arr.filter(f).length;
+  const line = `기록 ${pick.items.length} · 별점 ${cnt(pick.items, i => i.rating)} · 한줄평 ${cnt(pick.items, i => i.review)}`;
+  if (!confirm(`「${pick.label}」${pick.at ? ` (${fmtDateTime(pick.at)})` : ""} 로 되돌립니다.\n\n${line}\n\n지금 데이터는 사라집니다. 계속할까요?`)) {
+    toast("취소했습니다");
+    return;
   }
 
+  $("#restoreModal").classList.add("hidden");
   State.items = pick.items;
   saveLocal();
   applyFilters();
