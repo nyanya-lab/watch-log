@@ -677,6 +677,13 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 /* 이전 → 이후. 지워지는 값은 취소선으로 한눈에 구분되게 둔다 */
 .rf-a { color: #9aa694; text-decoration: line-through; }
 .rf-b { color: #3b6d11; }
+/* 포스터는 주소를 글자로 보여줘야 알 수가 없다 — 작게 그려서 눈으로 비교한다 */
+.rf-thumb {
+  width: 34px; height: 51px; object-fit: cover; border-radius: 4px;
+  background: #e9ede3; display: inline-block; vertical-align: middle;
+}
+img.rf-a { opacity: .5; }
+img.rf-b { outline: 2px solid #7fae48; outline-offset: 1px; }
 
 .rf-item.rf-skip { border-color: #f0d3a8; background: #fffaf1; padding: 10px 12px; }
 .rf-diff { font-size: 12.5px; color: #5d6b57; margin-top: 5px; line-height: 1.65; }

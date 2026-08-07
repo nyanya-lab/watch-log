@@ -1491,6 +1491,15 @@ function saveItem() {
       collectionId: t.collectionId || null, collectionName: t.collectionName || "",
       seriesNo: t.seriesNo || null, seriesTotal: t.seriesTotal || null
     });
+
+    /* 시즌을 고른 TV 기록은 **그 시즌의** 포스터·방영일을 쓴다.
+       `tmdbDetail`이 주는 `poster`/`first_air_date`는 **작품 전체의 것**이라, 안 그러면
+       킹덤 S1·S2·S3이 전부 같은 포스터에 같은 연도(2019)로 저장된다. */
+    const sn = seasonNum > 0 && (t.seasons || []).find(s => s.number === seasonNum);
+    if (sn) {
+      if (sn.poster) base.poster = sn.poster;
+      if (sn.airDate) { base.releaseDate = sn.airDate; base.releaseYear = sn.airDate.slice(0, 4); }
+    }
   }
 
   if (State.editingId) {
@@ -1938,6 +1947,25 @@ async function runRefreshAll() {
       put(p, "화수", i.totalEpisodes ?? null, d.totalEpisodes ?? null,
           { totalEpisodes: d.totalEpisodes ?? null }, numTxt);
 
+      /* 시즌을 적어둔 TV 기록은 **그 시즌의** 포스터·방영일이 맞다.
+         `d.poster`/`d.releaseDate`는 **작품 전체의 값**이라 그대로 두면 킹덤 S1·S2·S3이
+         전부 같은 포스터에 같은 연도(2019)가 된다 — 실제로 그렇게 저장돼 있었다. */
+      if (mt === "tv") {
+        const no = parseInt(String(i.season || "").replace(/\D/g, "")) || 0;
+        const sn = no && (d.seasons || []).find(s => s.number === no);
+        if (sn) {
+          if (sn.poster && differs(i.poster || null, sn.poster)) {
+            // 포스터는 주소를 글자로 보여줘야 알 수가 없다 — 미리보기에 그림으로 그린다(`img`)
+            p.diff.push({ label: "시즌 포스터", from: i.poster || "", to: sn.poster,
+                          keys: { poster: sn.poster }, img: true });
+          }
+          if (sn.airDate) {
+            put(p, "시즌 방영일", i.releaseDate || null, sn.airDate,
+                { releaseDate: sn.airDate, releaseYear: sn.airDate.slice(0, 4) });
+          }
+        }
+      }
+
       /* 시리즈 정보는 **조회에 성공했을 때만 담는다.** 예전 코드는 조회하기 전에 seriesNo/
          seriesTotal을 null로 밀어놔서, 컬렉션 조회가 실패하면 멀쩡하던 "S3 / 총 8편"이 사라졌다. */
       if (d.collectionId) {
@@ -2031,6 +2059,11 @@ function showRefreshPreview(plan, unsure, fail) {
   /* 값 한 줄 = 체크박스 하나. 줄 전체가 `<label>`이라 아무 데나 눌러도 토글된다
      (폰에서 네모만 노리기 어렵다). 묶음 체크박스는 그 주제의 줄들을 한꺼번에 켜고 끈다. */
   const val = (v) => (v === "" || v == null) ? "(없음)" : esc(String(v));
+  /* 포스터처럼 주소를 글자로 보여줘야 알 수 없는 값은 그림으로 그린다 (`c.img`) */
+  const cell = (c, v, cls) => c.img
+    ? (v ? `<img class="rf-thumb ${cls}" src="${esc(v)}" alt="" loading="lazy">`
+         : `<span class="${cls}">(없음)</span>`)
+    : `<span class="${cls}">${val(v)}</span>`;
   const rows = [...groups].map(([label, list]) => `
     <div class="rf-group" data-label="${esc(label)}">
       <div class="rf-head">
@@ -2048,7 +2081,7 @@ function showRefreshPreview(plan, unsure, fail) {
           <input type="checkbox" class="rf-cb rf-f-cb" data-idx="${e.idx}" data-f="${e.f}"
                  data-label="${esc(label)}" checked>
           <span class="rf-w">${esc(e.p.title)}${e.p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</span>
-          <span class="rf-a">${val(e.c.from)}</span><span class="rf-arrow">→</span><span class="rf-b">${val(e.c.to)}</span>
+          ${cell(e.c, e.c.from, "rf-a")}<span class="rf-arrow">→</span>${cell(e.c, e.c.to, "rf-b")}
         </label>`).join("")}</div>
     </div>`).join("");
 

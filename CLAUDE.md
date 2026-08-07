@@ -17,10 +17,10 @@
 
 ```
 index.html      673줄  전체 마크업 (헤더/목록/탐색/통계/설정 + 모달 9개)
-style.css       711줄  커스텀 CSS (Tailwind CDN 위에 얹음)
+style.css       719줄  커스텀 CSS (Tailwind CDN 위에 얹음)
 core.js         853줄  동기화(REST), 상태(State), 탭, Escape, 유틸
 tmdb.js         703줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
-watchlog.js    2321줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
+watchlog.js    2350줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
 discover.js    1600줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
 stats.js        403줄  Chart.js 통계 + 히트맵
 dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
@@ -291,7 +291,16 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 
 - 갱신: `otts` · `voteAverage` · `totalSeasons` · `totalEpisodes` · `collectionId` · `collectionName`
   · `seriesNo` · `seriesTotal`, 그리고 **확인된 `mediaType`**.
-- ⚠ 안 건드림: `tmdbId` · 제목 · 포스터 · 줄거리 · 장르 · 출연진 · 내 기록(별점·본 날짜·한줄평·`ott`).
+- ⚠ 안 건드림: `tmdbId` · 제목 · 줄거리 · 장르 · 출연진 · 내 기록(별점·본 날짜·한줄평·`ott`).
+- **시즌 포스터 · 시즌 방영일**(2026-08-07): 시즌을 적어둔 TV 기록만 대상. `tmdbDetail`의
+  `poster`/`first_air_date`는 **작품 전체의 값**이라 그대로 두면 킹덤 S1·S2·S3이 전부 같은 포스터에
+  같은 연도(2019)가 된다 — 실제로 시즌이 여러 개인 드라마 4편이 전부 그렇게 저장돼 있었다.
+  `d.seasons[번호]`의 `poster`/`airDate`로 바꾼다. 포스터는 주소를 글자로 보여줘야 알 수 없으므로
+  미리보기에 **썸네일 두 장**으로 그린다(`c.img`).
+  - `releaseDate`를 시즌 방영일로 바꿔도 `sameWork`는 안 깨진다 — 원제가 먼저 일치해 통과한다
+    (해당 4편 모두 `originalTitle`이 있다).
+  - **새로 저장할 때도 같다** — `saveItem`이 고른 시즌의 poster/airDate를 쓴다. 수정으로 다시
+    저장할 때는 `State.selectedTmdb`에 `seasons`가 없어 아무것도 덮지 않는다.
 - **`collectionId`/`seriesNo`는 갱신 대상에 넣는다.** `coll.order.get(i.tmdbId)` — **저장된 tmdbId를
   그대로 쓰므로** 갱신해도 매칭이 바뀌지 않는다. 시즌 표기도 직접 적은 `season`이 우선이라 안 덮인다
   (`seriesLabel`). 예전에 "컬렉션이 되돌아가 매칭이 흐트러졌다"던 사고의 원인은 컬렉션을 갱신한 것이
