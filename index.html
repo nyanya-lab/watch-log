@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260807w">
+<link rel="stylesheet" href="style.css?v=20260807x">
 </head>
 <body>
 
@@ -60,7 +60,7 @@
       <div class="flex gap-2 mb-3">
         <div class="relative flex-1">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-          <input type="text" id="searchInput" placeholder="제목 · 원제 · 배우 · 감독 검색..."
+          <input type="text" id="searchInput" autocomplete="off" spellcheck="false" placeholder="제목 · 원제 · 배우 · 감독 검색..."
             class="inp pl-9">
         </div>
         <button id="filterBtn" class="btn-icon relative" title="필터">
@@ -137,7 +137,7 @@
       <div class="flex gap-2">
         <div class="relative flex-1">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-          <input type="text" id="dcQuery" placeholder="안 본 작품도 찾아보기 — TMDB 전체 검색"
+          <input type="text" id="dcQuery" autocomplete="off" spellcheck="false" placeholder="안 본 작품도 찾아보기 — TMDB 전체 검색"
             class="inp pl-9">
         </div>
         <button id="dcSearchBtn" class="btn btn-primary shrink-0">
@@ -255,7 +255,7 @@
         <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-key mr-2 text-lime-700"></i>TMDB API 키</h3>
         <p class="text-sm text-slate-500 mb-3">themoviedb.org에서 발급받은 v3 API 키를 입력하세요.</p>
         <div class="flex gap-2">
-          <input type="text" id="tmdbKeyInput" placeholder="TMDB API Key (v3)" class="inp flex-1">
+          <input type="text" id="tmdbKeyInput" autocomplete="off" spellcheck="false" placeholder="TMDB API Key (v3)" class="inp flex-1">
           <button id="saveTmdbKey" class="btn btn-primary">저장</button>
         </div>
         <div id="tmdbKeyStatus" class="text-sm mt-2 font-medium"></div>
@@ -459,7 +459,7 @@
       <div id="tmdbSearchArea">
         <label class="form-label"><i class="fa-solid fa-wand-magic-sparkles mr-1 text-lime-700"></i>TMDB에서 정보 가져오기</label>
         <div class="flex gap-2">
-          <input type="text" id="tmdbQuery" placeholder="영화/드라마 제목 입력" class="inp flex-1">
+          <input type="text" id="tmdbQuery" autocomplete="off" spellcheck="false" placeholder="영화/드라마 제목 입력" class="inp flex-1">
           <button id="tmdbSearchBtn" class="px-4 py-2.5 rounded-lg bg-lime-700 text-white text-sm font-semibold hover:bg-lime-800 whitespace-nowrap">
             <i class="fa-solid fa-magnifying-glass mr-1"></i>검색
           </button>
@@ -486,7 +486,7 @@
       <div id="manualFields" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="sm:col-span-2">
           <label class="form-label">제목 <span class="text-red-500">*</span></label>
-          <input type="text" id="fTitle" class="form-input">
+          <input type="text" id="fTitle" autocomplete="off" spellcheck="false" class="form-input">
         </div>
         <div>
           <label class="form-label"><i class="fa-solid fa-shapes mr-1 text-violet-400"></i>구분</label>
@@ -497,7 +497,7 @@
         </div>
         <div>
           <label class="form-label"><i class="fa-solid fa-earth-asia mr-1 text-blue-400"></i>국가</label>
-          <input type="text" id="fCountry" class="form-input" placeholder="한국">
+          <input type="text" id="fCountry" autocomplete="off" spellcheck="false" class="form-input" placeholder="한국">
         </div>
 
         <!-- 어디서 봤나요 — 스트리밍 목록은 TMDB가 자동으로 채우므로 영화관/기타만 직접 기록 -->
@@ -513,7 +513,7 @@
           </div>
           <!-- 기타를 체크했을 때만 나타난다. 스트리밍은 TMDB(otts)가 채우므로 평소엔 적을 게 없다 -->
           <div id="ottWrap" class="mt-2 hidden">
-            <input type="text" id="fOtt" class="form-input" placeholder="어디서 봤는지 (예: 비행기, DVD)">
+            <input type="text" id="fOtt" autocomplete="off" spellcheck="false" class="form-input" placeholder="어디서 봤는지 (예: 비행기, DVD)">
           </div>
           <div id="ottHint" class="hidden text-xs font-semibold text-emerald-600 mt-1.5"></div>
         </div>
@@ -578,7 +578,7 @@
 
       <div>
         <label class="form-label"><i class="fa-solid fa-comment-dots mr-1 text-lime-600"></i>한줄평</label>
-        <textarea id="fReview" rows="3" class="form-input resize-none" placeholder="느낀 점을 적어보세요"></textarea>
+        <textarea id="fReview" autocomplete="off" spellcheck="false" rows="3" class="form-input resize-none" placeholder="느낀 점을 적어보세요"></textarea>
       </div>
     </div>
 
@@ -634,7 +634,7 @@
       </div>
       <div>
         <label class="form-label">비밀번호 (아무 문자열이나 가능)</label>
-        <input type="password" id="syncPwInput" placeholder="예: nyanya-watch-2026"
+        <input type="password" id="syncPwInput" autocomplete="off" spellcheck="false" placeholder="예: nyanya-watch-2026"
           class="inp" style="font-family:ui-monospace,monospace">
       </div>
     </div>
@@ -664,10 +664,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260807w"></script>
-<script src="tmdb.js?v=20260807w"></script>
-<script src="watchlog.js?v=20260807w"></script>
-<script src="discover.js?v=20260807w"></script>
-<script src="stats.js?v=20260807w"></script>
+<script src="core.js?v=20260807x"></script>
+<script src="tmdb.js?v=20260807x"></script>
+<script src="watchlog.js?v=20260807x"></script>
+<script src="discover.js?v=20260807x"></script>
+<script src="stats.js?v=20260807x"></script>
 </body>
 </html>

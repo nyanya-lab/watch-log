@@ -20,7 +20,7 @@ index.html      673줄  전체 마크업 (헤더/목록/탐색/통계/설정 + �
 style.css       719줄  커스텀 CSS (Tailwind CDN 위에 얹음)
 core.js         853줄  동기화(REST), 상태(State), 탭, Escape, 유틸
 tmdb.js         712줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
-watchlog.js    2410줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
+watchlog.js    2417줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
 discover.js    1600줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
 stats.js        403줄  Chart.js 통계 + 히트맵
 dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
@@ -540,9 +540,13 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
 - 등록/수정 모달: TMDB 검색 → 선택 시 정보카드 표시 + 폼 자동 채움. 수정 시에도 기존 TMDB 정보 카드 표시됨
   - 등록 시점에 `selectTmdb`가 컬렉션까지 조회해 `seriesNo`/`seriesTotal`을 채운다
     (그래서 새로 등록한 영화도 바로 시리즈에 묶이고 S번호가 붙는다).
-  - **주의**: `openEdit`이 `State.selectedTmdb`를 재구성할 때 `collectionId`/`collectionName`/
-    `seriesNo`/`seriesTotal`을 반드시 함께 넣어야 한다. 빠뜨리면 수정 저장 시 `saveItem`이
-    `t.collectionId || null`로 덮어써서 시리즈 정보가 지워진다.
+  - ⚠⚠ **`openEdit`이 `State.selectedTmdb`를 재구성할 때 빠뜨린 값은 저장하는 순간 지워진다.**
+    `saveItem`이 `t.<필드> || null`로 통째로 덮어쓰기 때문이다. 이 구조로 두 번 당했다:
+    - `collectionId`/`collectionName`/`seriesNo`/`seriesTotal` — 시리즈 정보가 지워졌다.
+    - **`mediaType`** — 수정해서 저장할 때마다 영화/TV 구분이 날아갔다(2026-08-07 발견).
+      갱신으로 273/283까지 채웠는데 **시즌을 손본 드라마 10건만 비어 있어서** 잡혔다 —
+      그것들이 바로 그 사이에 수정창을 거친 기록이었다.
+    → 새 필드를 `saveItem`의 `Object.assign(base, {...})`에 넣으면 **`openEdit`에도 같이 넣을 것.**
 - 시즌: **TMDB 시즌 목록에서 고르기만 한다.** 수기 ± 스테퍼는 없앴다 — 시즌 번호는 TMDB에서 오는
   값이고 손으로 넣으면 실제 시즌과 어긋나기만 했다. 목록이 없는 작품(영화·단일시즌)은
   `#seasonField` 자체가 숨는다. 이미 저장된 값은 hidden `#fSeason`에 남아 있어 **저장해도 지워지지 않는다**.

@@ -1407,7 +1407,11 @@ function openEdit(id) {
     // 이미 TMDB 정보 있으면 그 정보 카드도 표시
     if (i.tmdbId) {
       State.selectedTmdb = {
-        tmdbId: i.tmdbId, poster: i.poster, backdrop: i.backdrop, genres: i.genres || [],
+        /* ⚠ `mediaType`을 빠뜨리면 `saveItem`이 `t.mediaType || null`로 **지워버린다** —
+           수정해서 저장할 때마다 영화/TV 구분이 날아갔다(2026-08-07, 시즌 만진 드라마 10건이 그랬다).
+           `collectionId`도 같은 이유로 아래에 들어 있다. 여기에 안 담은 값은 저장 때 사라진다. */
+        tmdbId: i.tmdbId, mediaType: i.mediaType || null,
+        poster: i.poster, backdrop: i.backdrop, genres: i.genres || [],
         overview: i.overview || "", releaseDate: i.releaseDate, releaseYear: i.releaseYear,
         cast: i.cast || [], director: i.director || "", runtime: i.runtime,
         totalEpisodes: i.totalEpisodes, totalSeasons: i.totalSeasons,
