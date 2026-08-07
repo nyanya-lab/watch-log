@@ -1482,6 +1482,18 @@ function saveItem() {
   const lastS = useRe ? ($("#fLastStart").value || null) : null;
   const lastE = useRe ? ($("#fLastEnd").value || lastS) : null;
   const seasonNum = parseInt($("#fSeason").value) || 0;
+
+  /* 시즌이 여러 개인 작품은 **어느 시즌인지 고르고 저장한다.**
+     안 고르면 몇 번째를 본 기록인지 알 수 없어서 시리즈 묶기·시즌 미기록 칩이 흐트러지고,
+     탐색 탭 이어보기는 그런 기록을 **대상에서 아예 뺀다**(`unknownSeason`) — 안 본 시즌을
+     영영 못 찾는다. 드롭다운이 떠 있다는 건 곧 시즌이 2개 이상이라는 뜻이다. */
+  const seasonField = $("#seasonField");
+  if (seasonField && !seasonField.classList.contains("hidden") && seasonNum <= 0) {
+    toast("시즌을 선택하세요", "error");
+    $("#fSeasonSelect").focus();
+    return;
+  }
+
   /* 둘 다 안 켰으면 "직접 적을 게 없음"(null) — 스트리밍은 TMDB `otts`가 맡는다 */
   const ott = $("#fTheater").checked ? "영화관"
             : ($("#fOttEtc").checked ? ($("#fOtt").value.trim() || null) : null);
@@ -1526,6 +1538,26 @@ function saveItem() {
       if (sn.poster) base.poster = sn.poster;
       if (sn.airDate) { base.releaseDate = sn.airDate; base.releaseYear = sn.airDate.slice(0, 4); }
     }
+  }
+
+  /* ---- 중복 확인 ----
+     같은 작품의 같은 시즌이 이미 있으면 대개 실수다. 다시 본 거라면 새 기록을 만들 게 아니라
+     기존 기록의 **재시청 날짜**에 넣는 게 맞다 — 통계·히트맵·재시청 수가 그걸 전제로 센다.
+     그래도 정말 따로 두고 싶을 수 있으니 막지 않고 물어본다.
+     `tmdbId`가 없는 기록은 제목으로 비교한다. */
+  const dupKey = (x) => [x.tmdbId || ("t:" + String(x.title || "").trim()),
+                         String(x.season || "").trim()].join("|");
+  const already = State.items.find(x => x.id !== State.editingId && dupKey(x) === dupKey(base));
+  if (already) {
+    const when = fmtRange(already.startDate, already.endDate) || "본 날짜 없음";
+    const ok = confirm(
+      `이미 같은 기록이 있습니다.\n\n` +
+      `${already.title}${already.season ? " " + already.season : ""} — ${when}` +
+      `${already.rating ? ` · 별점 ${fmtRating(already.rating)}` : ""}\n\n` +
+      `다시 본 거라면 새로 만들지 말고 그 기록의 [재시청]에 날짜를 넣는 편이 좋습니다.\n` +
+      `그래도 따로 저장할까요?`
+    );
+    if (!ok) { toast("취소했습니다"); return; }
   }
 
   if (State.editingId) {
