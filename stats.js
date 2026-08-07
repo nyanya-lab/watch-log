@@ -40,7 +40,15 @@ function renderStats() {
   /* --- 집계 --- */
   const byType = countBy(items, i => i.type || "기타");
   const byCountry = countBy(items, i => i.country || "미상");
-  const byOtt = countBy(items, i => i.ott || "기타");
+  /* OTT는 한 작품이 여러 곳에 있을 수 있어 `countBy`(값 하나)로는 못 센다.
+     **필터·카드와 같은 기준(`ottList`)을 쓴다** — 예전엔 `i.ott`(내가 본 곳)만 세서,
+     그 필드를 비우고 나니 통계가 거의 "기타"가 됐다. */
+  const byOtt = {};
+  items.forEach(i => {
+    const list = ottList(i);
+    if (!list.length) { byOtt["정보 없음"] = (byOtt["정보 없음"] || 0) + 1; return; }
+    list.forEach(o => { byOtt[o] = (byOtt[o] || 0) + 1; });
+  });
   const byGenre = countBy(items.flatMap(i => visibleGenres(i.genres)), g => g);
   const byYear = countBy(items.filter(i => i.startDate), i => i.startDate.slice(0, 4));
   const byActor = countBy(items.flatMap(i => (i.cast || []).map(c => c.name)), n => n);
@@ -234,7 +242,8 @@ function renderStats() {
   _charts.push(new Chart($("#chartOtt"), {
     type: "bar",
     data: { labels: oTop.labels, datasets: [{ data: oTop.values, backgroundColor: "#f59e0b", borderRadius: 6 }] },
-    options: { ...commonOpts, onClick: clickToFilter(l => ({ ott: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    /* "정보 없음"·"기타"는 필터로 걸 수 있는 값이 아니라 클릭해도 아무 일 없게 둔다 */
+    options: { ...commonOpts, onClick: clickToFilter(l => (l === "정보 없음" || l === "기타") ? null : { ott: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // 별점

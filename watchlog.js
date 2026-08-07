@@ -996,8 +996,9 @@ function openDetail(id) {
       <div id="dtWatch"></div>
     </div>
     <div class="modal-foot">
-      ${i.tmdbId ? `<button onclick="refreshTmdbInDetail(this, '${i.id}')" class="btn btn-ghost">
-        <i class="fa-solid fa-rotate mr-1"></i>TMDB 새로고침</button>` : ""}
+      ${i.tmdbId ? `<button onclick="refreshTmdbInDetail(this, '${i.id}')" class="btn btn-ghost"
+        title="매칭은 그대로 두고 OTT·평점·시즌 정보만 다시 받아옵니다">
+        <i class="fa-solid fa-rotate mr-1"></i>OTT·평점 갱신</button>` : ""}
       <div class="flex-1"></div>
       <button onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')"
         class="btn btn-primary">
@@ -1071,38 +1072,22 @@ async function refreshTmdbInDetail(btn, itemId) {
 
     i.mediaType = mediaType;          // 다음부터는 짐작하지 않아도 되게 남긴다
     d.otts = await tmdbProviders(i.tmdbId, mediaType);
-    await applyKoreanNames(d);
-
-    // 시리즈 편 번호까지 다시 맞춘다 (컬렉션이 바뀌었을 수 있다)
-    let coll = null;
-    if (d.collectionId) {
-      try { coll = await tmdbCollection(d.collectionId); saveCollInfo(coll); } catch { /* 편 번호는 없어도 갱신은 계속 */ }
-    }
-
-    /* ⚠ 제목·구분·국가는 **덮어쓰지 않는다.** 손으로 맞춰둘 수 있는 값이라서다.
-       속편이 1편의 tmdbId를 물고 있는 기록에서 이걸 덮으면, "범죄도시2"로 적어둔 제목이
-       TMDB가 답하는 "범죄도시"로 되돌아간다 — 실제로 그 일이 났다.
-       여기서 갱신할 것은 시간이 지나면 바뀌는 TMDB 쪽 정보(OTT·평점·포스터·출연진)뿐이다. */
+    /* ⚠ **매칭은 절대 건드리지 않는다.** 갱신하는 건 시간이 지나면 실제로 바뀌는 값뿐이다:
+       OTT·평점·시즌/화수. 제목·구분·국가·포스터·줄거리·출연진, 그리고 컬렉션과 시리즈 번호는
+       그대로 둔다 — 전부 손으로 맞춰둘 수 있는 값이고, 덮으면 맞춰둔 게 TMDB 기준으로 되돌아간다.
+       (제목만 막았을 때도 컬렉션·시리즈 번호가 되돌아가 매칭이 흐트러졌다.) */
     Object.assign(i, {
-      poster: d.poster, backdrop: d.backdrop,
-      genres: d.genres, overview: d.overview,
-      originalTitle: d.originalTitle,
-      releaseDate: d.releaseDate, releaseYear: d.releaseYear,
-      runtime: d.runtime, totalSeasons: d.totalSeasons, totalEpisodes: d.totalEpisodes,
-      cert: d.cert, voteAverage: d.voteAverage,
-      companies: d.companies, cast: d.cast, director: d.director,
       otts: d.otts || [],
-      collectionId: d.collectionId || null,
-      collectionName: d.collectionName || "",
-      seriesNo: coll ? (coll.order.get(d.tmdbId) || null) : i.seriesNo,
-      seriesTotal: coll ? coll.total : i.seriesTotal
+      voteAverage: d.voteAverage,
+      totalSeasons: d.totalSeasons,
+      totalEpisodes: d.totalEpisodes
     });
 
     saveLocal();
     applyFilters();
     renderDiscover();
     openDetail(i.id);              // 갱신된 값으로 상세를 다시 그린다
-    toast("TMDB 정보를 새로 받았습니다", "success");
+    toast("OTT·평점을 새로 받았습니다", "success");
   } catch (e) {
     btn.disabled = false;
     btn.innerHTML = before;

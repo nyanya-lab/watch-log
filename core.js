@@ -22,6 +22,7 @@ const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서�
 const LS_MODIFIED = "watchlog_modified";
 const LS_BACKUP = "watchlog_items_backup";
 const LS_BACKUP_AT = "watchlog_items_backup_at";   // 그 백업이 언제 것인지
+const LOCAL_BACKUP_MIN = 10 * 60 * 1000;           // 기기 백업 갱신 주기 (10분)
 /* 시드를 넣던 코드는 없앴지만(2026-08-07) 이 표시는 남긴다 —
    **예전에 시드가 들어간 채로 남아 있는 기기**가 그걸 서버로 올리지 않도록 계속 막아야 한다.
    새로 붙는 일은 없고, `saveLocal()`이 한 번 돌면 지워진다. */
@@ -129,9 +130,12 @@ let _syncTimer = null;
 
 function saveLocal(skipCloud) {
   try {
-    // 직전 상태를 백업으로 하나 남겨둠 (사고 대비). 언제 것인지 알아야 고를 수 있어 시각도 함께
+    /* 백업은 **10분에 한 번만** 갱신한다.
+       저장할 때마다 덮으면, 별점을 연달아 넣는 것처럼 저장이 촘촘한 작업 중에 백업이 바로
+       "방금 상태"가 되어 버려 되돌릴 데가 없어진다. 주기를 두면 10분 전 상태가 남는다. */
     const prev = localStorage.getItem(LS_KEY);
-    if (prev && prev.length > 20) {
+    const bakAt = Date.parse(localStorage.getItem(LS_BACKUP_AT) || "") || 0;
+    if (prev && prev.length > 20 && Date.now() - bakAt >= LOCAL_BACKUP_MIN) {
       localStorage.setItem(LS_BACKUP, prev);
       localStorage.setItem(LS_BACKUP_AT, new Date().toISOString());
     }
