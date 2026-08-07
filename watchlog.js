@@ -1513,33 +1513,57 @@ function initSettings() {
    **서버 데이터를 채택할 때는 백업을 갱신하지 않으므로**, 다른 기기가 서버를 망가뜨린 뒤에도
    이 기기의 백업에는 그 전 상태가 남아 있는 경우가 많다.
    콘솔을 못 쓰는 상황(폰 등)에서도 복구할 수 있어야 해서 버튼으로 둔다. */
-function runRestoreBackup() {
-  let bak;
-  try { bak = JSON.parse(localStorage.getItem("watchlog_items_backup") || "null"); }
-  catch { bak = null; }
-  if (!Array.isArray(bak) || !bak.length) { toast("백업이 없습니다", "error"); return; }
+async function runRestoreBackup() {
+  const btn = $("#restoreBtn");
+  if (btn) { btn.disabled = true; }
 
-  /* 개수만으로는 뭐가 나은지 알 수 없다 — 별점·한줄평처럼 되살리려는 게 뭔지 같이 보여준다 */
+  /* 되돌릴 수 있는 지점을 모은다 — 이 기기 것 하나 + 서버 것 둘.
+     기기 백업은 그 기기를 쓸수록 덮이므로, 서버 쪽이 더 옛날이자 더 성한 경우가 많다. */
+  const points = [];
+  try {
+    const local = JSON.parse(localStorage.getItem("watchlog_items_backup") || "null");
+    if (Array.isArray(local) && local.length) {
+      points.push({ label: "이 기기 · 저장 직전", items: local, at: "" });
+    }
+  } catch { /* 깨진 백업은 없는 셈 친다 */ }
+
+  try {
+    const NAME = { prev: "서버 · 1시간 전쯤", daily: "서버 · 하루 전" };
+    (await fetchBackups()).forEach(b =>
+      points.push({ label: NAME[b.kind] || b.kind, items: b.data.items, at: b.data.savedAt || "" }));
+  } catch { /* 서버 백업을 못 받아도 기기 백업으로는 되돌릴 수 있다 */ }
+
+  if (btn) btn.disabled = false;
+  if (!points.length) { toast("되돌릴 수 있는 백업이 없습니다", "error"); return; }
+
+  /* 개수만으로는 어느 쪽이 나은지 알 수 없다 — 별점·한줄평도 같이 보여준다 */
   const cnt = (arr, f) => arr.filter(f).length;
   const now = State.items;
-  const lines = [
-    `기록 수:    지금 ${now.length}개  →  백업 ${bak.length}개`,
-    `별점:      지금 ${cnt(now, i => i.rating)}개  →  백업 ${cnt(bak, i => i.rating)}개`,
-    `한줄평:    지금 ${cnt(now, i => i.review)}개  →  백업 ${cnt(bak, i => i.review)}개`
-  ];
+  const desc = (items) =>
+    `기록 ${items.length} · 별점 ${cnt(items, i => i.rating)} · 한줄평 ${cnt(items, i => i.review)}`;
+  const when = (at) => at ? ` (${fmtDate(at.slice(0, 10))})` : "";
 
-  const ok = confirm(
-    `저장 직전 상태로 되돌립니다.\n지금 데이터는 사라지고, 되돌린 내용이 서버에도 올라갑니다.\n\n` +
-    lines.join("\n") +
-    `\n\n※ 다른 기기의 앱은 닫아두세요 — 열려 있으면 그쪽 내용이 다시 덮어쓸 수 있습니다.`
+  const menu = points.map((p, n) => `${n + 1}. ${p.label}${when(p.at)}\n     ${desc(p.items)}`).join("\n");
+  const answer = prompt(
+    `어느 시점으로 되돌릴까요? 번호를 입력하세요.\n\n` +
+    `지금:  ${desc(now)}\n\n${menu}\n\n` +
+    `※ 다른 기기의 앱은 닫아두세요 — 열려 있으면 그쪽 내용이 다시 덮어쓸 수 있습니다.`,
+    ""
   );
-  if (!ok) { toast("취소했습니다"); return; }
+  if (answer === null) { toast("취소했습니다"); return; }
 
-  State.items = bak;
+  const pick = points[parseInt(answer, 10) - 1];
+  if (!pick) { toast("번호를 잘못 입력했습니다", "error"); return; }
+
+  if (!confirm(`「${pick.label}」로 되돌립니다.\n\n${desc(pick.items)}\n\n지금 데이터는 사라집니다. 계속할까요?`)) {
+    toast("취소했습니다"); return;
+  }
+
+  State.items = pick.items;
   saveLocal();
   applyFilters();
   renderDiscover();
-  toast(`백업 ${bak.length}개로 되돌렸습니다`, "success");
+  toast(`${pick.label} 상태로 되돌렸습니다 (${pick.items.length}개)`, "success");
 }
 
 /* ---------- "내가 본 곳"(ott) 비우기 ----------

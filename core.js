@@ -156,6 +156,68 @@ function loadLocal() {
   } catch { State.hides = []; }
 }
 
+/* ---------- 서버 백업 (2026-08-07) ----------
+   기기 안의 백업(`watchlog_items_backup`)은 **그 기기를 쓸수록 덮인다.** 실제로 하루 종일 만진 PC는
+   이미 망가진 상태가 백업에 들어가 있었고, 거의 안 쓴 폰에만 성한 사본이 남아 살았다.
+   그래서 서버에도 둔다 — 어느 기기에서든 꺼낼 수 있고, 그 기기를 얼마나 썼는지와 무관하다.
+
+   두 벌을 서로 다른 주기로 굴린다:
+     · `prev`  — 1시간마다   → 방금 망친 걸 되돌릴 때
+     · `daily` — 하루마다    → 오늘 여러 번 저장해 `prev`까지 덮였을 때
+   방 이름만 다르므로 Firebase 규칙(`watchlog/$room`)은 그대로 쓴다. */
+const BAK_KINDS = { prev: 60 * 60 * 1000, daily: 24 * 60 * 60 * 1000 };
+const LS_BAK_AT = "watchlog_server_bak_at";   // 종류별 마지막 갱신 시각 (이 기기 기준)
+
+function getBackupUrl(kind) {
+  const pw = getSyncPassword();
+  if (!pw) return null;
+  return `${FIREBASE_DB_URL}/${SYNC_BRANCH}/${encodeURIComponent(pw + "_bak_" + kind)}.json`;
+}
+
+function bakStamps() {
+  try { return JSON.parse(localStorage.getItem(LS_BAK_AT) || "{}"); } catch { return {}; }
+}
+
+/* 서버를 덮어쓰기 **직전에**, 지금 서버에 있던 내용을 백업 자리로 옮긴다.
+   `current`는 호출부가 이미 받아둔 서버 응답이다 (백업 때문에 새로 조회하지 않는다). */
+async function rotateServerBackup(current) {
+  if (!current || !Array.isArray(current.items) || !current.items.length) return;
+
+  const now = Date.now();
+  const at = bakStamps();
+  for (const kind of Object.keys(BAK_KINDS)) {
+    const last = Date.parse(at[kind] || "") || 0;
+    if (now - last < BAK_KINDS[kind]) continue;     // 아직 주기가 안 됐다
+    const url = getBackupUrl(kind);
+    if (!url) continue;
+    try {
+      await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...current, savedAt: new Date().toISOString() })
+      });
+      at[kind] = new Date().toISOString();
+    } catch { /* 백업 실패가 저장을 막지는 않는다 */ }
+  }
+  try { localStorage.setItem(LS_BAK_AT, JSON.stringify(at)); } catch {}
+}
+
+/* 복구 화면에서 쓸 목록. 없는 건 빼고 돌려준다. */
+async function fetchBackups() {
+  const out = [];
+  for (const kind of Object.keys(BAK_KINDS)) {
+    const url = getBackupUrl(kind);
+    if (!url) continue;
+    try {
+      const res = await fetch(url + "?t=" + Date.now());
+      if (!res.ok) continue;
+      const d = await res.json();
+      if (d && Array.isArray(d.items) && d.items.length) out.push({ kind, data: d });
+    } catch { /* 못 받으면 그 항목만 빠진다 */ }
+  }
+  return out;
+}
+
 /* ---------- 서버 통신 (Realtime Database REST) ---------- */
 /* 서버에 내가 모르는 변경이 있는지 확인.
    실시간 구독이 있어도 끊겨 있던 동안의 변경은 놓칠 수 있어서, 올리기 직전에 한 번 더 본다.
@@ -163,11 +225,14 @@ function loadLocal() {
 async function serverChangedBehindUs() {
   try {
     const d = await fetchServer();
+    /* 덮어쓰기 직전의 서버 내용 — 백업을 굴리는 데 그대로 쓴다 (조회를 한 번 더 하지 않으려고) */
+    _lastServerSeen = d;
     if (!d || !d.updatedAt) return false;
     const known = State.serverStamp || localStorage.getItem(LS_MODIFIED) || "";
     return d.updatedAt > known;
   } catch { return false; }   // 확인 실패는 막지 않는다 (오프라인에서도 저장은 되어야 함)
 }
+let _lastServerSeen = null;
 
 async function autoPush() {
   _syncTimer = null;
@@ -183,6 +248,7 @@ async function autoPush() {
 
   State.syncing = true;
   setSyncIcon("saving");
+  await rotateServerBackup(_lastServerSeen);      // 덮어쓰기 전 사본을 남긴다
   try {
     const res = await fetch(url, {
       method: "PUT",
@@ -221,6 +287,7 @@ async function pushToServer() {
   }
   State.syncing = true;
   setSyncIcon("saving");
+  try { await rotateServerBackup(await fetchServer()); } catch { /* 백업 실패가 저장을 막지 않는다 */ }
   const stamp = new Date().toISOString();
   try {
     const res = await fetch(url, {
