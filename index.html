@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260807d">
+<link rel="stylesheet" href="style.css?v=20260807e">
 </head>
 <body>
 
@@ -32,9 +32,15 @@
           <!-- 구분별 개수 — 기록에 있는 구분만 자동으로 채워진다 -->
           <span id="typeCounts" class="hidden sm:inline-flex items-center gap-1.5"></span>
         </div>
-        <button id="syncBtn" class="btn-icon" style="width:38px;height:38px" title="동기화">
-          <i class="fa-solid fa-cloud-arrow-up"></i>
-        </button>
+        <div class="flex items-center gap-1">
+          <!-- 실시간 동기화가 끊겼을 때(폰 백그라운드 등) 손으로 받아오는 길 -->
+          <button id="pullBtn" class="btn-icon text-slate-400" style="width:38px;height:38px" title="서버에서 받아오기">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+          <button id="syncBtn" class="btn-icon" style="width:38px;height:38px" title="동기화">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+          </button>
+        </div>
       </div>
       <nav class="pb-3">
         <div class="tab-seg">
@@ -613,10 +619,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260807d"></script>
-<script src="tmdb.js?v=20260807d"></script>
-<script src="watchlog.js?v=20260807d"></script>
-<script src="discover.js?v=20260807d"></script>
-<script src="stats.js?v=20260807d"></script>
+<script src="core.js?v=20260807e"></script>
+<script src="tmdb.js?v=20260807e"></script>
+<script src="watchlog.js?v=20260807e"></script>
+<script src="discover.js?v=20260807e"></script>
+<script src="stats.js?v=20260807e"></script>
 </body>
 </html>

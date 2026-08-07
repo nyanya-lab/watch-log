@@ -232,7 +232,10 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 - `saveLocal()` → localStorage 저장 + 2.5초 디바운스 후 `autoPush()`
 - `syncOnBoot()` → 부팅 시 서버/로컬 `updatedAt` 비교해 최신본 채택
 - 안전장치: 서버 데이터가 로컬의 50% 미만이면 confirm으로 확인
-- 헤더 구름 아이콘이 상태 표시 (idle/pending/saving/saved/error)
+- 헤더 구름 아이콘이 상태 표시 (idle/pending/saving/saved/error). 누르면 즉시 올리기(`pushToServer`)
+- 그 왼쪽 **새로고침 아이콘**(`#pullBtn` → `manualPull`)은 서버 것을 지금 받아온다.
+  실시간 구독과 F5로도 되는 일이지만, **홈 화면에 추가해 쓰는 폰에는 주소창이 없어서**
+  새로고침할 방법이 마땅찮다. 묻지 않고 바로 받아온다 — 잘못 받아오면 [백업에서 되돌리기].
 
 ### 실시간 동기화 (2026-08-03)
 

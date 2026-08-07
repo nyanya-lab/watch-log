@@ -100,6 +100,7 @@ function initWatchlog() {
   $("#saveBtn").addEventListener("click", saveItem);
   $("#deleteBtn").addEventListener("click", deleteItem);
   $("#syncBtn").addEventListener("click", async () => { await pushToServer(); });
+  $("#pullBtn").addEventListener("click", manualPull);
 
   $("#searchInput").addEventListener("input", debounce(() => {
     Filters.q = $("#searchInput").value.trim().toLowerCase();

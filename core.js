@@ -352,6 +352,25 @@ async function pullFromServer(silent) {
   }
 }
 
+/* 헤더의 새로고침 버튼 — 서버 것을 지금 받아온다.
+   평소엔 실시간 구독이 알아서 따라오고 새로고침(F5)으로도 되지만, **홈 화면에 추가해 쓰는 폰에는
+   주소창이 없어서** 새로고침할 방법이 마땅찮다. 그래서 버튼으로 둔다.
+   묻지 않고 그대로 받아온다 — 잘못 받아오면 설정 탭 [백업에서 되돌리기]로 돌아가면 된다. */
+async function manualPull() {
+  if (!hasSyncPassword()) { toast("먼저 동기화 비밀번호를 설정하세요", "error"); openSyncPwModal(); return; }
+
+  const btn = $("#pullBtn");
+  if (btn) btn.disabled = true;
+  try {
+    if (await pullFromServer()) {
+      applyFilters();
+      if (window.renderDiscover) renderDiscover();
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 /* 부팅 시 서버/로컬 중 최신본 자동 선택 */
 async function syncOnBoot() {
   // 동기화 비밀번호가 없으면 서버를 건드리지 않고 이 기기 데이터만 사용
