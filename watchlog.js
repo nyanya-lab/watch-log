@@ -1456,10 +1456,8 @@ function initSettings() {
     $("#syncStatus").className = "text-sm mt-2 font-medium " + (ok ? "text-emerald-600" : "text-red-600");
   });
 
+  $("#refreshAllBtn").addEventListener("click", runRefreshAll);
   $("#enrichBtn").addEventListener("click", runEnrichAll);
-  $("#refreshOttBtn").addEventListener("click", runRefreshOtts);
-  $("#refreshRatingBtn").addEventListener("click", runRefreshRatings);
-  $("#refreshCollectionBtn").addEventListener("click", runRefreshCollections);
   renderUpdInfo();
 
   $("#exportBtn").addEventListener("click", () => {
@@ -1632,21 +1630,24 @@ function renderUpdInfo() {
   const u = getUpd();
   const set = (id, v) => { const el = $("#" + id); if (el) el.textContent = fmtUpd(v); };
   set("updEnrich", u.enrich);
-  set("updOtt", u.ott);
-  set("updRating", u.rating);
-  set("updCollection", u.collection);
+  /* 예전에 OTT·평점·시리즈 버튼이 따로 있던 시절의 시각도 본다 —
+     버튼을 합쳤다고 "아직 실행 안 함"으로 되돌아가면 안 되니 그중 가장 최근 것을 쓴다. */
+  set("updRefresh", [u.refresh, u.ott, u.rating, u.collection].filter(Boolean).sort().pop());
 }
 
-/* ---------- 일괄 정보 채우기 ---------- */
+/* ---------- 미등록 항목 채우기 ----------
+   ⚠ **이미 `tmdbId`가 있는 기록은 대상이 아니다.** 예전엔 "이미 채운 항목도 갱신" 체크박스가 있어
+   그 경우에도 `tmdbAutoMatch`(제목 검색)를 돌렸는데, 그건 저장된 `tmdbId`를 통째로 무시하고
+   **검색 결과 1등으로 갈아치우는** 동작이라 손으로 맞춰둔 매칭이 전부 풀렸다.
+   재매칭이 필요하면 수정창에서 직접 고르고, 정보 갱신은 `runRefreshAll`이 한다. */
 let _enriching = false;
 async function runEnrichAll() {
   if (_enriching) { toast("이미 진행 중입니다"); return; }
   if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
 
-  const overwrite = $("#enrichOverwrite").checked;
-  const targets = overwrite ? State.items.slice() : State.items.filter(i => !i.tmdbId);
-  if (!targets.length) { toast("채울 항목이 없습니다", "success"); return; }
-  if (!confirm(`${targets.length}개 항목의 정보를 가져옵니다. 시간이 걸릴 수 있습니다.`)) return;
+  const targets = State.items.filter(i => !i.tmdbId);
+  if (!targets.length) { toast("미등록 항목이 없습니다", "success"); return; }
+  if (!confirm(`미등록 ${targets.length}개를 제목으로 찾아 채웁니다. 시간이 걸릴 수 있습니다.`)) return;
 
   _enriching = true;
   const status = $("#enrichStatus");
@@ -1665,7 +1666,9 @@ async function runEnrichAll() {
       const d = await tmdbAutoMatch(i.title, i.type);
       if (d) {
         Object.assign(i, {
-          tmdbId: d.tmdbId, poster: d.poster, backdrop: d.backdrop,
+          // mediaType을 같이 남긴다 — movie/tv는 다른 번호판이라 나중에 짐작하면 위험하다
+          tmdbId: d.tmdbId, mediaType: d.mediaType || null,
+          poster: d.poster, backdrop: d.backdrop,
           genres: d.genres, overview: d.overview,
           releaseDate: d.releaseDate, releaseYear: d.releaseYear,
           cast: d.cast, director: d.director, runtime: d.runtime,
@@ -1701,22 +1704,35 @@ async function runEnrichAll() {
   toast(`정보 채우기 완료 (${ok}개)`, "success");
 }
 
-/* ---------- OTT(스트리밍) 정보만 갱신 ---------- */
-async function runRefreshOtts() {
+/* ---------- 최신 정보로 갱신 (OTT · 평점 · 시즌/화수 · 시리즈) ----------
+   예전엔 [OTT만]·[평점만]·[시리즈 정보] 버튼이 따로 있었다. 셋 다 같은 기록을 놓고
+   **각자 mediaType을 짐작해 각자 조회**했으므로 위험도 세 배, 시간도 세 배(283개면 세 바퀴)였다.
+   한 번 조회해서 한 번 확인하고 셋을 함께 갱신한다.
+
+   ⚠ **매칭은 건드리지 않는다.** `tmdbId`·제목·포스터·줄거리·장르·출연진, 그리고 별점·본 날짜·
+   한줄평 같은 내 기록은 그대로다.
+   `collectionId`/`seriesNo`는 갱신 대상에 **넣는다** — 저장된 `tmdbId`로부터 계산되는 값이라
+   갱신해도 매칭이 바뀌지 않기 때문이다(`coll.order.get(i.tmdbId)` — id를 그대로 쓴다).
+   시즌 표기도 직접 적은 `season`이 우선이라 덮이지 않는다(`seriesLabel` 참고).
+   예전에 "컬렉션이 되돌아가 매칭이 흐트러졌다"던 사고의 원인은 컬렉션을 갱신한 것이 아니라
+   **mediaType 짐작이 틀려 엉뚱한 작품의 컬렉션을 넣은 것**이었다. 아래 `sameWork` 확인이 그걸 막는다. */
+async function runRefreshAll() {
   if (_enriching) { toast("이미 진행 중입니다"); return; }
   if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
 
   // 시청 기록 + 보고싶어요를 함께 갱신한다.
   // (위시는 "지금 어디서 볼 수 있나"가 곧 쓸모라 오히려 최신값이 더 필요하다)
-  const targets = [
-    ...State.items.filter(i => i.tmdbId).map(i => ({ obj: i, primary: mediaTypeOf(i) })),
-    ...State.wishes.filter(w => w.tmdbId).map(w => ({ obj: w, primary: w.mediaType || "movie" }))
-  ];
-  if (!targets.length) { toast("갱신할 항목이 없습니다 (TMDB 연동된 항목만 대상)", "success"); return; }
+  const items = State.items.filter(i => i.tmdbId);
+  const wishes = State.wishes.filter(w => w.tmdbId);
+  const total = items.length + wishes.length;
+  if (!total) { toast("갱신할 항목이 없습니다 (TMDB 연동된 항목만 대상)", "success"); return; }
 
-  const wishN = State.wishes.filter(w => w.tmdbId).length;
-  if (!confirm(`${targets.length - wishN}개 기록${wishN ? ` + 보고싶어요 ${wishN}개` : ""}의 ` +
-               `OTT(스트리밍) 정보를 새로 조회합니다.`)) return;
+  if (!confirm(
+    `${items.length}개 기록${wishes.length ? ` + 보고싶어요 ${wishes.length}개` : ""}의 정보를 새로 조회합니다.\n\n` +
+    `갱신 — OTT · TMDB 평점 · 시즌/화수 · 시리즈 정보\n` +
+    `그대로 둠 — 제목 · 포스터 · 줄거리 · 장르 · 출연진 · 내 기록(별점·본 날짜·한줄평)\n\n` +
+    `몇 분 걸립니다.`
+  )) return;
 
   _enriching = true;
   const status = $("#enrichStatus");
@@ -1724,24 +1740,75 @@ async function runRefreshOtts() {
   const fill = $("#enrichBarFill");
   bar.classList.remove("hidden");
 
-  let changed = 0, fail = 0;
-  for (let n = 0; n < targets.length; n++) {
-    const { obj: i, primary } = targets[n];
-    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
+  let done = 0, changed = 0, fail = 0;
+  const unsure = [];                 // 받아온 게 다른 작품처럼 보여 건너뛴 것
+  const step = (label) => {
+    done++;
+    status.textContent = `${done} / ${total} — ${label}`;
     status.className = "text-sm mt-3 font-medium text-slate-600";
-    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
+    fill.style.width = (done / total * 100).toFixed(1) + "%";
+  };
+  const snap = (i) => JSON.stringify([i.otts, i.voteAverage, i.totalSeasons, i.totalEpisodes,
+                                      i.collectionId, i.seriesNo, i.seriesTotal]);
 
-    // 저장된 구분으로 movie/tv 추정, 비면 반대쪽도 시도 (애니 극장판 등 대비)
-    const other = primary === "movie" ? "tv" : "movie";
+  for (const i of items) {
+    step(i.title);
     try {
-      let otts = await tmdbProviders(i.tmdbId, primary);
-      if (!otts.length) otts = await tmdbProviders(i.tmdbId, other);
-      const before = JSON.stringify(i.otts || []);
-      i.otts = otts;
-      if (JSON.stringify(otts) !== before) changed++;
+      /* 저장된 mediaType이 있으면 그걸 쓰고, 없으면 짐작하되 **받아온 게 같은 작품인지 반드시 확인**한다.
+         movie와 tv는 다른 번호판이라, 확인이 없으면 같은 번호의 엉뚱한 작품을 저장하게 된다. */
+      let mt = mediaTypeOf(i);
+      let d = await tmdbDetail(i.tmdbId, mt).catch(() => null);
+      if (!sameWork(i, d)) {
+        const other = mt === "movie" ? "tv" : "movie";
+        const d2 = await tmdbDetail(i.tmdbId, other).catch(() => null);
+        if (sameWork(i, d2)) { d = d2; mt = other; }
+      }
+      /* 둘 다 아니면 **아무것도 바꾸지 않고** 넘어간다. 일괄이라 하나씩 물어볼 수 없고,
+         그냥 두면 기존 값이 그대로 남으므로 잃는 게 없다. 끝에 제목 목록으로 보여준다. */
+      if (!sameWork(i, d)) { unsure.push(i.title); continue; }
+
+      const before = snap(i);
+      i.mediaType = mt;                    // 확인된 값만 남긴다 — 다음부터는 짐작하지 않는다
+      i.otts = await tmdbProviders(i.tmdbId, mt);
+      i.voteAverage = d.voteAverage;
+      i.totalSeasons = d.totalSeasons;
+      i.totalEpisodes = d.totalEpisodes;
+
+      /* 시리즈 정보는 **성공했을 때만 덮는다.** 예전 코드는 조회하기 전에 seriesNo/seriesTotal을
+         null로 밀어놔서, 컬렉션 조회가 실패하면 멀쩡하던 "S3 / 총 8편"이 사라졌다. */
+      if (d.collectionId) {
+        i.collectionId = d.collectionId;
+        i.collectionName = d.collectionName || i.collectionName || "";
+        try {
+          const coll = await tmdbCollection(d.collectionId);
+          i.seriesNo = coll.order.get(i.tmdbId) || i.seriesNo || null;
+          i.seriesTotal = coll.total || i.seriesTotal || null;
+          if (coll.name) i.collectionName = coll.name;
+          saveCollInfo(coll);              // 편별 개봉일·제목 (탐색 탭 이어보기용)
+        } catch { /* 편 번호를 못 구해도 컬렉션 연결 자체는 남긴다 */ }
+      } else if (mt === "movie") {
+        /* 영화인데 컬렉션이 없다고 답했으면 연결을 지운다 (시리즈에서 빠졌거나 애초에 없던 것).
+           TV는 TMDB가 컬렉션 개념을 제공하지 않으므로 "없다"가 근거가 못 된다 — 건드리지 않는다. */
+        i.collectionId = null; i.collectionName = ""; i.seriesNo = null; i.seriesTotal = null;
+      }
+
+      if (snap(i) !== before) changed++;
     } catch { fail++; }
 
-    if (n % 10 === 9) saveLocal(true);
+    if (done % 10 === 0) saveLocal(true);
+    await new Promise(r => setTimeout(r, 260));
+  }
+
+  /* 위시는 `mediaType`을 담을 때부터 저장해두므로 짐작할 일이 없다 (확인도 필요 없다). */
+  for (const w of wishes) {
+    step(w.title);
+    try {
+      const before = JSON.stringify(w.otts || []);
+      w.otts = await tmdbProviders(w.tmdbId, w.mediaType || "movie");
+      if (JSON.stringify(w.otts) !== before) changed++;
+    } catch { fail++; }
+
+    if (done % 10 === 0) saveLocal(true);
     await new Promise(r => setTimeout(r, 260));
   }
 
@@ -1749,10 +1816,22 @@ async function runRefreshOtts() {
   applyFilters();
   renderDiscover();
   _enriching = false;
-  markUpd("ott");
-  status.textContent = `OTT 갱신 완료 — 변경 ${changed}개${fail ? `, 실패 ${fail}개` : ""}`;
+  markUpd("refresh");
+
+  status.textContent = `갱신 완료 — 변경 ${changed}개`
+    + (fail ? `, 실패 ${fail}개` : "") + (unsure.length ? `, 확인 필요 ${unsure.length}개` : "");
   status.className = "text-sm mt-3 font-medium text-emerald-600";
-  toast(`OTT 정보 갱신 완료`, "success");
+
+  /* 건너뛴 건 **제목까지** 보여준다 — 개수만 알려주면 뭘 확인해야 할지 알 수가 없다. */
+  if (unsure.length) {
+    alert(
+      `받아온 정보가 기록과 달라 보여 ${unsure.length}개를 건너뛰었습니다.\n` +
+      `이 항목들은 아무것도 바뀌지 않았습니다 — 수정창에서 TMDB를 다시 연결해 주세요.\n\n` +
+      unsure.slice(0, 30).map(t => "· " + t).join("\n") +
+      (unsure.length > 30 ? `\n… 외 ${unsure.length - 30}개` : "")
+    );
+  }
+  toast(`최신 정보 갱신 완료 (변경 ${changed}개)`, "success");
 }
 
 /* ---------- 시리즈 편 자동 재매칭 ----------
@@ -1846,63 +1925,6 @@ async function runAutoRematch() {
   toast(`${done}개를 올바른 편으로 연결했습니다`, "success");
 }
 window.runAutoRematch = runAutoRematch;
-
-/* ---------- 시리즈(TMDB 컬렉션) 정보만 가져오기 ----------
-   제목이 달라도 같은 시리즈면 묶이도록 collectionId를 채운다. 영화에만 존재. */
-async function runRefreshCollections() {
-  if (_enriching) { toast("이미 진행 중입니다"); return; }
-  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
-
-  const targets = State.items.filter(i => i.tmdbId);
-  if (!targets.length) { toast("갱신할 항목이 없습니다", "success"); return; }
-  if (!confirm(`${targets.length}개 항목의 시리즈(컬렉션) 정보를 가져옵니다.`)) return;
-
-  _enriching = true;
-  const status = $("#enrichStatus");
-  const bar = $("#enrichBar");
-  const fill = $("#enrichBarFill");
-  bar.classList.remove("hidden");
-
-  let found = 0, fail = 0;
-  for (let n = 0; n < targets.length; n++) {
-    const i = targets[n];
-    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
-    status.className = "text-sm mt-3 font-medium text-slate-600";
-    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
-
-    const mediaType = mediaTypeOf(i);
-    try {
-      const d = await tmdbDetail(i.tmdbId, mediaType);
-      i.collectionId = d.collectionId || null;
-      i.collectionName = d.collectionName || "";
-      i.seriesNo = null;
-      i.seriesTotal = null;
-
-      // 시리즈에 속하면 개봉일 순으로 "몇 번째 편"인지까지 채운다
-      if (i.collectionId) {
-        found++;
-        try {
-          const coll = await tmdbCollection(i.collectionId);
-          i.seriesNo = coll.order.get(i.tmdbId) || null;
-          i.seriesTotal = coll.total || null;
-          if (coll.name) i.collectionName = coll.name;
-          saveCollInfo(coll);        // 편별 개봉일·제목 저장 (탐색 탭 이어보기용)
-        } catch { /* 편 번호만 실패해도 컬렉션 정보는 유지 */ }
-      }
-    } catch { fail++; }
-
-    if (n % 10 === 9) saveLocal(true);
-    await new Promise(r => setTimeout(r, 260));
-  }
-
-  saveLocal();
-  applyFilters();
-  _enriching = false;
-  markUpd("collection");
-  status.textContent = `시리즈 정보 완료 — ${found}개 작품이 시리즈에 속함${fail ? `, 실패 ${fail}개` : ""}`;
-  status.className = "text-sm mt-3 font-medium text-emerald-600";
-  toast("시리즈 정보 가져오기 완료", "success");
-}
 
 /* ---------- 사람 이름 한글로 바꾸기 ----------
    "임화영 / Park Shin-woo"처럼 한 화면에서 표기가 갈리는 걸 고친다.
@@ -1998,46 +2020,3 @@ async function runFixNames(list) {
   toast(`배우·감독 이름 ${changed}곳을 한글로 바꿨습니다`, "success");
 }
 
-/* ---------- 평점(TMDB voteAverage)만 갱신 ---------- */
-async function runRefreshRatings() {
-  if (_enriching) { toast("이미 진행 중입니다"); return; }
-  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
-
-  const targets = State.items.filter(i => i.tmdbId);
-  if (!targets.length) { toast("갱신할 항목이 없습니다 (TMDB 연동된 항목만 대상)", "success"); return; }
-  if (!confirm(`${targets.length}개 항목의 TMDB 평점을 새로 조회합니다.`)) return;
-
-  _enriching = true;
-  const status = $("#enrichStatus");
-  const bar = $("#enrichBar");
-  const fill = $("#enrichBarFill");
-  bar.classList.remove("hidden");
-
-  let changed = 0, fail = 0;
-  for (let n = 0; n < targets.length; n++) {
-    const i = targets[n];
-    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
-    status.className = "text-sm mt-3 font-medium text-slate-600";
-    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
-
-    const mediaType = mediaTypeOf(i);
-    try {
-      const d = await tmdbDetail(i.tmdbId, mediaType);
-      if (d && d.voteAverage != null && d.voteAverage !== i.voteAverage) {
-        i.voteAverage = d.voteAverage;
-        changed++;
-      }
-    } catch { fail++; }
-
-    if (n % 10 === 9) saveLocal(true);
-    await new Promise(r => setTimeout(r, 260));
-  }
-
-  saveLocal();
-  applyFilters();
-  _enriching = false;
-  markUpd("rating");
-  status.textContent = `평점 갱신 완료 — 변경 ${changed}개${fail ? `, 실패 ${fail}개` : ""}`;
-  status.className = "text-sm mt-3 font-medium text-emerald-600";
-  toast(`평점 갱신 완료`, "success");
-}

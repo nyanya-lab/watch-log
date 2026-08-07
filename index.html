@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260807l">
+<link rel="stylesheet" href="style.css?v=20260807m">
 </head>
 <body>
 
@@ -223,40 +223,28 @@
     <!-- ===== 설정 탭 ===== -->
     <section id="tab-settings" class="hidden space-y-5">
       <div class="panel">
-        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-lime-700"></i>TMDB 정보 일괄 채우기</h3>
+        <h3 class="font-semibold text-slate-800 mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2 text-lime-700"></i>TMDB 정보</h3>
         <p class="text-sm text-slate-500 mb-3">포스터·장르·줄거리·출연진·평점·OTT 등을 자동으로 찾아 채웁니다.</p>
-        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mb-3">
-          <input type="checkbox" id="enrichOverwrite" class="w-4 h-4 rounded">
-          이미 채운 항목도 최신 정보로 갱신 (출연진·평점·OTT 등 새 정보 포함)
-        </label>
         <div class="space-y-2">
           <div class="flex items-center gap-3 flex-wrap">
-            <button id="enrichBtn" class="btn btn-primary shrink-0">
-              <i class="fa-solid fa-download mr-1"></i>정보 채우기 시작
+            <button id="refreshAllBtn" class="btn btn-primary shrink-0">
+              <i class="fa-solid fa-rotate mr-1"></i>최신 정보로 갱신
+            </button>
+            <span id="updRefresh" class="text-xs font-medium text-slate-400"></span>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button id="enrichBtn" class="btn btn-ghost shrink-0">
+              <i class="fa-solid fa-download mr-1"></i>미등록 항목 채우기
             </button>
             <span id="updEnrich" class="text-xs font-medium text-slate-400"></span>
           </div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <button id="refreshOttBtn" class="btn btn-ghost shrink-0">
-              <i class="fa-solid fa-tv mr-1"></i>OTT 정보만 갱신
-            </button>
-            <span id="updOtt" class="text-xs font-medium text-slate-400"></span>
-          </div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <button id="refreshRatingBtn" class="btn btn-ghost shrink-0">
-              <i class="fa-solid fa-star mr-1"></i>평점(TMDB)만 갱신
-            </button>
-            <span id="updRating" class="text-xs font-medium text-slate-400"></span>
-          </div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <button id="refreshCollectionBtn" class="btn btn-ghost shrink-0">
-              <i class="fa-solid fa-layer-group mr-1"></i>시리즈 정보 가져오기
-            </button>
-            <span id="updCollection" class="text-xs font-medium text-slate-400"></span>
-          </div>
         </div>
-        <p class="text-xs text-slate-400 mt-2">OTT·평점은 시간이 지나면 바뀝니다. 위 버튼으로 그 정보만 최신화할 수 있어요.<br>
-          <b>시리즈 정보</b>를 가져오면 해리포터·반지의제왕처럼 제목이 다른 시리즈도 묶이고, <b>몇 번째 편</b>인지까지 표시됩니다.</p>
+        <p class="text-xs text-slate-400 mt-2">
+          <b>최신 정보로 갱신</b> — 시간이 지나면 바뀌는 값만 다시 받아옵니다:
+          OTT · TMDB 평점 · 시즌/화수 · 시리즈 정보(해리포터·반지의제왕처럼 제목이 다른 시리즈 묶기, 몇 번째 편인지).
+          제목·포스터·줄거리·장르·출연진과 내 기록(별점·본 날짜·한줄평)은 <b>건드리지 않습니다.</b><br>
+          <b>미등록 항목 채우기</b> — TMDB에 아직 연결되지 않은 기록만 제목으로 찾아 채웁니다.
+          이미 연결된 기록은 대상이 아닙니다(매칭이 바뀌지 않도록).</p>
         <div id="enrichStatus" class="text-sm mt-3 font-medium"></div>
         <div id="enrichBar" class="hidden mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
           <div id="enrichBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
@@ -643,10 +631,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260807l"></script>
-<script src="tmdb.js?v=20260807l"></script>
-<script src="watchlog.js?v=20260807l"></script>
-<script src="discover.js?v=20260807l"></script>
-<script src="stats.js?v=20260807l"></script>
+<script src="core.js?v=20260807m"></script>
+<script src="tmdb.js?v=20260807m"></script>
+<script src="watchlog.js?v=20260807m"></script>
+<script src="discover.js?v=20260807m"></script>
+<script src="stats.js?v=20260807m"></script>
 </body>
 </html>
