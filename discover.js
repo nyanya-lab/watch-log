@@ -318,6 +318,7 @@ async function runReco() {
     const data = { generatedAt: new Date().toISOString(), basis: genreNames, list };
     localStorage.setItem(LS_RECO, JSON.stringify(data));
     Discover.reco = data;
+    touchCache();
 
     setStatus(`추천 ${list.length}개를 골랐어요`, 100);
     setTimeout(() => $("#dcRecoProgress").classList.add("hidden"), 1200);
@@ -756,6 +757,7 @@ function saveFrCache(key, parts) {
     const c = getFrCache();
     c[key] = { parts, updatedAt: new Date().toISOString() };
     localStorage.setItem(LS_FR, JSON.stringify(c));
+    touchCache();
   } catch { /* 캐시일 뿐이라 조용히 넘어간다 */ }
 }
 

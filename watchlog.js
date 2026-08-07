@@ -1533,6 +1533,7 @@ function markUpd(key) {
   const o = getUpd();
   o[key] = new Date().toISOString();
   localStorage.setItem(LS_UPD, JSON.stringify(o));
+  touchCache();
   renderUpdInfo();
 }
 function fmtUpd(iso) {

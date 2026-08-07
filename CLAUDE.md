@@ -153,12 +153,12 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 - `watchlog_items_backup` — 저장 직전 상태 1개
 - `watchlog_wishes` — 보고싶어요 목록 (`State.wishes`)
 - `watchlog_hides` — 관심없음 목록 (`State.hides`)
-- `watchlog_reco` — 추천 결과 캐시 `{generatedAt, basis:[장르], list:[...]}`. 이 기기에만, 동기화 안 함
+- `watchlog_reco` — 추천 결과 캐시 `{generatedAt, basis:[장르], list:[...]}`
 - `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
   영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
-  정보라 서버 동기화는 안 함 (`getCollCache`/`saveCollInfo` in tmdb.js)
+  정보다 (`getCollCache`/`saveCollInfo` in tmdb.js)
 - `watchlog_franchises` — 프랜차이즈(MCU·미들어스 등) 영화 목록 캐시 `{[key]: {parts, updatedAt}}`.
-  탐색 탭 "시리즈" 뷰가 쓴다. TMDB로 다시 만들 수 있어 서버 동기화는 안 함
+  탐색 탭 "시리즈" 뷰가 쓴다
 - `watchlog_person_ko` — 한글 표기 캐시. `""`는 "확인했지만 한글 표기 없음"으로 **확정된** 값.
   키가 두 종류다: 숫자 = 사람 id, `"n:이름"` = **id를 못 구한 사람**.
   id 없는 사람을 이름으로도 기억하지 않으면 "이름 영문" 목록에서 영원히 안 빠진다.
@@ -172,7 +172,18 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 ### 서버 (Realtime Database REST, SDK 안 씀)
 
 - `PUT/GET {DB_URL}/watchlog/{동기화 비밀번호}.json` (경로는 `getDataUrl()`이 생성)
-- 저장 형태: `{ items: [...], wishes: [...], hides: [...], updatedAt: ISO, count: n }`
+- 저장 형태: `{ items: [...], wishes: [...], hides: [...], cache: {...}, updatedAt: ISO, count: n }`
+- **`cache`는 TMDB에서 받아온 참고 정보**(배우 한글 이름·컬렉션 편 목록·프랜차이즈·추천 결과·
+  갱신 시각). 2026-08-07부터 기록과 함께 올린다 — 예전엔 "TMDB로 다시 만들 수 있으니 기기에만
+  두자"고 했는데, 그러면 **기기를 옮길 때마다 같은 작업을 처음부터 다시** 돌려야 했다
+  (폰에서 "이름 영문 63개"가 다시 뜨는 식). `CACHE_KEYS`가 목록이고 `collectCache`/`adoptCache`가
+  담고 푼다.
+  - **API 키·동기화 비밀번호·백업·시드 표시는 뺐다** — 그 기기에 남아야 하는 것들이다.
+  - 사람·컬렉션·프랜차이즈는 맵이라 **두 기기 것을 합친다**(`CACHE_MERGE`). 통째로 덮으면
+    한쪽이 조회해둔 게 사라진다. 겹치면 이 기기 것을 남긴다(방금 조회한 값일 수 있어서).
+  - 캐시만 바뀌는 작업도 `touchCache()`로 `saveLocal()`을 부른다 — **수정 시각이 갱신돼야
+    다른 기기가 변경을 알아챈다.** 시각이 그대로면 서버가 바뀌어도 아무도 받아가지 않는다.
+  - `adoptCache`는 `cache`가 **있을 때만** 반영한다 (구버전 저장본이 이 값들을 지우지 않도록)
 - `wishes`·`hides`는 나중에 추가된 필드라 예전 저장본엔 없다. `adoptLists(d)`가 **있을 때만** 반영하고
   없으면 이 기기 것을 유지한다 (구버전 데이터가 이 목록들을 지워버리지 않도록).
 

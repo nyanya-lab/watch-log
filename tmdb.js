@@ -378,7 +378,7 @@ function getPersonCache() {
   catch { return {}; }
 }
 function savePersonCache(c) {
-  try { localStorage.setItem(LS_PERSON, JSON.stringify(c)); } catch {}
+  try { localStorage.setItem(LS_PERSON, JSON.stringify(c)); touchCache(); } catch {}
 }
 
 /* 이름으로 사람을 찾는다 — 저장된 이름이 지금 크레딧 목록에 없어 id를 못 구했을 때의 대비책.
@@ -510,6 +510,7 @@ function writeCollCache(id, value) {
     const c = getCollCache();
     c[id] = { ...value, updatedAt: new Date().toISOString() };
     localStorage.setItem(LS_COLL, JSON.stringify(c));
+    touchCache();
   } catch { /* 저장 공간 문제면 조용히 넘어간다 (캐시일 뿐) */ }
 }
 

@@ -198,7 +198,8 @@ async function autoPush() {
         wishes: State.wishes,
         hides: State.hides,
         updatedAt: localStorage.getItem(LS_MODIFIED) || new Date().toISOString(),
-        count: State.items.length
+        count: State.items.length,
+        cache: collectCache()
       })
     });
     if (!res.ok) throw new Error(describeHttp(res.status));
@@ -236,7 +237,8 @@ async function pushToServer() {
         wishes: State.wishes,
         hides: State.hides,
         updatedAt: stamp,
-        count: State.items.length
+        count: State.items.length,
+        cache: collectCache()
       })
     });
     if (!res.ok) throw new Error(describeHttp(res.status));
@@ -276,6 +278,58 @@ function adoptLists(d) {
     State.hides = d.hides;
     localStorage.setItem(LS_HIDE, JSON.stringify(State.hides));
   }
+  adoptCache(d.cache);
+}
+
+/* ---------- TMDB에서 받아온 참고 정보 (2026-08-07부터 같이 동기화) ----------
+   내가 입력한 기록이 아니라 앱이 TMDB에서 받아 저장해둔 것들 — 배우 한글 이름, 시리즈 편 목록,
+   추천 결과 등. 예전엔 "TMDB로 다시 만들 수 있으니 기기에만 두자"고 했는데, 그러면 기기를 옮길
+   때마다 같은 작업을 처음부터 다시 돌려야 했다. 그래서 기록과 함께 올린다.
+
+   API 키·동기화 비밀번호·백업·시드 표시는 **일부러 뺐다** — 그 기기에 남아야 하는 것들이다. */
+const CACHE_KEYS = [
+  "watchlog_person_ko",     // 배우·감독 한글 표기 (한글 표기가 "없다고 확인된" 사람 포함)
+  "watchlog_collections",   // 컬렉션 편 정보
+  "watchlog_franchises",    // 프랜차이즈(MCU 등) 목록
+  "watchlog_reco",          // 추천 결과
+  "watchlog_updated_at"     // 설정 탭의 "마지막 실행" 시각
+];
+
+/* 사람·컬렉션·프랜차이즈는 맵이라 **두 기기 것을 합친다** — 서로 다른 걸 조회해뒀을 수 있어서
+   통째로 덮으면 한쪽이 한 일이 사라진다. 추천 결과·시각은 통째로 최신을 쓴다. */
+const CACHE_MERGE = ["watchlog_person_ko", "watchlog_collections", "watchlog_franchises"];
+
+function collectCache() {
+  const out = {};
+  CACHE_KEYS.forEach(k => {
+    const raw = localStorage.getItem(k);
+    if (raw == null) return;
+    try { out[k] = JSON.parse(raw); } catch { /* 깨진 값은 올리지 않는다 */ }
+  });
+  return out;
+}
+
+/* 캐시만 바뀐 작업(이름 한글화·시리즈 정보·추천 등)도 서버에 반영되게 한다.
+   `saveLocal()`을 불러야 수정 시각이 갱신돼 **다른 기기가 변경을 알아챈다** — 시각이 그대로면
+   서버 내용이 바뀌어도 아무도 받아가지 않는다. 한 작업이 캐시를 여러 번 건드리므로 몰아서 한 번만. */
+let _cacheTouch = null;
+function touchCache() {
+  clearTimeout(_cacheTouch);
+  _cacheTouch = setTimeout(() => saveLocal(), 3000);
+}
+
+function adoptCache(cache) {
+  if (!cache || typeof cache !== "object") return;   // 예전 저장본엔 없다 — 그땐 이 기기 것을 유지
+  CACHE_KEYS.forEach(k => {
+    if (cache[k] === undefined) return;
+    let val = cache[k];
+    if (CACHE_MERGE.includes(k)) {
+      let mine = {};
+      try { mine = JSON.parse(localStorage.getItem(k) || "{}"); } catch { mine = {}; }
+      val = { ...val, ...mine };      // 겹치면 이 기기 것을 남긴다 (방금 조회한 값일 수 있다)
+    }
+    try { localStorage.setItem(k, JSON.stringify(val)); } catch { /* 저장 공간 문제면 넘어간다 */ }
+  });
 }
 
 async function pullFromServer(silent) {
