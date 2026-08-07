@@ -867,6 +867,13 @@ function openDetail(id) {
   const seasons = seasonsOf(i);
   const siblings = seasons.filter(s => s.id !== i.id);
 
+  /* 시리즈 전체를 포스터로 그릴 수 있는 경우 — 영화는 TMDB 컬렉션, TV는 시즌이 2개 이상.
+     그릴 수 있으면 아래 "다른 편" 배지 줄은 그리지 않는다 (같은 걸 두 번 보일 이유가 없다).
+     **영화는 편 목록이 이미 캐시에 있으면 API 키가 없어도 그린다** — 조회할 게 없기 때문. */
+  const hasParts = !!i.tmdbId && (mediaTypeOf(i) === "movie"
+    ? !!i.collectionId && (!!getTmdbKey() || !!(getCollCache()[i.collectionId] || {}).parts)
+    : (i.totalSeasons || 0) > 1 && !!getTmdbKey());
+
   /* ---- 내 기록 블록 ----
      별점·본 날짜·한줄평은 이 앱에서 유일하게 "내가 만든" 정보다.
      예전에는 TMDB 정보(방영일·제작사)와 똑같은 label-value 줄로 섞여 있어 구분이 안 됐다.
@@ -982,7 +989,9 @@ function openDetail(id) {
         <div class="dt-facts" style="margin-top:0">${esc(i.companies.join(" · "))}</div>
       </div>` : ""}
 
-      ${siblings.length ? `<div class="dt-sec">
+      <!-- 시리즈 전체를 포스터로 (안 본 편까지). 못 그리는 경우에만 아래 배지 줄로 물러난다 -->
+      <div id="dtParts"></div>
+      ${siblings.length && !hasParts ? `<div class="dt-sec">
         <div class="dt-sec-h">
           <i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>이 시리즈의 다른 편 ${siblings.length}개
         </div>
@@ -1008,6 +1017,100 @@ function openDetail(id) {
   $("#detailModal").classList.remove("hidden");
   /* 저장된 `otts`는 등록 시점 값이라 시간이 지나면 어긋난다. 열자마자 지금 값을 받아 아래에 붙인다 */
   renderWatchInto($("#dtWatch"), i.tmdbId, mediaTypeOf(i), i.title);
+  if (hasParts) renderPartsInto($("#dtParts"), i);
+}
+
+/* ---------- 상세: 이 시리즈를 포스터로 (안 본 편까지) ----------
+   예전엔 **내 기록에 있는 편만** 작은 배지로 나왔다. 그래서 "3편 중 뭘 안 봤나"가 안 보였고,
+   포스터가 있는데도 글자만 보였다. 영화는 TMDB 컬렉션의 편 목록, TV는 시즌 목록을 받아
+   내 기록을 겹쳐 그린다 — 탐색 탭의 "이어보기"가 하는 일을 그 작품 안에서 보여주는 셈이다.
+
+   `renderWatchInto`와 같은 이유로 늦게 온 응답이 다음 작품 화면을 덮지 않게 순번을 둔다. */
+async function renderPartsInto(box, i) {
+  if (!box || !i.tmdbId) return;
+  const isMovie = mediaTypeOf(i) === "movie";
+  if (!isMovie && !getTmdbKey()) return;      // TV 시즌은 받아와야만 알 수 있다
+
+  const my = String(Date.now()) + ":" + Math.random();
+  box.dataset.req = my;
+  box.innerHTML = `<div class="dt-sec"><div class="dt-sec-h">
+    <i class="fa-solid fa-spinner fa-spin mr-1 text-amber-400"></i>시리즈 정보 불러오는 중...</div></div>`;
+
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    let parts, title;
+    if (isMovie) {
+      /* 편 목록은 이미 받아둔 게 대부분이다(이어보기·시리즈 보기가 쓰는 캐시). 없으면 1회만 조회. */
+      let info = getCollCache()[i.collectionId];
+      if (!info || !info.parts) { info = await tmdbCollection(i.collectionId); saveCollInfo(info); }
+      title = info.name || i.collectionName || "";
+      parts = info.parts.map(p => ({
+        no: p.no, tmdbId: p.tmdbId, title: p.title, poster: p.poster,
+        date: p.releaseDate, year: (p.releaseDate || "").slice(0, 4)
+      }));
+    } else {
+      const d = await tmdbDetail(i.tmdbId, "tv");
+      title = i.title;
+      parts = (d.seasons || []).map(s => ({
+        no: s.number, tmdbId: i.tmdbId, title: s.name, poster: s.poster,
+        date: s.airDate, year: s.year, episodes: s.episodes
+      }));
+    }
+    if (box.dataset.req !== my) return;              // 그 사이 다른 작품이 열렸다
+    if (!parts || parts.length < 2) { box.innerHTML = ""; return; }
+
+    /* 내 기록을 겹친다. 영화는 **tmdbId와 편 번호 둘 다**로 본다 — 속편이 1편의 tmdbId를
+       물고 있는 기록이 있으면 tmdbId만으로는 실제로 본 편을 "안 봤다"고 잘못 잡는다. */
+    const mine = isMovie
+      ? State.items.filter(x => x.collectionId === i.collectionId)
+      : State.items.filter(x => x.tmdbId === i.tmdbId);
+    const numOf = (x) => x.seriesNo || parseInt(String(x.season || "").replace(/\D/g, "")) || 0;
+    const recOf = (p) => mine.find(x => numOf(x) === p.no)
+                      || (isMovie ? mine.find(x => x.tmdbId === p.tmdbId && !numOf(x)) : null);
+
+    const seen = parts.filter(p => recOf(p)).length;
+    const soon = parts.filter(p => p.date && p.date > today).length;
+
+    const cells = parts.map(p => {
+      const rec = recOf(p);
+      const upcoming = !rec && p.date && p.date > today;
+      /* 안 본 편은 눌러서 바로 등록으로 간다 (TV는 시즌까지 미리 골라준다).
+         미개봉은 아직 볼 수 없으니 누를 게 없다. */
+      const act = rec ? `openDetail('${rec.id}')`
+        : upcoming ? ""
+        : `document.getElementById('detailModal').classList.add('hidden');`
+          + `addFromDiscover(${p.tmdbId},'${isMovie ? "movie" : "tv"}'${isMovie ? "" : `,'S${p.no}'`})`;
+      const mark = rec
+        ? (rec.rating ? `<span class="dt-part-mark seen">${hearts(rec.rating)}</span>`
+                      : `<span class="dt-part-mark seen"><i class="fa-solid fa-check"></i></span>`)
+        : upcoming ? `<span class="dt-part-mark soon">미개봉</span>`
+                   : `<span class="dt-part-mark miss">안 봄</span>`;
+      return `
+        <button class="dt-part${rec ? "" : upcoming ? " is-soon" : " is-miss"}"
+                ${act ? `onclick="${act}"` : "disabled"}>
+          <div class="dt-part-img">
+            ${p.poster ? `<img src="${esc(p.poster)}" alt="" loading="lazy">`
+                       : `<div class="dt-part-none"><i class="fa-solid fa-image"></i></div>`}
+            <span class="dt-part-no">S${p.no}</span>
+            ${mark}
+          </div>
+          <div class="dt-part-t">${esc(p.title || "")}</div>
+          <div class="dt-part-y">${esc(p.year || "")}${p.episodes ? ` · ${p.episodes}화` : ""}</div>
+        </button>`;
+    }).join("");
+
+    box.innerHTML = `<div class="dt-sec">
+      <div class="dt-sec-h">
+        <i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>
+        ${esc(title || "이 시리즈")} · 총 ${parts.length}${isMovie ? "편" : "시즌"}
+        <span class="dt-part-sum">본 것 ${seen} · 안 본 것 ${parts.length - seen - soon}${soon ? ` · 미개봉 ${soon}` : ""}</span>
+      </div>
+      <div class="dt-parts">${cells}</div>
+    </div>`;
+  } catch {
+    /* 시리즈 정보는 없어도 상세는 멀쩡하다 — 조용히 비운다 */
+    if (box.dataset.req === my) box.innerHTML = "";
+  }
 }
 
 /* ---------- 상세에서 TMDB 정보 새로 받기 ----------

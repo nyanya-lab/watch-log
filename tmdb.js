@@ -336,13 +336,16 @@ async function tmdbDetail(id, mediaType) {
   if (mediaType === "movie") runtime = d.runtime || null;
   else runtime = (d.episode_run_time && d.episode_run_time[0]) || null;
 
-  // 시즌 목록 (실제 방영 시즌만)
+  /* 시즌 목록 (실제 방영 시즌만).
+     포스터·방영일도 담는다 — 상세의 "이 시리즈" 포스터 목록이 쓴다 (영화 컬렉션 parts와 짝을 맞춘다). */
   const seasons = ((d.seasons || [])
     .filter(s => s.season_number > 0)
     .map(s => ({
       number: s.season_number,
       name: s.name,
       year: (s.air_date || "").slice(0, 4),
+      airDate: s.air_date || "",
+      poster: s.poster_path ? TMDB_IMG + s.poster_path : null,
       episodes: s.episode_count
     })));
 
