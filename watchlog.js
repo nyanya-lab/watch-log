@@ -1740,7 +1740,7 @@ async function runRefreshAll() {
   const fill = $("#enrichBarFill");
   bar.classList.remove("hidden");
 
-  let done = 0, changed = 0, fail = 0;
+  let done = 0, changed = 0, fail = 0, mtFilled = 0;
   const unsure = [];                 // 받아온 게 다른 작품처럼 보여 건너뛴 것
   const step = (label) => {
     done++;
@@ -1768,7 +1768,11 @@ async function runRefreshAll() {
       if (!sameWork(i, d)) { unsure.push(i.title); continue; }
 
       const before = snap(i);
-      i.mediaType = mt;                    // 확인된 값만 남긴다 — 다음부터는 짐작하지 않는다
+      /* 확인된 값만 남긴다 — 다음부터는 짐작하지 않는다.
+         `snap`에는 넣지 않고 따로 센다: 화면에 드러나지 않는 값이라 "변경"으로 뭉뚱그리면
+         정작 이게 채워졌는지 알 수가 없다. */
+      if (!i.mediaType) mtFilled++;
+      i.mediaType = mt;
       i.otts = await tmdbProviders(i.tmdbId, mt);
       i.voteAverage = d.voteAverage;
       i.totalSeasons = d.totalSeasons;
@@ -1819,6 +1823,7 @@ async function runRefreshAll() {
   markUpd("refresh");
 
   status.textContent = `갱신 완료 — 변경 ${changed}개`
+    + (mtFilled ? `, 영화/TV 구분 ${mtFilled}개 저장` : "")
     + (fail ? `, 실패 ${fail}개` : "") + (unsure.length ? `, 확인 필요 ${unsure.length}개` : "");
   status.className = "text-sm mt-3 font-medium text-emerald-600";
 
