@@ -1513,14 +1513,33 @@ function initSettings() {
   $("#refreshPreviewModal").addEventListener("click", e => {
     if (e.target.id === "refreshPreviewModal") closePreview();
   });
-  /* 항목은 열 때마다 새로 그리므로 체크 변화는 위임으로 받는다 */
+  /* 항목은 열 때마다 새로 그리므로 체크·접기는 전부 위임으로 받는다.
+     실제 선택 상태를 갖는 건 값 한 줄짜리 `.rf-f-cb` 하나뿐이고,
+     항목·필드·전체 체크박스는 **그걸 켜고 끄는 손잡이**일 뿐이다 (상태를 따로 두면 어긋난다). */
+  const setAll = (list, on) => { list.forEach(b => { b.checked = on; }); syncRefreshPicked(); };
   $("#rfList").addEventListener("change", e => {
-    if (e.target.classList.contains("rf-cb")) syncRefreshPicked();
+    const t = e.target;
+    if (t.classList.contains("rf-item-cb")) {
+      setAll([...document.querySelectorAll(`#rfList .rf-f-cb[data-idx="${t.dataset.idx}"]`)], t.checked);
+    } else if (t.classList.contains("rf-f-cb")) {
+      syncRefreshPicked();
+    }
   });
-  $("#rfAll").addEventListener("change", e => {
-    document.querySelectorAll("#rfList .rf-cb").forEach(b => { b.checked = e.target.checked; });
-    syncRefreshPicked();
+  $("#rfList").addEventListener("click", e => {
+    const fold = e.target.closest(".rf-fold");
+    if (fold) { fold.closest(".rf-item").classList.toggle("rf-folded"); return; }
+    // 제목을 눌러도 접힌다 — 폰에서 작은 화살표만 노리기 어렵다
+    const name = e.target.closest(".rf-name, .rf-sum");
+    if (name) name.closest(".rf-item").classList.toggle("rf-folded");
   });
+  $("#rfFields").addEventListener("change", e => {
+    if (!e.target.classList.contains("rf-fall")) return;
+    const q = `#rfList .rf-f-cb[data-label="${CSS.escape(e.target.dataset.label)}"]`;
+    setAll([...document.querySelectorAll(q)], e.target.checked);
+  });
+  $("#rfAll").addEventListener("change", e =>
+    setAll([...document.querySelectorAll("#rfList .rf-f-cb")], e.target.checked));
+  $("#rfFoldAll").addEventListener("click", () => setRefreshFold(!$("#rfFoldAll").dataset.folded));
 }
 
 /* ---------- 백업에서 되돌리기 ----------
@@ -1772,18 +1791,22 @@ async function runRefreshAll() {
     fill.style.width = (done / total * 100).toFixed(1) + "%";
   };
 
-  /* 값 하나가 바뀌면 patch(적용할 것)와 diff(보여줄 것)에 함께 담는다.
-     같은 값이면 아무 데도 안 담기므로 "안 바뀐 항목"은 목록에 뜨지 않는다. */
-  const put = (p, key, cur, next, label, fmt) => {
-    const same = Array.isArray(cur) || Array.isArray(next)
-      ? JSON.stringify(cur || []) === JSON.stringify(next || [])
-      : (cur ?? null) === (next ?? null);
-    if (same) return;
-    p.patch[key] = next;
-    if (label) p.diff.push({ label, from: fmt ? fmt(cur) : cur, to: fmt ? fmt(next) : next });
+  const differs = (a, b) => (Array.isArray(a) || Array.isArray(b))
+    ? JSON.stringify(a || []) !== JSON.stringify(b || [])
+    : (a ?? null) !== (b ?? null);
+
+  /* 바뀐 값 하나 = 미리보기에서 **따로 고를 수 있는 한 줄**.
+     `keys`에 실제로 쓸 필드를 담는다 — 적용은 고른 줄의 keys만 `Object.assign` 한다.
+     같은 값이면 아무것도 안 담기므로 "안 바뀐 항목"은 목록에 뜨지 않는다. */
+  const put = (p, label, cur, next, keys, fmt) => {
+    if (!differs(cur, next)) return;
+    p.diff.push({ label, from: fmt ? fmt(cur) : cur, to: fmt ? fmt(next) : next, keys });
   };
   const ottTxt = (v) => (v && v.length) ? v.join("·") : "";
   const numTxt = (v) => (v == null || v === "") ? "" : String(v);
+  const mtTxt = (v) => v === "tv" ? "TV" : v === "movie" ? "영화" : "";
+  const noTxt = (v) => v ? "S" + v : "";
+  const totTxt = (v) => v ? v + "편" : "";
 
   for (const i of items) {
     step(i.title);
@@ -1804,13 +1827,16 @@ async function runRefreshAll() {
         continue;
       }
 
-      const p = { obj: i, title: i.title, patch: {}, diff: [] };
-      put(p, "mediaType", i.mediaType || null, mt, "영화/TV 구분",
-          v => v === "tv" ? "TV" : v === "movie" ? "영화" : "");
-      put(p, "otts", i.otts || [], await tmdbProviders(i.tmdbId, mt), "볼 수 있는 곳", ottTxt);
-      put(p, "voteAverage", i.voteAverage ?? null, d.voteAverage ?? null, "TMDB 평점", numTxt);
-      put(p, "totalSeasons", i.totalSeasons ?? null, d.totalSeasons ?? null, "시즌 수", numTxt);
-      put(p, "totalEpisodes", i.totalEpisodes ?? null, d.totalEpisodes ?? null, "화수", numTxt);
+      const p = { obj: i, title: i.title, diff: [] };
+      put(p, "영화/TV 구분", i.mediaType || null, mt, { mediaType: mt }, mtTxt);
+      const otts = await tmdbProviders(i.tmdbId, mt);
+      put(p, "볼 수 있는 곳", i.otts || [], otts, { otts }, ottTxt);
+      put(p, "TMDB 평점", i.voteAverage ?? null, d.voteAverage ?? null,
+          { voteAverage: d.voteAverage ?? null }, numTxt);
+      put(p, "시즌 수", i.totalSeasons ?? null, d.totalSeasons ?? null,
+          { totalSeasons: d.totalSeasons ?? null }, numTxt);
+      put(p, "화수", i.totalEpisodes ?? null, d.totalEpisodes ?? null,
+          { totalEpisodes: d.totalEpisodes ?? null }, numTxt);
 
       /* 시리즈 정보는 **조회에 성공했을 때만 담는다.** 예전 코드는 조회하기 전에 seriesNo/
          seriesTotal을 null로 밀어놔서, 컬렉션 조회가 실패하면 멀쩡하던 "S3 / 총 8편"이 사라졌다. */
@@ -1824,20 +1850,24 @@ async function runRefreshAll() {
           if (coll.name) name = coll.name;
           saveCollInfo(coll);            // 편별 개봉일·제목 (탐색 탭 이어보기용)
         } catch { /* 편 번호를 못 구해도 컬렉션 연결 자체는 담는다 */ }
-        put(p, "collectionId", i.collectionId ?? null, d.collectionId, null);
-        put(p, "collectionName", i.collectionName || "", name, "시리즈");
-        put(p, "seriesNo", i.seriesNo ?? null, no, "시리즈 편", v => v ? "S" + v : "");
-        put(p, "seriesTotal", i.seriesTotal ?? null, tot, "총 편수", v => v ? v + "편" : "");
+        /* 컬렉션 **id와 이름은 한 줄로 묶는다** — 따로 고를 수 있게 하면 이름만 바뀌고 id는
+           옛것으로 남는 어긋난 상태가 만들어진다. 화면에는 이름으로 보여준다. */
+        if (differs(i.collectionId ?? null, d.collectionId) || differs(i.collectionName || "", name)) {
+          p.diff.push({ label: "시리즈", from: i.collectionName || "", to: name,
+                        keys: { collectionId: d.collectionId, collectionName: name } });
+        }
+        put(p, "시리즈 편", i.seriesNo ?? null, no, { seriesNo: no }, noTxt);
+        put(p, "총 편수", i.seriesTotal ?? null, tot, { seriesTotal: tot }, totTxt);
       } else if (mt === "movie" && i.collectionId) {
         /* 영화인데 컬렉션이 없다고 답했으면 연결을 지운다 (시리즈에서 빠졌거나 애초에 없던 것).
            TV는 TMDB가 컬렉션 개념을 제공하지 않으므로 "없다"가 근거가 못 된다 — 건드리지 않는다. */
-        put(p, "collectionId", i.collectionId, null, null);
-        put(p, "collectionName", i.collectionName || "", "", "시리즈");
-        put(p, "seriesNo", i.seriesNo ?? null, null, "시리즈 편", v => v ? "S" + v : "");
-        put(p, "seriesTotal", i.seriesTotal ?? null, null, "총 편수", v => v ? v + "편" : "");
+        p.diff.push({ label: "시리즈", from: i.collectionName || "", to: "",
+                      keys: { collectionId: null, collectionName: "" } });
+        put(p, "시리즈 편", i.seriesNo ?? null, null, { seriesNo: null }, noTxt);
+        put(p, "총 편수", i.seriesTotal ?? null, null, { seriesTotal: null }, totTxt);
       }
 
-      if (Object.keys(p.patch).length) plan.push(p);
+      if (p.diff.length) plan.push(p);
     } catch { fail++; }
 
     await new Promise(r => setTimeout(r, 260));
@@ -1847,10 +1877,10 @@ async function runRefreshAll() {
   for (const w of wishes) {
     step(w.title);
     try {
-      const p = { obj: w, title: w.title, wish: true, patch: {}, diff: [] };
-      put(p, "otts", w.otts || [], await tmdbProviders(w.tmdbId, w.mediaType || "movie"),
-          "볼 수 있는 곳", ottTxt);
-      if (Object.keys(p.patch).length) plan.push(p);
+      const p = { obj: w, title: w.title, wish: true, diff: [] };
+      const otts = await tmdbProviders(w.tmdbId, w.mediaType || "movie");
+      put(p, "볼 수 있는 곳", w.otts || [], otts, { otts }, ottTxt);
+      if (p.diff.length) plan.push(p);
     } catch { fail++; }
 
     await new Promise(r => setTimeout(r, 260));
@@ -1882,25 +1912,41 @@ let RefreshPlan = [];
 function showRefreshPreview(plan, unsure, fail) {
   RefreshPlan = plan;
 
-  const n = (f) => plan.filter(f).length;
+  const changes = plan.reduce((s, p) => s + p.diff.length, 0);
   $("#rfSummary").innerHTML =
-    `<b>바뀔 항목 ${plan.length}개</b> — 기록 ${n(p => !p.wish)} · 보고싶어요 ${n(p => p.wish)}`
-    + (n(p => "mediaType" in p.patch) ? ` · 영화/TV 구분 새로 저장 ${n(p => "mediaType" in p.patch)}` : "")
+    `<b>${plan.length}개 항목 · 바뀔 값 ${changes}개</b>`
+    + ` — 기록 ${plan.filter(p => !p.wish).length} · 보고싶어요 ${plan.filter(p => p.wish).length}`
     + (fail ? ` · 조회 실패 ${fail}` : "");
 
-  /* 카드를 `<label>`로 감싸 아무 데나 눌러도 체크가 토글되게 한다 (폰에서 네모만 노리기 어렵다).
-     기본은 전부 켜짐 — 대개 다 적용할 거고, 걸리는 것만 풀면 된다. */
+  /* 필드별 일괄 — "평점은 다 받고 시리즈는 손대지 말자" 같은 판단이 한 번에 된다.
+     실제로 바뀌는 값이 있는 필드만 그린다. */
+  const byField = new Map();
+  plan.forEach(p => p.diff.forEach(c => byField.set(c.label, (byField.get(c.label) || 0) + 1)));
+  $("#rfFields").innerHTML = [...byField].map(([label, n]) =>
+    `<label class="rf-fchip"><input type="checkbox" class="rf-fall" data-label="${esc(label)}" checked>
+       <span>${esc(label)}</span><b>${n}</b></label>`).join("");
+
+  /* 값 한 줄 = 체크박스 하나. 줄 전체가 `<label>`이라 아무 데나 눌러도 토글된다
+     (폰에서 네모만 노리기 어렵다). 항목 체크박스는 그 항목의 줄들을 한꺼번에 켜고 끈다. */
   const val = (v) => (v === "" || v == null) ? "(없음)" : esc(String(v));
   const rows = plan.map((p, n) => `
-    <label class="rf-item">
-      <input type="checkbox" class="rf-cb" data-idx="${n}" checked>
-      <div class="rf-body">
-        <div class="rf-name">${esc(p.title)}${p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</div>
-        <div class="rf-diff">${p.diff.map(c =>
-          `<div><span class="rf-k">${esc(c.label)}</span><span class="rf-a">${val(c.from)}</span>
-           <span class="rf-k">→</span><span class="rf-b">${val(c.to)}</span></div>`).join("")}</div>
+    <div class="rf-item" data-idx="${n}">
+      <div class="rf-head">
+        <input type="checkbox" class="rf-cb rf-item-cb" data-idx="${n}" checked>
+        <button type="button" class="rf-fold" data-idx="${n}" title="접기/펴기">
+          <i class="fa-solid fa-chevron-down"></i>
+        </button>
+        <span class="rf-name">${esc(p.title)}${p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</span>
+        <span class="rf-sum">${p.diff.map(c => esc(c.label)).join(" · ")}</span>
       </div>
-    </label>`).join("");
+      <div class="rf-fieldrows">${p.diff.map((c, f) => `
+        <label class="rf-field">
+          <input type="checkbox" class="rf-cb rf-f-cb" data-idx="${n}" data-f="${f}"
+                 data-label="${esc(c.label)}" checked>
+          <span class="rf-k">${esc(c.label)}</span>
+          <span class="rf-a">${val(c.from)}</span><span class="rf-arrow">→</span><span class="rf-b">${val(c.to)}</span>
+        </label>`).join("")}</div>
+    </div>`).join("");
 
   /* 건너뛴 건 **어떤 작품이 왔는지까지** 보여준다 — 제목만 알려주면 뭐가 문제인지 알 수가 없다. */
   const skipped = unsure.length ? `
@@ -1913,33 +1959,66 @@ function showRefreshPreview(plan, unsure, fail) {
 
   $("#rfList").innerHTML = skipped + rows;
   $("#rfAll").checked = true;
+  setRefreshFold(false);              // 처음엔 펴서 보여준다 — 확인하려고 여는 화면이다
   syncRefreshPicked();
   $("#refreshPreviewModal").classList.remove("hidden");
 }
 
-/* 고른 개수를 버튼과 안내에 반영한다 — 몇 개가 적용될지 누르기 전에 보여야 한다 */
+/* 접기/펴기. 목록이 길 때 제목만 훑고 싶을 때가 있다 (접으면 필드 이름만 한 줄로 남는다) */
+function setRefreshFold(folded) {
+  document.querySelectorAll("#rfList .rf-item:not(.rf-skip)")
+    .forEach(el => el.classList.toggle("rf-folded", folded));
+  const b = $("#rfFoldAll");
+  b.innerHTML = folded
+    ? `<i class="fa-solid fa-chevron-down mr-1"></i>모두 펴기`
+    : `<i class="fa-solid fa-chevron-up mr-1"></i>모두 접기`;
+  b.dataset.folded = folded ? "1" : "";
+}
+
+/* 고른 상태를 위쪽 체크박스들과 버튼에 반영한다 — 몇 개가 저장될지 누르기 전에 보여야 한다.
+   부분 선택은 `indeterminate`로 표시한다 (켬/끔 둘 중 하나로 보이면 거짓말이 된다). */
 function syncRefreshPicked() {
-  const boxes = [...document.querySelectorAll("#rfList .rf-cb")];
+  const boxes = [...document.querySelectorAll("#rfList .rf-f-cb")];
   const on = boxes.filter(b => b.checked).length;
-  const all = $("#rfAll");
-  all.checked = on === boxes.length && on > 0;
-  all.indeterminate = on > 0 && on < boxes.length;   // 일부만 골랐을 때
-  $("#rfPicked").textContent = `${on} / ${boxes.length}개 선택`;
+
+  const mark = (box, list) => {
+    const k = list.filter(b => b.checked).length;
+    box.checked = k > 0 && k === list.length;
+    box.indeterminate = k > 0 && k < list.length;
+  };
+  // 항목별
+  document.querySelectorAll("#rfList .rf-item-cb").forEach(cb => {
+    mark(cb, boxes.filter(b => b.dataset.idx === cb.dataset.idx));
+  });
+  // 필드별
+  document.querySelectorAll("#rfFields .rf-fall").forEach(cb => {
+    mark(cb, boxes.filter(b => b.dataset.label === cb.dataset.label));
+  });
+  mark($("#rfAll"), boxes);
+
+  $("#rfPicked").textContent = `${on} / ${boxes.length}개 값 선택`;
   const btn = $("#applyRefreshPreview");
   btn.textContent = on ? `적용 (${on}개)` : "적용";
   btn.disabled = !on;
 }
 
-/* [적용] — 여기서 처음으로 State가 바뀐다. 체크된 것만 반영한다. */
+/* [적용] — 여기서 처음으로 State가 바뀐다. **체크된 값만** 반영한다. */
 function applyRefreshPlan() {
-  const picked = [...document.querySelectorAll("#rfList .rf-cb")]
-    .filter(b => b.checked).map(b => RefreshPlan[+b.dataset.idx]).filter(Boolean);
-
+  const boxes = [...document.querySelectorAll("#rfList .rf-f-cb")].filter(b => b.checked);
   $("#refreshPreviewModal").classList.add("hidden");
-  if (!picked.length) { toast("고른 항목이 없습니다"); RefreshPlan = []; return; }
+  if (!boxes.length) { toast("고른 값이 없습니다"); RefreshPlan = []; return; }
 
-  picked.forEach(p => Object.assign(p.obj, p.patch));
-  const cnt = picked.length, skipped = RefreshPlan.length - cnt;
+  const touched = new Set();
+  boxes.forEach(b => {
+    const p = RefreshPlan[+b.dataset.idx];
+    const c = p && p.diff[+b.dataset.f];
+    if (!c) return;
+    Object.assign(p.obj, c.keys);
+    touched.add(p);
+  });
+
+  const cnt = boxes.length, items = touched.size;
+  const left = RefreshPlan.reduce((s, p) => s + p.diff.length, 0) - cnt;
   RefreshPlan = [];
 
   saveLocal();
@@ -1948,10 +2027,10 @@ function applyRefreshPlan() {
   markUpd("refresh");
 
   const status = $("#enrichStatus");
-  status.textContent = `적용 완료 — ${cnt}개 갱신됨`
-    + (skipped ? `, ${skipped}개는 체크를 풀어 그대로 뒀습니다` : "");
+  status.textContent = `적용 완료 — ${items}개 항목의 값 ${cnt}개 갱신됨`
+    + (left ? `, ${left}개는 체크를 풀어 그대로 뒀습니다` : "");
   status.className = "text-sm mt-3 font-medium text-emerald-600";
-  toast(`${cnt}개를 갱신했습니다`, "success");
+  toast(`${items}개 항목을 갱신했습니다`, "success");
 }
 
 /* ---------- 시리즈 편 자동 재매칭 ----------

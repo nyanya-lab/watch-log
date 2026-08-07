@@ -581,33 +581,73 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 
 /* ===== 갱신 미리보기 =====
    조회는 끝났고 아직 저장 전인 상태의 변경 목록. 항목이 많을 수 있어 이 영역만 스크롤한다. */
-.rf-list { margin-top: 8px; max-height: 50vh; overflow-y: auto; }
+.rf-list { margin-top: 8px; max-height: 46vh; overflow-y: auto; }
+.rf-cb { width: 16px; height: 16px; flex: none; border-radius: 4px; accent-color: #4d7c2a; }
+
+/* 필드별 일괄 — 알약 하나가 그 필드 전체를 켜고 끈다 */
+.rf-fields { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.rf-fchip {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 1px solid #dbe4d0; border-radius: 999px; padding: 5px 11px;
+  background: #fff; font-size: 12.5px; color: #4f5c49;
+}
+.rf-fchip:hover { background: #f4f8ee; border-color: #a9cd85; }
+.rf-fchip input { width: 15px; height: 15px; border-radius: 4px; accent-color: #4d7c2a; }
+.rf-fchip b { color: #3b6d11; }
+.rf-fchip:has(input:not(:checked)) { opacity: .5; }
+
 .rf-allrow {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; margin-top: 14px; padding: 0 2px;
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 12px; padding: 0 2px;
 }
 .rf-all { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #3b4a35; }
 .rf-all input { width: 16px; height: 16px; border-radius: 4px; accent-color: #4d7c2a; }
-.rf-picked { font-size: 12.5px; color: #8a9683; }
-/* 카드 전체가 라벨이라 아무 데나 눌러도 체크가 토글된다 (폰에서 체크박스만 노리기 어렵다) */
-.rf-item {
-  display: flex; gap: 10px; align-items: flex-start;
-  border: 1px solid #e6ecdd; border-radius: 10px;
-  padding: 10px 12px; background: #fff; margin-bottom: 8px;
-  cursor: pointer; transition: background .12s, border-color .12s, opacity .12s;
+.rf-picked { font-size: 12.5px; color: #8a9683; flex: 1; }
+.rf-foldall {
+  font-size: 12.5px; color: #4f5c49; border: 1px solid #dbe4d0;
+  border-radius: 8px; padding: 4px 10px; background: #fff;
 }
-label.rf-item:hover { background: #f7faf3; border-color: #cddcbc; }
-.rf-cb { width: 16px; height: 16px; margin-top: 2px; flex: none; border-radius: 4px; accent-color: #4d7c2a; }
-.rf-body { min-width: 0; flex: 1; }
-/* 체크를 푼 항목은 흐리게 — 목록에 남아 있되 "이건 안 바뀐다"가 보여야 한다 */
-.rf-item:has(.rf-cb:not(:checked)) { opacity: .45; background: #fafbf8; }
-.rf-item.rf-skip { display: block; border-color: #f0d3a8; background: #fffaf1; cursor: default; }
-.rf-name { font-size: 13.5px; color: #2f3a2a; }
-.rf-diff { font-size: 12.5px; color: #5d6b57; margin-top: 5px; line-height: 1.65; }
-.rf-diff .rf-k { color: #8a9683; margin-right: 6px; }
+.rf-foldall:hover { background: #f4f8ee; border-color: #a9cd85; }
+
+.rf-item {
+  border: 1px solid #e6ecdd; border-radius: 10px;
+  background: #fff; margin-bottom: 8px; overflow: hidden;
+}
+.rf-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; }
+.rf-name { font-size: 13.5px; color: #2f3a2a; cursor: pointer; min-width: 0; }
+/* 접었을 때만 보이는 요약 — 어떤 필드가 걸려 있는지는 남아야 한다 */
+.rf-sum { display: none; font-size: 12px; color: #9aa694; margin-left: auto; }
+.rf-item.rf-folded .rf-sum { display: block; }
+.rf-item.rf-folded .rf-fieldrows { display: none; }
+.rf-fold {
+  width: 22px; height: 22px; flex: none; color: #9aa694;
+  font-size: 11px; border-radius: 6px;
+}
+.rf-fold:hover { background: #eef3e7; color: #4d7c2a; }
+.rf-item.rf-folded .rf-fold i { transform: rotate(-90deg); }
+
+/* 값 한 줄 = 고를 수 있는 단위. 줄 전체가 라벨이라 아무 데나 눌러도 토글된다 */
+.rf-fieldrows { border-top: 1px solid #f0f4eb; }
+.rf-field {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  padding: 7px 12px 7px 14px; cursor: pointer;
+  font-size: 12.5px; line-height: 1.5;
+  border-top: 1px solid #f6f8f3;
+  transition: background .12s, opacity .12s;
+}
+.rf-field:first-child { border-top: 0; }
+.rf-field:hover { background: #f7faf3; }
+/* 체크를 푼 줄은 흐리게 — 목록에 남아 있되 "이건 안 바뀐다"가 보여야 한다 */
+.rf-field:has(input:not(:checked)) { opacity: .4; }
+.rf-k { color: #8a9683; }
+.rf-arrow { color: #b6c0ae; }
 /* 이전 → 이후. 지워지는 값은 취소선으로 한눈에 구분되게 둔다 */
-.rf-diff .rf-a { color: #9aa694; text-decoration: line-through; }
-.rf-diff .rf-b { color: #3b6d11; }
+.rf-a { color: #9aa694; text-decoration: line-through; }
+.rf-b { color: #3b6d11; }
+
+.rf-item.rf-skip { border-color: #f0d3a8; background: #fffaf1; padding: 10px 12px; }
+.rf-diff { font-size: 12.5px; color: #5d6b57; margin-top: 5px; line-height: 1.65; }
+.rf-diff .rf-k { margin-right: 6px; }
 .rf-note { font-size: 12.5px; color: #9a6a1e; margin-top: 4px; }
 
 /* ===== 볼 수 있는 곳 (OTT 찾기) =====
