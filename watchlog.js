@@ -1013,17 +1013,53 @@ function openDetail(id) {
    포스터·평점·OTT·출연진은 시간이 지나면 바뀌는데 저장된 값은 등록 시점 그대로다.
    여기서는 **바로 갱신하고 저장한다**(사용자 선택) — 별점·본 날짜·한줄평·시청 횟수·시즌 같은
    내 기록은 건드리지 않는다. 되돌리려면 콘솔 `restoreBackup()`. */
+/* ⚠ TMDB는 영화와 TV가 **완전히 다른 id 공간**이다 — `movie/12345`와 `tv/12345`는 남남이다.
+   그런데 기록에는 media_type이 없고 구분(`type`)만 있어서, "애니"·"다큐"·"예능"을 전부 tv로 넘기면
+   **같은 번호의 엉뚱한 TV 시리즈**를 받아온다. 실제로 그걸 저장해 기록이 다른 작품이 된 사고가 났다.
+
+   그래서 받아온 게 이 기록과 같은 작품인지 확인한다. 원제·제목·개봉연도 중 하나라도 맞아야 한다. */
+function sameWork(i, d) {
+  if (!d) return false;
+  const norm = (s) => String(s || "").toLowerCase().replace(/\s+/g, "");
+  const t = norm(i.title), ot = norm(i.originalTitle);
+  const dt = norm(d.title), dot = norm(d.originalTitle);
+  if (ot && dot && ot === dot) return true;
+  if (t && dt && t === dt) return true;
+  // 제목이 달라도(속편을 직접 고쳐 적은 경우 등) 원제나 개봉연도가 맞으면 같은 작품으로 본다
+  const y = (i.releaseDate || "").slice(0, 4), dy = (d.releaseDate || "").slice(0, 4);
+  if (y && dy && y === dy && (ot && dot ? ot === dot : true) && (t.slice(0, 2) === dt.slice(0, 2))) return true;
+  return false;
+}
+
 async function refreshTmdbInDetail(btn, itemId) {
   const i = State.items.find(x => x.id === itemId);
   if (!i || !i.tmdbId) return;
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
 
-  const mediaType = i.type === "영화" ? "movie" : "tv";
+  /* 저장된 mediaType이 있으면 그걸 쓰고, 없으면 구분으로 짐작하되 **결과를 반드시 확인**한다 */
+  let mediaType = i.mediaType || (i.type === "영화" ? "movie" : "tv");
   const before = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>갱신 중...`;
   try {
-    const d = await tmdbDetail(i.tmdbId, mediaType);
+    let d = await tmdbDetail(i.tmdbId, mediaType).catch(() => null);
+
+    // 짐작이 틀렸을 수 있으니 반대쪽도 본다
+    if (!sameWork(i, d)) {
+      const other = mediaType === "movie" ? "tv" : "movie";
+      const d2 = await tmdbDetail(i.tmdbId, other).catch(() => null);
+      if (sameWork(i, d2)) { d = d2; mediaType = other; }
+    }
+
+    /* 둘 다 이 기록과 다른 작품이면 **아무것도 저장하지 않는다.** 잘못된 tmdbId일 수 있다 */
+    if (!sameWork(i, d)) {
+      btn.disabled = false;
+      btn.innerHTML = before;
+      toast(`이 기록과 맞는 TMDB 작품을 찾지 못했어요 — 수정창에서 다시 검색해 연결해주세요`, "error");
+      return;
+    }
+
+    i.mediaType = mediaType;          // 다음부터는 짐작하지 않아도 되게 남긴다
     d.otts = await tmdbProviders(i.tmdbId, mediaType);
     await applyKoreanNames(d);
 
