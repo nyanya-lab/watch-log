@@ -1033,10 +1033,11 @@ async function refreshTmdbInDetail(btn, itemId) {
       try { coll = await tmdbCollection(d.collectionId); saveCollInfo(coll); } catch { /* 편 번호는 없어도 갱신은 계속 */ }
     }
 
+    /* ⚠ 제목·구분·국가는 **덮어쓰지 않는다.** 손으로 맞춰둘 수 있는 값이라서다.
+       속편이 1편의 tmdbId를 물고 있는 기록에서 이걸 덮으면, "범죄도시2"로 적어둔 제목이
+       TMDB가 답하는 "범죄도시"로 되돌아간다 — 실제로 그 일이 났다.
+       여기서 갱신할 것은 시간이 지나면 바뀌는 TMDB 쪽 정보(OTT·평점·포스터·출연진)뿐이다. */
     Object.assign(i, {
-      title: d.title || i.title,
-      type: d.type || i.type,
-      country: d.country || i.country,
       poster: d.poster, backdrop: d.backdrop,
       genres: d.genres, overview: d.overview,
       originalTitle: d.originalTitle,
