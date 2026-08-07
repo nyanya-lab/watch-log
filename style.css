@@ -622,18 +622,6 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .rf-list { margin-top: 8px; max-height: 46vh; overflow-y: auto; }
 .rf-cb { width: 16px; height: 16px; flex: none; border-radius: 4px; accent-color: #4d7c2a; }
 
-/* 필드별 일괄 — 알약 하나가 그 필드 전체를 켜고 끈다 */
-.rf-fields { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
-.rf-fchip {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-  border: 1px solid #dbe4d0; border-radius: 999px; padding: 5px 11px;
-  background: #fff; font-size: 12.5px; color: #4f5c49;
-}
-.rf-fchip:hover { background: #f4f8ee; border-color: #a9cd85; }
-.rf-fchip input { width: 15px; height: 15px; border-radius: 4px; accent-color: #4d7c2a; }
-.rf-fchip b { color: #3b6d11; }
-.rf-fchip:has(input:not(:checked)) { opacity: .5; }
-
 .rf-allrow {
   display: flex; align-items: center; gap: 10px;
   margin-top: 12px; padding: 0 2px;
@@ -647,22 +635,27 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 }
 .rf-foldall:hover { background: #f4f8ee; border-color: #a9cd85; }
 
-.rf-item {
+/* 주제(필드) 묶음 — 헤더가 곧 그 주제의 일괄 선택이고, 해당 내역이 바로 아래에 딸려온다 */
+.rf-group, .rf-item {
   border: 1px solid #e6ecdd; border-radius: 10px;
   background: #fff; margin-bottom: 8px; overflow: hidden;
 }
-.rf-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; }
+.rf-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: #fafcf7; }
 .rf-name { font-size: 13.5px; color: #2f3a2a; cursor: pointer; min-width: 0; }
-/* 접었을 때만 보이는 요약 — 어떤 필드가 걸려 있는지는 남아야 한다 */
-.rf-sum { display: none; font-size: 12px; color: #9aa694; margin-left: auto; }
-.rf-item.rf-folded .rf-sum { display: block; }
-.rf-item.rf-folded .rf-fieldrows { display: none; }
+.rf-gn { font-size: 12px; color: #3b6d11; cursor: pointer; }
+/* 접었을 때만 보이는 요약 — 어떤 작품이 걸려 있는지는 남아야 한다 */
+.rf-sum {
+  display: none; font-size: 12px; color: #9aa694; margin-left: auto;
+  cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rf-group.rf-folded .rf-sum { display: block; }
+.rf-group.rf-folded .rf-fieldrows { display: none; }
 .rf-fold {
   width: 22px; height: 22px; flex: none; color: #9aa694;
   font-size: 11px; border-radius: 6px;
 }
 .rf-fold:hover { background: #eef3e7; color: #4d7c2a; }
-.rf-item.rf-folded .rf-fold i { transform: rotate(-90deg); }
+.rf-group.rf-folded .rf-fold i { transform: rotate(-90deg); }
 
 /* 값 한 줄 = 고를 수 있는 단위. 줄 전체가 라벨이라 아무 데나 눌러도 토글된다 */
 .rf-fieldrows { border-top: 1px solid #f0f4eb; }
@@ -677,6 +670,8 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .rf-field:hover { background: #f7faf3; }
 /* 체크를 푼 줄은 흐리게 — 목록에 남아 있되 "이건 안 바뀐다"가 보여야 한다 */
 .rf-field:has(input:not(:checked)) { opacity: .4; }
+/* 묶음이 주제를 말해주므로 줄에는 **작품 제목**이 온다 */
+.rf-w { color: #2f3a2a; margin-right: 2px; }
 .rf-k { color: #8a9683; }
 .rf-arrow { color: #b6c0ae; }
 /* 이전 → 이후. 지워지는 값은 취소선으로 한눈에 구분되게 둔다 */

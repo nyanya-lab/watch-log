@@ -1622,23 +1622,20 @@ function initSettings() {
   const setAll = (list, on) => { list.forEach(b => { b.checked = on; }); syncRefreshPicked(); };
   $("#rfList").addEventListener("change", e => {
     const t = e.target;
-    if (t.classList.contains("rf-item-cb")) {
-      setAll([...document.querySelectorAll(`#rfList .rf-f-cb[data-idx="${t.dataset.idx}"]`)], t.checked);
+    if (t.classList.contains("rf-g-cb")) {          // 주제 묶음 = 그 주제 전체를 켜고 끈다
+      const q = `#rfList .rf-f-cb[data-label="${CSS.escape(t.dataset.label)}"]`;
+      setAll([...document.querySelectorAll(q)], t.checked);
     } else if (t.classList.contains("rf-f-cb")) {
       syncRefreshPicked();
     }
   });
   $("#rfList").addEventListener("click", e => {
     const fold = e.target.closest(".rf-fold");
-    if (fold) { fold.closest(".rf-item").classList.toggle("rf-folded"); return; }
-    // 제목을 눌러도 접힌다 — 폰에서 작은 화살표만 노리기 어렵다
-    const name = e.target.closest(".rf-name, .rf-sum");
-    if (name) name.closest(".rf-item").classList.toggle("rf-folded");
-  });
-  $("#rfFields").addEventListener("change", e => {
-    if (!e.target.classList.contains("rf-fall")) return;
-    const q = `#rfList .rf-f-cb[data-label="${CSS.escape(e.target.dataset.label)}"]`;
-    setAll([...document.querySelectorAll(q)], e.target.checked);
+    if (fold) { fold.closest(".rf-group").classList.toggle("rf-folded"); return; }
+    // 주제 이름을 눌러도 접힌다 — 폰에서 작은 화살표만 노리기 어렵다
+    const name = e.target.closest(".rf-name, .rf-gn, .rf-sum");
+    const g = name && name.closest(".rf-group");
+    if (g) g.classList.toggle("rf-folded");
   });
   $("#rfAll").addEventListener("change", e =>
     setAll([...document.querySelectorAll("#rfList .rf-f-cb")], e.target.checked));
@@ -2021,33 +2018,37 @@ function showRefreshPreview(plan, unsure, fail) {
     + ` — 기록 ${plan.filter(p => !p.wish).length} · 보고싶어요 ${plan.filter(p => p.wish).length}`
     + (fail ? ` · 조회 실패 ${fail}` : "");
 
-  /* 필드별 일괄 — "평점은 다 받고 시리즈는 손대지 말자" 같은 판단이 한 번에 된다.
-     실제로 바뀌는 값이 있는 필드만 그린다. */
-  const byField = new Map();
-  plan.forEach(p => p.diff.forEach(c => byField.set(c.label, (byField.get(c.label) || 0) + 1)));
-  $("#rfFields").innerHTML = [...byField].map(([label, n]) =>
-    `<label class="rf-fchip"><input type="checkbox" class="rf-fall" data-label="${esc(label)}" checked>
-       <span>${esc(label)}</span><b>${n}</b></label>`).join("");
+  /* **필드(주제)로 묶는다.** 예전엔 작품별로 묶고 필드는 위에 칩으로만 뒀는데,
+     그러면 "볼 수 있는 곳 2개"를 봐도 그 2개가 작품 목록 어디에 있는지 스크롤로 찾아야 했다.
+     주제를 제목으로 놓고 **그 아래에 해당 내역이 딸려오게** 한다 — 묶음 헤더가 곧 필드별 일괄이다.
+     묶음 순서는 `put()`이 담은 순서 그대로다 (실행마다 자리가 바뀌면 찾기 어렵다). */
+  const groups = new Map();
+  plan.forEach((p, n) => p.diff.forEach((c, f) => {
+    if (!groups.has(c.label)) groups.set(c.label, []);
+    groups.get(c.label).push({ idx: n, f, p, c });
+  }));
 
   /* 값 한 줄 = 체크박스 하나. 줄 전체가 `<label>`이라 아무 데나 눌러도 토글된다
-     (폰에서 네모만 노리기 어렵다). 항목 체크박스는 그 항목의 줄들을 한꺼번에 켜고 끈다. */
+     (폰에서 네모만 노리기 어렵다). 묶음 체크박스는 그 주제의 줄들을 한꺼번에 켜고 끈다. */
   const val = (v) => (v === "" || v == null) ? "(없음)" : esc(String(v));
-  const rows = plan.map((p, n) => `
-    <div class="rf-item" data-idx="${n}">
+  const rows = [...groups].map(([label, list]) => `
+    <div class="rf-group" data-label="${esc(label)}">
       <div class="rf-head">
-        <input type="checkbox" class="rf-cb rf-item-cb" data-idx="${n}" checked>
-        <button type="button" class="rf-fold" data-idx="${n}" title="접기/펴기">
+        <input type="checkbox" class="rf-cb rf-g-cb" data-label="${esc(label)}" checked>
+        <button type="button" class="rf-fold" title="접기/펴기">
           <i class="fa-solid fa-chevron-down"></i>
         </button>
-        <span class="rf-name">${esc(p.title)}${p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</span>
-        <span class="rf-sum">${p.diff.map(c => esc(c.label)).join(" · ")}</span>
+        <span class="rf-name">${esc(label)}</span>
+        <span class="rf-gn">${list.length}개</span>
+        <span class="rf-sum">${esc(list.slice(0, 3).map(e => e.p.title).join(", "))}${
+          list.length > 3 ? ` 외 ${list.length - 3}` : ""}</span>
       </div>
-      <div class="rf-fieldrows">${p.diff.map((c, f) => `
+      <div class="rf-fieldrows">${list.map(e => `
         <label class="rf-field">
-          <input type="checkbox" class="rf-cb rf-f-cb" data-idx="${n}" data-f="${f}"
-                 data-label="${esc(c.label)}" checked>
-          <span class="rf-k">${esc(c.label)}</span>
-          <span class="rf-a">${val(c.from)}</span><span class="rf-arrow">→</span><span class="rf-b">${val(c.to)}</span>
+          <input type="checkbox" class="rf-cb rf-f-cb" data-idx="${e.idx}" data-f="${e.f}"
+                 data-label="${esc(label)}" checked>
+          <span class="rf-w">${esc(e.p.title)}${e.p.wish ? ` <span class="badge badge-genre">보고싶어요</span>` : ""}</span>
+          <span class="rf-a">${val(e.c.from)}</span><span class="rf-arrow">→</span><span class="rf-b">${val(e.c.to)}</span>
         </label>`).join("")}</div>
     </div>`).join("");
 
@@ -2067,9 +2068,9 @@ function showRefreshPreview(plan, unsure, fail) {
   $("#refreshPreviewModal").classList.remove("hidden");
 }
 
-/* 접기/펴기. 목록이 길 때 제목만 훑고 싶을 때가 있다 (접으면 필드 이름만 한 줄로 남는다) */
+/* 접기/펴기. 목록이 길 때 주제만 훑고 싶을 때가 있다 (접으면 작품 몇 개가 요약으로 남는다) */
 function setRefreshFold(folded) {
-  document.querySelectorAll("#rfList .rf-item:not(.rf-skip)")
+  document.querySelectorAll("#rfList .rf-group")
     .forEach(el => el.classList.toggle("rf-folded", folded));
   const b = $("#rfFoldAll");
   b.innerHTML = folded
@@ -2089,12 +2090,8 @@ function syncRefreshPicked() {
     box.checked = k > 0 && k === list.length;
     box.indeterminate = k > 0 && k < list.length;
   };
-  // 항목별
-  document.querySelectorAll("#rfList .rf-item-cb").forEach(cb => {
-    mark(cb, boxes.filter(b => b.dataset.idx === cb.dataset.idx));
-  });
-  // 필드별
-  document.querySelectorAll("#rfFields .rf-fall").forEach(cb => {
+  // 주제(필드)별 묶음 헤더
+  document.querySelectorAll("#rfList .rf-g-cb").forEach(cb => {
     mark(cb, boxes.filter(b => b.dataset.label === cb.dataset.label));
   });
   mark($("#rfAll"), boxes);
