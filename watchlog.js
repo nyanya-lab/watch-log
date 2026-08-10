@@ -118,7 +118,7 @@ function initWatchlog() {
   $("#autoFixBtn").addEventListener("click", runAutoRematch);
   $("#closeFilter").addEventListener("click", closeFilterModal);
   $("#applyFilterBtn").addEventListener("click", closeFilterModal);
-  $("#filterModal").addEventListener("click", e => { if (e.target.id === "filterModal") closeFilterModal(); });
+  onBackdropClose("#filterModal", closeFilterModal);
 
   /* 칩은 열 때마다 다시 그리므로 위임으로 받는다 */
   $("#filterModal").addEventListener("click", e => {
@@ -183,7 +183,7 @@ function initWatchlog() {
   /* 별점 몰아넣기 */
   $("#quickRateBtn").addEventListener("click", openQuickRate);
   $("#qrClose").addEventListener("click", closeQuickRate);
-  $("#quickRateModal").addEventListener("click", e => { if (e.target.id === "quickRateModal") closeQuickRate(); });
+  onBackdropClose("#quickRateModal", closeQuickRate);
 
   $("#loadMoreBtn").addEventListener("click", () => { State.page++; renderCards(); });
 
@@ -222,8 +222,8 @@ function initWatchlog() {
     $("#rewatchFields").classList.toggle("hidden", !e.target.checked);
   });
 
-  $("#editModal").addEventListener("click", e => { if (e.target.id === "editModal") closeEdit(); });
-  $("#detailModal").addEventListener("click", e => { if (e.target.id === "detailModal") $("#detailModal").classList.add("hidden"); });
+  onBackdropClose("#editModal", closeEdit);
+  onBackdropClose("#detailModal", () => $("#detailModal").classList.add("hidden"));
 }
 
 /* 남은 스테퍼는 시청 횟수 하나뿐 (시즌 스테퍼는 없앴다) */
@@ -1302,7 +1302,7 @@ function renderQuickRate() {
       <div class="flex items-center gap-2">
         <div class="relative flex-1">
           <i class="fa-solid fa-heart absolute left-3 top-1/2 -translate-y-1/2 text-rose-400"></i>
-          <input type="number" id="qrInput" class="form-input pl-9 text-lg font-semibold" min="0" max="10" step="0.1"
+          <input type="number" id="qrInput" class="form-input pl-9 text-lg font-semibold" min="0" max="10" step="1"
             placeholder="0 ~ 10 (소수점 가능)" value="${i.rating || ""}" autocomplete="off">
         </div>
         <span class="text-sm font-semibold text-slate-400">/ 10</span>
@@ -1610,7 +1610,7 @@ function initSettings() {
   $("#closeSyncPw").addEventListener("click", closeSyncPwModal);
   $("#cancelSyncPw").addEventListener("click", closeSyncPwModal);
   $("#saveSyncPwBtn").addEventListener("click", saveSyncPw);
-  $("#syncPwModal").addEventListener("click", e => { if (e.target.id === "syncPwModal") closeSyncPwModal(); });
+  onBackdropClose("#syncPwModal", closeSyncPwModal);
   $("#syncPwInput").addEventListener("keydown", e => { if (e.key === "Enter") saveSyncPw(); });
 
   $("#pushBtn").addEventListener("click", async () => {
@@ -1668,8 +1668,8 @@ function initSettings() {
   const closeRestore = () => $("#restoreModal").classList.add("hidden");
   $("#closeRestore").addEventListener("click", closeRestore);
   $("#cancelRestore").addEventListener("click", closeRestore);
+  onBackdropClose("#restoreModal", closeRestore);
   $("#restoreModal").addEventListener("click", e => {
-    if (e.target.id === "restoreModal") { closeRestore(); return; }
     const item = e.target.closest(".rst-item");
     if (item) applyRestorePoint(+item.dataset.idx);
   });
@@ -1684,9 +1684,7 @@ function initSettings() {
   $("#closeRefreshPreview").addEventListener("click", closePreview);
   $("#cancelRefreshPreview").addEventListener("click", closePreview);
   $("#applyRefreshPreview").addEventListener("click", applyRefreshPlan);
-  $("#refreshPreviewModal").addEventListener("click", e => {
-    if (e.target.id === "refreshPreviewModal") closePreview();
-  });
+  onBackdropClose("#refreshPreviewModal", closePreview);
   /* 항목은 열 때마다 새로 그리므로 체크·접기는 전부 위임으로 받는다.
      실제 선택 상태를 갖는 건 값 한 줄짜리 `.rf-f-cb` 하나뿐이고,
      항목·필드·전체 체크박스는 **그걸 켜고 끄는 손잡이**일 뿐이다 (상태를 따로 두면 어긋난다). */

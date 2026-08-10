@@ -12,7 +12,6 @@ const Discover = {
   frStory: false,    // 스토리 시간순으로 볼지 (기본은 개봉일 순)
   recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
   recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
-  recoAvail: "",     // "" 전체 | "any" 어디든 볼 수 있는 것만 | "none" 국내에 없는 것만
   recoSort: "score", // score=추천순 | vote=TMDB 평점순
   recoDir: "desc",
   reco: null,        // 캐시된 추천 결과
@@ -295,18 +294,30 @@ async function runReco() {
     }
 
     // 장르 매칭·평점 보정 후 정렬
-    const list = [...cand.values()].map(c => {
+    const ranked = [...cand.values()].map(c => {
       const gm = genreMatchScore(c.card, gmap, profMap, maxW);
       const vote = c.card.voteAverage ? (c.card.voteAverage - 6.8) * 0.2 : 0;
       return { ...c.card, score: c.score + gm * 0.5 + vote, reason: c.reasons[0] || "" };
-    }).sort((a, b) => b.score - a.score).slice(0, 60);
+    }).sort((a, b) => b.score - a.score);
 
-    /* 볼 수 있는 곳을 카드마다 조회한다. TMDB는 스트리밍 정보를 목록 응답에 안 주고
-       작품별 `/watch/providers`에만 주기 때문에 60건이면 호출도 60번이다(약 15초).
-       그래도 여기서 받아두면 결과가 캐시에 남아, 다음부터는 기다림 없이 OTT 필터·배지를 쓴다. */
-    for (let n = 0; n < list.length; n++) {
-      setStatus(`볼 수 있는 곳 확인 ${n + 1} / ${list.length}`, 60 + (n + 1) / list.length * 38);
-      list[n].otts = await tmdbProviders(list[n].tmdbId, list[n].mediaType);
+    /* 볼 수 있는 곳을 카드마다 조회해 **국내에서 볼 수 있는 것만 추천에 담는다**(2026-08-07).
+       예전엔 상위 60개를 그대로 담고 "국내에 없는 것만/볼 수 있는 것만"을 필터로 골랐는데,
+       추천은 "이제 뭘 볼까"에 답하는 자리라 **지금 못 보는 작품은 답이 되지 않는다**.
+
+       TMDB는 스트리밍 정보를 목록 응답에 안 주고 작품별 `/watch/providers`에만 주므로
+       한 건씩 물어봐야 한다(240ms 간격). 그래서 60개를 채우거나 조회 상한에 닿으면 멈춘다 —
+       전부 훑으면 후보가 수백 개라 하염없이 기다리게 된다.
+       ⚠ `otts`는 정액제·무료·광고형만 센다(`tmdbProviders`). 대여·구매만 있는 작품은 빠진다. */
+    const TARGET = 60, MAX_CALLS = 130;
+    const list = [];
+    let checked = 0;
+    for (const c of ranked) {
+      if (list.length >= TARGET || checked >= MAX_CALLS) break;
+      checked++;
+      setStatus(`볼 수 있는 곳 확인 ${checked}개째 — ${list.length} / ${TARGET}개 확보`,
+                60 + list.length / TARGET * 38);
+      c.otts = await tmdbProviders(c.tmdbId, c.mediaType);
+      if (c.otts.length) list.push(c);
       await new Promise(r => setTimeout(r, 240));
     }
 
@@ -356,13 +367,6 @@ function renderRecoFilters(all) {
           data-rtype="${t[0]}">${t[1]}</button>`).join("")}
       </div>
     </div>
-    <div class="fsec">
-      <div class="fsec-h">국내 시청 <span class="fsec-hint">(정액제·무료 기준 — 대여·구매는 안 셈)</span></div>
-      <div class="fchips">
-        ${[["", "전체"], ["any", "볼 수 있는 것만"], ["none", "국내에 없는 것만"]].map(a =>
-          `<button class="fchip ${Discover.recoAvail === a[0] ? "on" : ""}" data-ravail="${a[0]}">${a[1]}</button>`).join("")}
-      </div>
-    </div>
     ${otts.length ? `<div class="fsec">
       <div class="fsec-h">OTT <span class="fsec-hint">(여러 개)</span></div>
       <div class="fchips">
@@ -380,7 +384,7 @@ function renderRecoFilters(all) {
     </div>`;
 
   // 팝업을 닫아둬도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
-  const on = Discover.recoType || Discover.recoOtt.length || Discover.recoAvail
+  const on = Discover.recoType || Discover.recoOtt.length
     || Discover.recoSort !== "score" || Discover.recoDir !== "desc";
   const dot = $("#dcRecoDot");
   if (dot) dot.classList.toggle("hidden", !on);
@@ -397,9 +401,12 @@ function renderDcReco() {
   if (data) {
     const d = new Date(data.generatedAt);
     const p = (n) => String(n).padStart(2, "0");
+    /* "지금 국내에서 볼 수 있는 것만"이라는 걸 밝혀둔다 — 안 그러면 아는 작품이 안 보일 때
+       추천이 이상한 줄 안다. 대여·구매만 있는 작품은 여기 안 들어온다(`tmdbProviders`). */
     info.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>
       ${(data.basis || []).length ? `<b>${esc(data.basis.join("·"))}</b> 취향 기준 · ` : ""}
-      ${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 기준`;
+      ${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 기준
+      <span class="opacity-70">· 국내 정액제로 볼 수 있는 것만</span>`;
   } else {
     info.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>아직 추천을 만들지 않았어요. 오른쪽 버튼을 눌러보세요.`;
   }
@@ -414,13 +421,9 @@ function renderDcReco() {
 
   const list = all
     .filter(c => !mt || c.mediaType === mt)
-    /* 한국에서 볼 수 있는 곳이 아예 없는 작품도 추천에 섞인다 — 그것만/그것 빼고를 고를 수 있게 한다 */
-    .filter(c => {
-      const has = (c.otts || []).length > 0;
-      if (Discover.recoAvail === "any" && !has) return false;
-      if (Discover.recoAvail === "none" && has) return false;
-      return true;
-    })
+    /* 추천은 **국내에서 볼 수 있는 것만** 담는다(`runReco`). 예전 캐시에는 못 보는 것도
+       섞여 있으므로 그릴 때 한 번 더 거른다 — 다시 뽑기 전까지 옛 결과가 그대로 뜨기 때문. */
+    .filter(c => (c.otts || []).length > 0)
     /* OTT 필터 — 고른 게 없으면 통과, 있으면 그중 하나라도 있어야 한다 */
     .filter(c => !Discover.recoOtt.length || (c.otts || []).some(o => Discover.recoOtt.includes(o)))
     .sort((a, b) => {
@@ -1521,11 +1524,9 @@ function initDiscover() {
   });
   $("#closeRecoFilter").addEventListener("click", closeRecoFilter);
   $("#applyRecoFilter").addEventListener("click", closeRecoFilter);
-  $("#dcRecoModal").addEventListener("click", e => {
-    if (e.target.id === "dcRecoModal") closeRecoFilter();
-  });
+  onBackdropClose("#dcRecoModal", closeRecoFilter);
   $("#resetRecoFilter").addEventListener("click", () => {
-    Object.assign(Discover, { recoType: "", recoOtt: [], recoAvail: "", recoSort: "score", recoDir: "desc" });
+    Object.assign(Discover, { recoType: "", recoOtt: [], recoSort: "score", recoDir: "desc" });
     renderDiscover();
   });
   window.closeRecoFilterModal = closeRecoFilter;   // Escape 처리용
@@ -1536,8 +1537,6 @@ function initDiscover() {
     if (!chip) return;
     if (chip.dataset.rtype !== undefined) {
       Discover.recoType = chip.dataset.rtype;
-    } else if (chip.dataset.ravail !== undefined) {
-      Discover.recoAvail = chip.dataset.ravail;
     } else if (chip.dataset.rott !== undefined) {
       const v = chip.dataset.rott;
       if (v === "") Discover.recoOtt = [];
@@ -1594,7 +1593,5 @@ function initDiscover() {
     else if (act === "add") addFromDiscover(tid, entry ? entry.mediaType : "movie", btn.dataset.season);
   });
 
-  $("#dcModal").addEventListener("click", e => {
-    if (e.target.id === "dcModal") $("#dcModal").classList.add("hidden");
-  });
+  onBackdropClose("#dcModal", () => $("#dcModal").classList.add("hidden"));
 }

@@ -743,6 +743,26 @@ function updateSyncPwStatus() {
   }
 }
 
+/* ---------- 바깥을 눌러 모달 닫기 ----------
+   `click`의 target만 보면 **모달 안에서 누르고 바깥에서 손을 뗀 경우에도 닫힌다** —
+   click은 누른 곳과 뗀 곳의 공통 조상에서 발생하는데, 그게 백드롭이기 때문이다.
+   그래서 한줄평을 드래그해 고르거나 버튼에서 손이 살짝 미끄러지면 창이 통째로 닫혀
+   입력하던 게 날아갔다. **누르기 시작한 곳도 백드롭이었을 때만** 닫는다.
+
+   모달마다 따로 쓰던 `if (e.target.id === "...")`를 전부 이걸로 바꿨다. */
+function onBackdropClose(sel, close) {
+  const el = $(sel);
+  if (!el) return;
+  let downOnBack = false;
+  // 터치도 mousedown이 따라오므로 폰에서도 같은 판정이 된다
+  el.addEventListener("mousedown", e => { downOnBack = (e.target === el); });
+  el.addEventListener("click", e => {
+    const ok = downOnBack && e.target === el;
+    downOnBack = false;
+    if (ok) close();
+  });
+}
+
 /* ---------- Escape 키로 모달 닫기 ----------
    위에 겹쳐 뜬 것부터 하나씩 닫는다 (Escape 한 번에 전부 닫히면 뒤에 있던 것까지 사라진다).
    등록/수정 모달은 State도 정리해야 하므로 closeEdit()을 쓴다. */
