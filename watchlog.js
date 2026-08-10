@@ -85,7 +85,10 @@ function isDupTmdb(i) {
    seriesNo가 1이 아니므로 자동 대상에서 빠진다 — 잘못 건드리면 엉뚱한 영화로 바뀐다. */
 function autoFixTargets() {
   return State.items.map(i => {
-    if (i.type !== "영화" || !i.collectionId || i.seriesNo !== 1) return null;
+    /* ⚠ 예전엔 `i.type !== "영화"`로 걸렀는데, 구분이 **"애니"·"다큐"인 극장판이 통째로 빠졌다** —
+       인크레더블(구분 "애니", S2인데 1편 tmdbId)이 그래서 [매칭 확인] 1개로 영영 남아 있었다.
+       TMDB 컬렉션은 영화에만 있으므로 판정은 `mediaTypeOf`(저장된 값 우선)로 해야 맞다. */
+    if (mediaTypeOf(i) !== "movie" || !i.collectionId || i.seriesNo !== 1) return null;
     const want = parseInt(String(i.season || "").replace(/\D/g, ""));
     if (!want || want < 2) return null;
     if (i.seriesTotal && want > i.seriesTotal) return null;   // 총편수 밖이면 판단 필요
@@ -2297,6 +2300,8 @@ async function runAutoRematch() {
         runtime: d.runtime, cert: d.cert, voteAverage: d.voteAverage,
         companies: d.companies, cast: d.cast, director: d.director,
         otts: d.otts || [],
+        // 컬렉션의 편으로 갈아끼웠으니 영화가 확실하다 — 다음부터 짐작하지 않게 남긴다
+        mediaType: "movie",
         collectionId: d.collectionId || p.item.collectionId,
         collectionName: d.collectionName || p.item.collectionName,
         seriesNo: coll ? (coll.order.get(d.tmdbId) || p.want) : p.want,

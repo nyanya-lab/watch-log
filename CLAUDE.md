@@ -20,7 +20,7 @@ index.html      673줄  전체 마크업 (헤더/목록/탐색/통계/설정 + �
 style.css       719줄  커스텀 CSS (Tailwind CDN 위에 얹음)
 core.js         873줄  동기화(REST), 상태(State), 탭, Escape, 유틸
 tmdb.js         712줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
-watchlog.js    2414줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
+watchlog.js    2421줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
 discover.js    1597줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
 stats.js        403줄  Chart.js 통계 + 히트맵
 dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
@@ -450,8 +450,14 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
      tmdbId는 1편 것이라 TMDB가 S1이라고 답함). 제목이 같아서 ②로는 안 잡히는 케이스.
   ② 제목이 서로 다른데 `tmdbId`가 같은 항목 (`dupTmdbIdSet`).
 - **자동 재매칭**(`runAutoRematch`, `#autoFixBar`): 매칭 확인 목록을 볼 때만 뜨는 안내바.
-  대상(`autoFixTargets`) = `type=영화` + `seriesNo===1`(TMDB는 1편이라 함) + 내가 2편 이상으로 적음
-  + 그 번호가 `seriesTotal` 이내. 이 조합이 '속편을 1편 tmdbId에 얹어놓은' 패턴이다.
+  대상(`autoFixTargets`) = **`mediaTypeOf(i)==="movie"`** + `seriesNo===1`(TMDB는 1편이라 함)
+  + 내가 2편 이상으로 적음 + 그 번호가 `seriesTotal` 이내.
+  이 조합이 '속편을 1편 tmdbId에 얹어놓은' 패턴이다.
+  - ⚠ 예전엔 `type==="영화"`로 걸렀는데 그러면 **구분이 "애니"·"다큐"인 극장판이 통째로 빠진다.**
+    인크레더블(구분 "애니", S2로 적었는데 tmdbId는 1편)이 그래서 [매칭 확인] 1개로 계속 남아
+    있었다(2026-08-08). TMDB 컬렉션은 영화에만 있으므로 판정은 `mediaTypeOf`로 해야 맞다 —
+    `type`(내가 고르는 구분)과 `mediaType`(TMDB 번호판)은 다른 값이다.
+  - 갈아끼울 때 `mediaType: "movie"`도 남긴다. `type`(구분)은 건드리지 않으므로 "애니"는 그대로다.
   `seriesNo!==1`인 경우는 링크 자체는 맞고 번호 기준만 다른 것(안 본 편이 있어 밀린 브레이킹 던 등)이라
   자동 대상에서 제외 — 건드리면 엉뚱한 영화로 바뀐다.
   컬렉션에서 그 번호의 영화를 찾아 **바뀔 목록을 confirm으로 전부 보여준 뒤** tmdbId·제목·포스터·평점
