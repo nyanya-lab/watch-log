@@ -12,7 +12,9 @@ const Discover = {
   frStory: false,    // 스토리 시간순으로 볼지 (기본은 개봉일 순)
   recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
   recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
-  recoSort: "score", // score=추천순 | vote=TMDB 평점순
+  recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순
+  /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
+     그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
   recoDir: "desc",
   reco: null,        // 캐시된 추천 결과
   query: "",
@@ -385,7 +387,7 @@ function renderRecoFilters(all) {
 
   // 팝업을 닫아둬도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
   const on = Discover.recoType || Discover.recoOtt.length
-    || Discover.recoSort !== "score" || Discover.recoDir !== "desc";
+    || Discover.recoSort !== "vote" || Discover.recoDir !== "desc";
   const dot = $("#dcRecoDot");
   if (dot) dot.classList.toggle("hidden", !on);
 }
@@ -893,10 +895,27 @@ function dcCardHtml(e) {
 }
 
 /* 검색 결과·이어보기·위시에서 공통으로 쓰는 그리기 */
+/* 카드에 `group`({key, name, sub})이 있으면 **묶음 머리글**을 사이에 끼워 넣는다.
+   이어보기가 쓴다 — 한 시리즈의 안 본 편이 여러 장일 때 같은 배지를 카드마다 반복하는 대신
+   머리글에 한 번만 적는다. 머리글은 그리드 한 줄을 통째로 차지한다(`.dc-group`).
+   정렬이 이미 시리즈끼리 붙여주므로(`_sort`) 같은 key가 흩어지지 않는다. */
 function paintDcCards(entries, empty) {
   Discover._byId = new Map(entries.map(e => [String(e.tmdbId), e]));
   const grid = $("#dcGrid");
-  grid.innerHTML = entries.map(dcCardHtml).join("");
+  let lastKey = null;
+  grid.innerHTML = entries.map(e => {
+    let head = "";
+    if (e.group && e.group.key !== lastKey) {
+      lastKey = e.group.key;
+      head = `<div class="dc-group">
+        <div class="dc-group-t">${e.group.icon || ""}${esc(e.group.name)}</div>
+        <div class="dc-group-s">${e.group.sub || ""}</div>
+      </div>`;
+    } else if (!e.group) {
+      lastKey = null;
+    }
+    return head + dcCardHtml(e);
+  }).join("");
   const em = $("#dcEmpty");
   em.innerHTML = empty || "";
   em.classList.toggle("hidden", entries.length > 0);
@@ -959,9 +978,16 @@ function renderDcNext() {
       year: c.item.releaseYear || "",
       voteAverage: c.item.voteAverage,
       flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${esc(miss)} 안 봄</span>`,
-      note: `<span class="badge badge-season">본 시즌 ${esc(seen)}</span>
-             <span class="badge badge-cert">안 본 시즌 ${esc(miss)}</span>
-             <span class="wl-meta ml-1">총 ${st.totalSeasons}시즌</span>`,
+      /* 본 것·안 본 것·총 개수는 묶음 머리글로 올렸다 (카드마다 되풀이할 정보가 아니다) */
+      group: {
+        key: `tv:${c.tmdbId}`,
+        icon: `<i class="fa-solid fa-tv mr-1.5 text-slate-400"></i>`,
+        name: c.item.title,
+        sub: `<span class="badge badge-season">본 시즌 ${esc(seen)}</span>
+              <span class="badge badge-cert">안 본 시즌 ${esc(miss)}</span>
+              <span class="wl-meta ml-1">총 ${st.totalSeasons}시즌</span>`
+      },
+      note: "",
       actions: [
         { act: "add", season: st.missing[0], label: `S${st.missing[0]} 기록하기`, icon: "fa-plus", cls: "dc-btn-main" },
         { act: "open", id: c.item.id, label: "내 기록", icon: "fa-clock-rotate-left" }
@@ -982,14 +1008,18 @@ function renderDcNext() {
       year: (p.releaseDate || "").slice(0, 4),
       voteAverage: null,
       flag: `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>${p.no}편 안 봄</span>`,
-      /* 배지 구성을 TV 카드와 같게 맞춘다: 본 것 · 안 본 것 · 총 개수.
-         시리즈명과 미개봉은 영화에만 있는 정보라 앞뒤에 덧붙인다.
-         이 카드가 몇 편인지는 포스터 위 띠에 이미 있으므로 시리즈명만 둔다. */
-      note: `<span class="badge badge-genre"><i class="fa-solid fa-layer-group mr-1"></i>${esc(c.info.name)}</span>
-             <span class="badge badge-season">본 편 ${c.seenNos.length ? c.seenNos.map(n => "S" + n).join("·") : `${c.watched}편`}</span>
-             <span class="badge badge-cert">안 본 편 ${c.missing.map(m => "S" + m.no).join("·")}</span>
-             <span class="wl-meta ml-1">총 ${c.info.total}편</span>
-             ${c.upcoming ? `<span class="badge badge-genre">미개봉 ${c.upcoming}편 제외</span>` : ""}`,
+      /* 시리즈 요약은 **머리글에 한 번만** 적는다 — 예전엔 같은 배지 네 줄이 안 본 편 카드마다
+         똑같이 반복돼서 정작 편끼리 뭐가 다른지가 안 보였다. 배지 구성은 TV와 같게 맞춘다. */
+      group: {
+        key: `mv:${c.collectionId}`,
+        icon: `<i class="fa-solid fa-layer-group mr-1.5 text-amber-400"></i>`,
+        name: c.info.name,
+        sub: `<span class="badge badge-season">본 편 ${c.seenNos.length ? c.seenNos.map(n => "S" + n).join("·") : `${c.watched}편`}</span>
+              <span class="badge badge-cert">안 본 편 ${c.missing.map(m => "S" + m.no).join("·")}</span>
+              <span class="wl-meta ml-1">총 ${c.info.total}편</span>
+              ${c.upcoming ? `<span class="badge badge-genre">미개봉 ${c.upcoming}편 제외</span>` : ""}`
+      },
+      note: "",
       actions: [
         { act: "add", label: "기록하기", icon: "fa-plus", cls: "dc-btn-main" },
         /* 이 카드는 "안 본 편"이라 내 기록이 없다. 그래서 같은 시리즈에서
@@ -1526,7 +1556,7 @@ function initDiscover() {
   $("#applyRecoFilter").addEventListener("click", closeRecoFilter);
   onBackdropClose("#dcRecoModal", closeRecoFilter);
   $("#resetRecoFilter").addEventListener("click", () => {
-    Object.assign(Discover, { recoType: "", recoOtt: [], recoSort: "score", recoDir: "desc" });
+    Object.assign(Discover, { recoType: "", recoOtt: [], recoSort: "vote", recoDir: "desc" });
     renderDiscover();
   });
   window.closeRecoFilterModal = closeRecoFilter;   // Escape 처리용

@@ -542,6 +542,19 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-flag-seen { background: rgba(77,124,42,.9); }
 .dc-flag-wish { background: rgba(224,112,15,.9); }
 .dc-flag-next { background: rgba(220,68,68,.9); }
+
+/* ===== 탐색: 묶음 머리글 (이어보기의 시리즈·작품) =====
+   그리드 한 줄을 통째로 차지해 그 아래 카드들이 한 시리즈임을 보여준다.
+   카드마다 되풀이하던 "본 편 / 안 본 편 / 총 개수" 배지를 여기로 올렸다. */
+.dc-group {
+  grid-column: 1 / -1;
+  margin: 6px 0 -4px;
+  padding-top: 12px;
+  border-top: 1px solid #e6ecdd;
+}
+.dc-group:first-child { padding-top: 0; border-top: 0; margin-top: 0; }
+.dc-group-t { font-size: 14px; color: #2f3a2a; }
+.dc-group-s { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .dc-flag-hide { background: rgba(100,116,139,.9); }
 
 .dc-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 5px 0 2px; }
