@@ -19,9 +19,9 @@
 index.html      673줄  전체 마크업 (헤더/목록/탐색/통계/설정 + 모달 9개)
 style.css       719줄  커스텀 CSS (Tailwind CDN 위에 얹음)
 core.js         873줄  동기화(REST), 상태(State), 탭, Escape, 유틸
-tmdb.js         712줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
+tmdb.js         731줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
 watchlog.js    2421줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
-discover.js    1614줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
+discover.js    1658줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
 stats.js        403줄  Chart.js 통계 + 히트맵
 dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
 .gitignore            dev-local.js, .claude/ 제외
@@ -135,6 +135,12 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 ```js
 { id, tmdbId, mediaType, title, poster, year, voteAverage, addedAt }
 ```
+
+관심없음 뷰(`renderDcHide`)는 **시리즈로 묶어서** 보여준다(2026-08-08) — 시리즈째로 넘기는 일이
+많아서다(실제로 17개 중 분노의 질주가 9편, 컨저링 3편). 기록에 `collectionId`가 없으므로
+컬렉션 캐시를 뒤집은 **`collIndex()`**(tmdb.js)로 찾는다. 시리즈 안에서는 **편 번호 순**으로
+늘어놓고(몇 편째를 걸렀는지 읽히게), 캐시에 없는 작품은 맨 끝 `그 밖에`로 모은다.
+묶을 시리즈가 하나도 없으면 머리글을 아예 안 단다 — `그 밖에` 하나만 뜨면 방해만 된다.
 
 위시의 `otts`는 **담는 순간 1회만** 조회한다(`fillWishOtt`). TMDB는 스트리밍 정보를 목록 응답에 안 주고
 작품별 `/watch/providers`에만 주기 때문에, 추천 카드 60개에 붙이려면 호출이 60번 더 필요하다

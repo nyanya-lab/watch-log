@@ -1167,15 +1167,48 @@ function renderDcWish() {
 function renderDcHide() {
   $("#dcHint").classList.add("hidden");
 
-  const list = State.hides.map(h => ({
-    tmdbId: h.tmdbId, mediaType: h.mediaType, title: h.title,
-    poster: h.poster, year: h.year, voteAverage: h.voteAverage,
-    flag: `<span class="dc-flag dc-flag-hide"><i class="fa-solid fa-ban mr-1"></i>관심없음</span>`,
-    actions: [
-      { act: "unhide", label: "다시 관심", icon: "fa-rotate-left", cls: "dc-btn-main" },
-      { act: "wish", label: "보고싶어요", icon: "fa-bookmark" }
-    ]
-  }));
+  /* 관심없음은 **시리즈째로 넘기는 일이 많다** (분노의 질주 9편이 줄줄이 들어오는 식) —
+     이어보기와 같은 방식으로 묶어서 보여준다.
+     관심없음 기록에는 `collectionId`가 없으므로(담을 때 알 필요가 없었다) 컬렉션 캐시를
+     뒤집은 `collIndex()`로 찾는다. 캐시에 없는 작품은 맨 끝 "그 밖에"로 모은다. */
+  const ETC = "etc";
+  const idx = collIndex();
+  const groups = new Map();
+  State.hides.forEach(h => {
+    const s = idx.get(h.tmdbId);
+    const key = s ? "mv:" + s.collectionId : ETC;
+    if (!groups.has(key)) groups.set(key, { name: s ? s.name : "그 밖에", total: s ? s.total : 0, items: [], last: "" });
+    const g = groups.get(key);
+    g.items.push({ h, no: s ? s.no : 0 });
+    if ((h.addedAt || "") > g.last) g.last = h.addedAt || "";
+  });
+
+  // 최근에 넘긴 시리즈부터. "그 밖에"는 시리즈가 아니므로 항상 맨 끝
+  const ordered = [...groups.entries()].sort((a, b) =>
+    a[0] === ETC ? 1 : b[0] === ETC ? -1 : (b[1].last || "").localeCompare(a[1].last || ""));
+
+  /* 묶을 시리즈가 하나도 없으면 머리글을 달지 않는다 — "그 밖에" 하나만 뜨면 방해만 된다 */
+  const hasSeries = ordered.some(([k]) => k !== ETC);
+
+  const list = [];
+  ordered.forEach(([key, g]) => {
+    // 시리즈 안에서는 편 순서대로 — 그래야 몇 편째를 걸렀는지 읽힌다
+    g.items.sort((a, b) => a.no - b.no || (a.h.title || "").localeCompare(b.h.title || ""));
+    g.items.forEach(({ h }) => list.push({
+      tmdbId: h.tmdbId, mediaType: h.mediaType, title: h.title,
+      poster: h.poster, year: h.year, voteAverage: h.voteAverage,
+      flag: `<span class="dc-flag dc-flag-hide"><i class="fa-solid fa-ban mr-1"></i>관심없음</span>`,
+      group: !hasSeries ? null : key === ETC
+        ? { key, name: "그 밖에", sub: `<span class="wl-meta">시리즈로 묶이지 않은 작품 ${g.items.length}개</span>` }
+        : { key, icon: `<i class="fa-solid fa-layer-group mr-1.5 text-amber-400"></i>`, name: g.name,
+            sub: `<span class="badge badge-cert">관심없음 ${g.items.length}편</span>`
+                 + (g.total ? `<span class="wl-meta ml-1">총 ${g.total}편</span>` : "") },
+      actions: [
+        { act: "unhide", label: "다시 관심", icon: "fa-rotate-left", cls: "dc-btn-main" },
+        { act: "wish", label: "보고싶어요", icon: "fa-bookmark" }
+      ]
+    }));
+  });
 
   paintDcCards(list, `
     <i class="fa-solid fa-ban text-4xl mb-3"></i>

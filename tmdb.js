@@ -519,6 +519,23 @@ function saveCollInfo(info) {
   });
 }
 
+/* 작품 tmdbId → 그 작품이 속한 시리즈. 컬렉션 캐시를 뒤집어 만든다.
+   보고싶어요·관심없음 기록에는 `collectionId`가 없어서(담을 때 알 필요가 없었다) 묶으려면
+   이 역인덱스가 필요하다. 캐시에 없는 시리즈는 안 잡히지만, 캐시는 내 기록·이어보기가
+   이미 채워두므로 실제로는 대부분 걸린다. */
+function collIndex() {
+  const out = new Map();
+  const c = getCollCache();
+  Object.keys(c).forEach(cid => {
+    const info = c[cid];
+    if (!info || !info.parts) return;                 // 실패 흔적({failed:true})은 건너뛴다
+    info.parts.forEach(p => out.set(p.tmdbId, {
+      collectionId: cid, name: info.name || "", no: p.no, total: info.total
+    }));
+  });
+  return out;
+}
+
 /* 조회가 실패한 컬렉션도 흔적을 남긴다.
    안 남기면 "편 정보 없음" 안내가 영원히 뜨고, 버튼을 눌러도 매번 같은 실패를 반복해
    아무 일도 안 일어나는 것처럼 보인다 (없어진 컬렉션이면 절대 성공하지 않는다). */
