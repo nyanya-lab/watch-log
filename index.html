@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260812b">
+<link rel="stylesheet" href="style.css?v=20260812c">
 </head>
 <body>
 
@@ -207,6 +207,14 @@
         <span id="dcPartsMsg" class="flex-1 min-w-0"></span>
         <button id="dcPartsBtn" class="btn btn-sm btn-primary shrink-0">
           <i class="fa-solid fa-layer-group mr-1"></i>시리즈 편 정보 가져오기
+        </button>
+      </div>
+
+      <!-- 관심없음: 시리즈를 아직 확인 못 한 작품이 있을 때 안내 -->
+      <div id="dcHideBar" class="hidden flex items-center gap-3 flex-wrap text-sm font-semibold text-lime-800 bg-lime-50 border border-lime-200 rounded-lg px-3 py-2.5">
+        <span id="dcHideMsg" class="flex-1 min-w-0"></span>
+        <button id="dcHideFillBtn" class="btn btn-sm btn-primary shrink-0">
+          <i class="fa-solid fa-layer-group mr-1"></i>시리즈 확인하기
         </button>
       </div>
 
@@ -664,10 +672,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260812b"></script>
-<script src="tmdb.js?v=20260812b"></script>
-<script src="watchlog.js?v=20260812b"></script>
-<script src="discover.js?v=20260812b"></script>
-<script src="stats.js?v=20260812b"></script>
+<script src="core.js?v=20260812c"></script>
+<script src="tmdb.js?v=20260812c"></script>
+<script src="watchlog.js?v=20260812c"></script>
+<script src="discover.js?v=20260812c"></script>
+<script src="stats.js?v=20260812c"></script>
 </body>
 </html>

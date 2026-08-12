@@ -83,6 +83,79 @@ function addHide(h) {
   return true;
 }
 
+/* 관심없음으로 넘긴 영화의 시리즈 정보를 **담는 순간 1회** 받아둔다.
+   관심없음 뷰는 컬렉션 캐시(`collIndex`)로 묶는데 그 캐시는 **내 기록 기준으로만** 채워진다 —
+   추천에서 처음 보는 시리즈를 걸렀다면 캐시에 없어 "그 밖에"로 빠졌다(2026-08-12).
+   보고싶어요가 담는 순간 OTT를 1회 조회하는 것(`fillWishOtt`)과 같은 방식이다.
+   기다리게 하지 않는다 — 받아지면 그때 다시 그린다. 못 받으면 예전처럼 "그 밖에"에 남을 뿐이다. */
+async function fillHideColl(tmdbId, mediaType) {
+  if (mediaType === "tv" || !getTmdbKey()) return;      // 컬렉션은 영화에만 있다
+  if (collIndex().has(tmdbId)) return;                  // 이미 캐시가 알고 있으면 조회하지 않는다
+  try {
+    const d = await tmdbDetail(tmdbId, "movie");
+    const h = State.hides.find(x => x.tmdbId === tmdbId);
+    if (!d.collectionId) {
+      // 시리즈에 속하지 않는 영화. 표시를 남겨야 아래 안내바가 이 작품을 다시 세지 않는다
+      if (h) { h.noColl = true; saveLocal(); }
+      return;
+    }
+    if (!getCollCache()[d.collectionId]) saveCollInfo(await tmdbCollection(d.collectionId));
+    if (Discover.view === "hide") renderDiscover();
+  } catch { /* 조회 실패는 표시를 남기지 않는다 — 일시적일 수 있어 다음에 다시 해본다 */ }
+}
+
+/* 관심없음 목록에서 아직 시리즈를 확인 못 한 영화들 */
+function hidesNeedingColl() {
+  const idx = collIndex();
+  return State.hides.filter(h => h.mediaType !== "tv" && !h.noColl && !idx.has(h.tmdbId));
+}
+
+/* 이미 쌓여 있는 관심없음 작품들의 시리즈를 한 번에 확인한다 (`#dcHideFillBtn`).
+   `fillHideColl`이 생기기 전에 넘긴 것들은 컬렉션 캐시에 없어 "그 밖에"에 남아 있다. */
+let _hideFilling = false;
+async function runFillHideColls() {
+  if (_hideFilling) return;
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+  const targets = hidesNeedingColl();
+  if (!targets.length) { toast("확인할 작품이 없습니다"); renderDiscover(); return; }
+
+  _hideFilling = true;
+  const msg = $("#dcHideMsg");
+  let found = 0, none = 0;
+  const failed = [];
+  try {
+    for (let n = 0; n < targets.length; n++) {
+      const h = targets[n];
+      msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>시리즈 확인 ${n + 1} / ${targets.length}...`;
+      try {
+        const d = await tmdbDetail(h.tmdbId, "movie");
+        if (d.collectionId) {
+          if (!getCollCache()[d.collectionId]) saveCollInfo(await tmdbCollection(d.collectionId));
+          found++;
+        } else {
+          h.noColl = true;                 // 시리즈가 없다고 **확인된** 것만 표시한다
+          none++;
+        }
+      } catch (e) {
+        // 조회 실패는 표시를 남기지 않는다 — 남기면 일시적 오류가 영구 결론이 된다
+        failed.push({ title: h.title, error: e.message });
+      }
+      await new Promise(r => setTimeout(r, 240));
+    }
+  } finally {
+    _hideFilling = false;
+  }
+
+  saveLocal();
+  if (failed.length) {
+    console.warn("관심없음 시리즈 확인 실패:", failed);
+    toast(`시리즈 ${found}개 확인 · ${failed.length}개는 못 받았습니다`, failed.length > found ? "error" : "info");
+  } else {
+    toast(`시리즈 ${found}개를 묶었습니다 (${none}개는 시리즈가 아니었어요)`, "success");
+  }
+  renderDiscover();
+}
+
 function removeHide(tmdbId) {
   const before = State.hides.length;
   State.hides = State.hides.filter(h => h.tmdbId !== tmdbId);
@@ -965,6 +1038,7 @@ function renderDiscover() {
   if (Discover.view !== "reco") $("#dcRecoBar").classList.add("hidden");
   if (Discover.view !== "next") $("#dcPartsBar").classList.add("hidden");
   if (Discover.view !== "fr") $("#dcFrBar").classList.add("hidden");
+  if (Discover.view !== "hide" && $("#dcHideBar")) $("#dcHideBar").classList.add("hidden");
 
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "search") return renderDcSearch();
@@ -1203,6 +1277,19 @@ function renderDcWish() {
 function renderDcHide() {
   $("#dcHint").classList.add("hidden");
 
+  /* 시리즈를 아직 확인 못 한 작품이 있으면 안내. 확인이 끝나면(시리즈가 없다고 밝혀진 것 포함)
+     대상이 0이 되어 바가 사라진다 — 안 그러면 단독 영화들 때문에 영원히 떠 있게 된다. */
+  const need = hidesNeedingColl();
+  const bar = $("#dcHideBar");
+  if (bar) {
+    bar.classList.toggle("hidden", !need.length || _hideFilling);
+    if (need.length && !_hideFilling) {
+      $("#dcHideMsg").innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>
+        아직 시리즈를 확인 안 한 작품이 <b>${need.length}개</b> 있어요.
+        확인하면 같은 시리즈끼리 묶입니다.`;
+    }
+  }
+
   /* 관심없음은 **시리즈째로 넘기는 일이 많다** (분노의 질주 9편이 줄줄이 들어오는 식) —
      이어보기와 같은 방식으로 묶어서 보여준다.
      관심없음 기록에는 `collectionId`가 없으므로(담을 때 알 필요가 없었다) 컬렉션 캐시를
@@ -1387,6 +1474,7 @@ function dcHide(tmdbId) {
   });
   toast(`「${e.title}」을 관심없음으로 표시했습니다`);
   renderDiscover();
+  fillHideColl(+tmdbId, e.mediaType);   // 시리즈 정보는 뒤에서 받아온다 (기다리게 하지 않는다)
 }
 
 /* ---------- TMDB 상세 미리보기 ---------- */
@@ -1615,6 +1703,8 @@ function initDiscover() {
   /* 아직 안 가져온 게 있으면 가져오기, 실패만 남았으면 연결 고치기 */
   $("#dcPartsBtn").addEventListener("click", (e) =>
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
+  /* 관심없음 — 예전에 넘겨둬서 시리즈를 모르는 작품들을 한 번에 확인 */
+  if ($("#dcHideFillBtn")) $("#dcHideFillBtn").addEventListener("click", runFillHideColls);
   /* 필터·정렬은 팝업으로 (바에 다 펼치면 결과보다 바가 길어진다) */
   const closeRecoFilter = () => $("#dcRecoModal").classList.add("hidden");
   $("#dcRecoFilterBtn").addEventListener("click", () => {
