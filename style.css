@@ -543,18 +543,45 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-flag-wish { background: rgba(224,112,15,.9); }
 .dc-flag-next { background: rgba(220,68,68,.9); }
 
-/* ===== 탐색: 묶음 머리글 (이어보기의 시리즈·작품) =====
-   그리드 한 줄을 통째로 차지해 그 아래 카드들이 한 시리즈임을 보여준다.
-   카드마다 되풀이하던 "본 편 / 안 본 편 / 총 개수" 배지를 여기로 올렸다. */
-.dc-group {
-  grid-column: 1 / -1;
-  margin: 6px 0 -4px;
-  padding-top: 12px;
-  border-top: 1px solid #e6ecdd;
-}
-.dc-group:first-child { padding-top: 0; border-top: 0; margin-top: 0; }
+/* ===== 탐색: 시리즈 묶음 (이어보기·관심없음) =====
+   **묶음 하나가 그리드 한 칸**이다. 머리글 아래로 그 시리즈의 카드가 가로로 흐르고
+   넘치면 화살표로 넘긴다. 카드 폭이 고정이라 카드가 1장이든 9장이든 칸 높이가 같다.
+   예전엔 머리글이 `grid-column:1/-1`로 한 줄을 통째로 먹어 카드 1장짜리 시리즈도
+   한 줄을 차지했고, 시리즈가 열몇 개면 목록이 하염없이 아래로 늘어졌다.
+   묶음 칸은 넓어야 하므로 열을 줄인다 (카드 4열 → 묶음 3열). */
+#dcGrid.dc-grouped { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+@media (min-width: 640px)  { #dcGrid.dc-grouped { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { #dcGrid.dc-grouped { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.dc-gwrap { min-width: 0; }
+.dc-group { margin-bottom: 8px; }
 .dc-group-t { font-size: 14px; color: #2f3a2a; }
 .dc-group-s { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
+.dc-track-wrap { position: relative; min-width: 0; }
+.dc-track {
+  display: flex; gap: 10px;
+  overflow-x: auto; scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  /* 막대는 숨긴다 — 화살표가 그 노릇을 하고, 카드 밑에 붙으면 지저분하다 */
+  scrollbar-width: none;
+}
+.dc-track::-webkit-scrollbar { display: none; }
+.dc-track > .dc-card { flex: 0 0 150px; scroll-snap-align: start; }
+
+/* 포스터 세로 중앙(150px 폭 × 2:3 = 225px)에 걸친다 — 본문 높이는 버튼 수에 따라 흔들려서
+   퍼센트로 두면 묶음마다 화살표 높이가 달라진다 */
+.dc-arrow {
+  position: absolute; top: 112px; transform: translateY(-50%);
+  width: 30px; height: 30px; border-radius: 999px; z-index: 3;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.96); border: 1px solid #dbe3d2;
+  color: #2f3a2a; font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.14);
+}
+.dc-arrow:hover { background: #fff; border-color: #b9c9a6; }
+.dc-arrow-l { left: -8px; }
+.dc-arrow-r { right: -8px; }
 .dc-flag-hide { background: rgba(100,116,139,.9); }
 
 .dc-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 5px 0 2px; }

@@ -895,31 +895,67 @@ function dcCardHtml(e) {
 }
 
 /* 검색 결과·이어보기·위시에서 공통으로 쓰는 그리기 */
-/* 카드에 `group`({key, name, sub})이 있으면 **묶음 머리글**을 사이에 끼워 넣는다.
-   이어보기가 쓴다 — 한 시리즈의 안 본 편이 여러 장일 때 같은 배지를 카드마다 반복하는 대신
-   머리글에 한 번만 적는다. 머리글은 그리드 한 줄을 통째로 차지한다(`.dc-group`).
+/* 카드에 `group`({key, name, sub})이 있으면 **묶음 하나가 그리드 한 칸**이 된다(`.dc-gwrap`).
+   머리글을 칸 위에 얹고, 그 아래로 그 시리즈의 카드가 **가로로 흐른다**(화살표로 넘김).
+   ⚠ 예전엔 머리글이 그리드 한 줄을 통째로 먹어서(`grid-column:1/-1`) 카드가 1장인 TV 시리즈도
+   한 줄을 다 차지했다 — 시리즈가 열몇 개면 목록이 하염없이 아래로 늘어졌다(2026-08-12 지적).
+   **카드 폭이 고정이라** 묶음마다 카드 수가 1장이든 9장이든 칸 높이가 같다.
    정렬이 이미 시리즈끼리 붙여주므로(`_sort`) 같은 key가 흩어지지 않는다. */
 function paintDcCards(entries, empty) {
   Discover._byId = new Map(entries.map(e => [String(e.tmdbId), e]));
   const grid = $("#dcGrid");
-  let lastKey = null;
-  grid.innerHTML = entries.map(e => {
-    let head = "";
-    if (e.group && e.group.key !== lastKey) {
-      lastKey = e.group.key;
-      head = `<div class="dc-group">
-        <div class="dc-group-t">${e.group.icon || ""}${esc(e.group.name)}</div>
-        <div class="dc-group-s">${e.group.sub || ""}</div>
-      </div>`;
-    } else if (!e.group) {
-      lastKey = null;
-    }
-    return head + dcCardHtml(e);
-  }).join("");
+  const grouped = entries.some(e => e.group);
+  grid.classList.toggle("dc-grouped", grouped);
+
+  if (!grouped) {
+    grid.innerHTML = entries.map(dcCardHtml).join("");
+  } else {
+    /* 같은 key가 이어지는 동안 한 묶음으로 모은다.
+       **묶음이 없는 카드(key=null)끼리도 한 트랙에 모은다** — 관심없음 뷰처럼 묶인 것과 안 묶인 것이
+       섞일 때, 낱개마다 칸을 하나씩 주면 카드 옆이 통째로 빈다. */
+    const blocks = [];
+    entries.forEach(e => {
+      const key = e.group ? e.group.key : null;
+      const last = blocks[blocks.length - 1];
+      if (last && last.key === key) last.items.push(e);
+      else blocks.push({ key, head: e.group || null, items: [e] });
+    });
+    grid.innerHTML = blocks.map(b => `
+      <div class="dc-gwrap">
+        ${b.head ? `<div class="dc-group">
+          <div class="dc-group-t">${b.head.icon || ""}${esc(b.head.name)}</div>
+          <div class="dc-group-s">${b.head.sub || ""}</div>
+        </div>` : ""}
+        <div class="dc-track-wrap">
+          <button class="dc-arrow dc-arrow-l hidden" data-dir="-1" title="이전"><i class="fa-solid fa-chevron-left"></i></button>
+          <div class="dc-track">${b.items.map(dcCardHtml).join("")}</div>
+          <button class="dc-arrow dc-arrow-r hidden" data-dir="1" title="다음"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </div>`).join("");
+    syncDcArrows();
+  }
+
   const em = $("#dcEmpty");
   em.innerHTML = empty || "";
   em.classList.toggle("hidden", entries.length > 0);
   $("#dcCount").textContent = entries.length ? `${entries.length}개` : "";
+}
+
+/* 트랙이 넘칠 때만, 그리고 **갈 수 있는 쪽에만** 화살표를 보여준다.
+   카드 2장이 한눈에 들어오는 묶음이 대부분이라 늘 띄우면 포스터만 가린다.
+   탭이 숨어 있으면 폭이 0이라 판정이 안 되므로 `renderDiscover`가 다시 그릴 때 맞춰진다. */
+function syncDcArrows() {
+  $$("#dcGrid .dc-track-wrap").forEach(w => {
+    const t = w.querySelector(".dc-track");
+    const l = w.querySelector(".dc-arrow-l"), r = w.querySelector(".dc-arrow-r");
+    const paint = () => {
+      const room = t.scrollWidth - t.clientWidth;
+      l.classList.toggle("hidden", room <= 4 || t.scrollLeft <= 2);
+      r.classList.toggle("hidden", room <= 4 || t.scrollLeft >= room - 2);
+    };
+    t.addEventListener("scroll", paint);
+    paint();
+  });
 }
 
 /* ---------- 뷰별 렌더 ---------- */
@@ -1639,6 +1675,13 @@ function initDiscover() {
 
   /* 카드/버튼 클릭은 위임으로 한 번에 처리 */
   $("#dcGrid").addEventListener("click", e => {
+    /* 묶음 안 카드를 넘기는 화살표. 카드 바깥이라 detail과 겹치지 않는다 */
+    const arrow = e.target.closest(".dc-arrow");
+    if (arrow) {
+      const t = arrow.closest(".dc-track-wrap").querySelector(".dc-track");
+      t.scrollBy({ left: (+arrow.dataset.dir) * Math.max(160, t.clientWidth * 0.8), behavior: "smooth" });
+      return;
+    }
     const btn = e.target.closest("[data-act]");
     if (!btn) return;
     const act = btn.dataset.act;
