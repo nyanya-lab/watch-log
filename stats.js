@@ -65,17 +65,17 @@ function renderStats() {
   // 시즌 묶음 기준 작품 수 (표시 전용 그룹핑 — watchlog.js의 groupItems 사용)
   const totalWorks = (typeof groupItems === "function") ? groupItems(items).length : items.length;
 
-  const rated = items.filter(i => i.rating);
-  const avgRating = rated.length ? (rated.reduce((s, i) => s + i.rating, 0) / rated.length).toFixed(2) : "-";
-
   /* 내 별점 ↔ TMDB 평점 비교.
      **둘 다 있는 기록만** 쓴다 — 내 별점은 일부에만 있고 TMDB 평점은 거의 전부에 있어서,
-     각자 전체를 세면 막대 높이가 모집단 차이로 벌어져 비교가 성립하지 않는다. */
+     각자 전체를 세면 막대 높이가 모집단 차이로 벌어져 비교가 성립하지 않는다.
+     요약 타일의 두 평균도 같은 집합에서 낸다 — 나란히 놓인 숫자는 곧 비교되는데,
+     모집단이 다르면 그 비교가 거짓이 된다. */
   const pairs = items.filter(i => i.rating && i.voteAverage);
   const avgOf = (arr, f) => arr.reduce((s, x) => s + f(x), 0) / arr.length;
+  const myAvg = pairs.length ? avgOf(pairs, i => i.rating) : 0;
+  const tmAvg = pairs.length ? avgOf(pairs, i => i.voteAverage) : 0;
   let gapNote = "";
   if (pairs.length) {
-    const myAvg = avgOf(pairs, i => i.rating), tmAvg = avgOf(pairs, i => i.voteAverage);
     const gap = myAvg - tmAvg;
     gapNote = `평균 ♥${myAvg.toFixed(1)} · ★${tmAvg.toFixed(1)} — ` +
       (Math.abs(gap) < 0.2 ? "거의 같습니다"
@@ -105,7 +105,10 @@ function renderStats() {
       <div class="stat-box"><div class="stat-label">작품 수 <span class="text-slate-400">(시리즈 묶음)</span></div><div class="stat-value">${totalWorks}</div></div>
       <div class="stat-box"><div class="stat-label">${currentYear}년 시청</div><div class="stat-value">${thisYearCount}</div></div>
       <div class="stat-box"><div class="stat-label">재시청 작품</div><div class="stat-value">${rewatched}</div></div>
-      <div class="stat-box"><div class="stat-label">평균 별점</div><div class="stat-value">${avgRating}</div></div>
+      <div class="stat-box">
+        <div class="stat-label">평균 별점 <span class="text-slate-400">(같은 ${pairs.length}개)</span></div>
+        <div class="stat-value"><i class="fa-solid fa-heart" style="font-size:.6em;color:#e0567f;vertical-align:2px"></i> ${pairs.length ? myAvg.toFixed(2) : "-"}<span class="text-sm font-semibold text-slate-400 ml-1.5" style="-webkit-text-stroke:0;white-space:nowrap"><i class="fa-solid fa-star" style="color:#eab308"></i> ${pairs.length ? tmAvg.toFixed(2) : "-"}</span></div>
+      </div>
       <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${totalHours.toLocaleString()}<span class="text-base font-semibold text-slate-400">시간</span></div></div>
     </div>
 
