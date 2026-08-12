@@ -67,6 +67,20 @@ function renderStats() {
 
   const rated = items.filter(i => i.rating);
   const avgRating = rated.length ? (rated.reduce((s, i) => s + i.rating, 0) / rated.length).toFixed(2) : "-";
+
+  /* 내 별점 ↔ TMDB 평점 비교.
+     **둘 다 있는 기록만** 쓴다 — 내 별점은 일부에만 있고 TMDB 평점은 거의 전부에 있어서,
+     각자 전체를 세면 막대 높이가 모집단 차이로 벌어져 비교가 성립하지 않는다. */
+  const pairs = items.filter(i => i.rating && i.voteAverage);
+  const avgOf = (arr, f) => arr.reduce((s, x) => s + f(x), 0) / arr.length;
+  let gapNote = "";
+  if (pairs.length) {
+    const myAvg = avgOf(pairs, i => i.rating), tmAvg = avgOf(pairs, i => i.voteAverage);
+    const gap = myAvg - tmAvg;
+    gapNote = `평균 ♥${myAvg.toFixed(1)} · ★${tmAvg.toFixed(1)} — ` +
+      (Math.abs(gap) < 0.2 ? "거의 같습니다"
+        : `내가 ${Math.abs(gap).toFixed(1)}점 ${gap > 0 ? "후합니다" : "박합니다"}`);
+  }
   const totalWatch = items.reduce((s, i) => s + (i.watchCount || 1), 0);
   const rewatched = items.filter(i => (i.watchCount || 1) > 1).length;
 
@@ -94,12 +108,6 @@ function renderStats() {
       <div class="stat-box"><div class="stat-label">평균 별점</div><div class="stat-value">${avgRating}</div></div>
       <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${totalHours.toLocaleString()}<span class="text-base font-semibold text-slate-400">시간</span></div></div>
     </div>
-
-    <!-- 월별 추이 -->
-    <section class="stat-sec">
-      <h3 class="stat-h"><i class="fa-solid fa-calendar-week"></i>월별 시청 (전체 기간)</h3>
-      <div style="height:220px"><canvas id="chartMonth"></canvas></div>
-    </section>
 
     <!-- 장르 + 구분 -->
     <section class="stat-sec">
@@ -149,16 +157,36 @@ function renderStats() {
       </div>
     </section>
 
-    <!-- 별점 분포 -->
+    <!-- 별점 분포 + 내 별점↔TMDB 비교 -->
     <section class="stat-sec">
-      <h3 class="stat-h"><i class="fa-solid fa-heart" style="color:#e0567f"></i>별점 분포</h3>
-      <div style="height:220px"><canvas id="chartRating"></canvas></div>
+      <div class="stat-grid2">
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-heart" style="color:#e0567f"></i>별점 분포</h3>
+          <p class="stat-note">${pairs.length ? `내가 별점을 매긴 ${pairs.length}개를 두 점수로 나눠 셌습니다 (같은 작품이라 높이를 그대로 비교할 수 있습니다)` : `별점을 매기면 TMDB 평점과 나란히 비교됩니다`}</p>
+          ${pairs.length ? `<div style="height:260px"><canvas id="chartRating"></canvas></div>` : ""}
+        </div>
+        <div>
+          <h3 class="stat-h"><i class="fa-solid fa-code-compare" style="color:#0ea5e9"></i>작품별로 견줘보기</h3>
+          <p class="stat-note">${pairs.length
+            ? `점 하나가 작품입니다. 대각선 위 = 내가 더 후하게 본 작품 · ${gapNote}`
+            : `별점을 매긴 작품이 없어 비교할 수 없습니다`}</p>
+          ${pairs.length
+            ? `<div style="height:260px"><canvas id="chartGap"></canvas></div>`
+            : `<p class="stat-note text-center">목록 탭의 [별점 채우기]로 매길 수 있습니다</p>`}
+        </div>
+      </div>
     </section>
 
     <!-- 연도별 막대 -->
     <section class="stat-sec">
       <h3 class="stat-h"><i class="fa-solid fa-chart-column"></i>연도별 시청</h3>
       <div style="height:260px"><canvas id="chartYear"></canvas></div>
+    </section>
+
+    <!-- 월별 추이 -->
+    <section class="stat-sec">
+      <h3 class="stat-h"><i class="fa-solid fa-calendar-week"></i>월별 시청 (전체 기간)</h3>
+      <div style="height:220px"><canvas id="chartMonth"></canvas></div>
     </section>
 
     <!-- 히트맵 -->
@@ -181,6 +209,8 @@ function renderStats() {
     const patch = patchFn(label);
     if (patch && typeof jumpToList === "function") jumpToList(patch);
   };
+  /* '기타' 조각 = 순위 밖 값들의 합. 그 값들을 통째로 걸면 조각 크기와 목록 개수가 맞는다 */
+  const restPatch = (key, t) => (t.rest.length ? { [key]: t.rest } : null);
   const commonOpts = {
     responsive: true, maintainAspectRatio: false,
     onHover: (e, els) => { if (e.native) e.native.target.style.cursor = els.length ? "pointer" : "default"; },
@@ -208,7 +238,7 @@ function renderStats() {
       data: { labels: gTop.labels, datasets: [{ data: gTop.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: "#fff" }] },
       options: {
         ...commonOpts,
-        onClick: clickToFilter(l => (l === "기타" ? null : { genre: l })),
+        onClick: clickToFilter(l => (l === "기타" ? restPatch("genre", gTop) : { genre: l })),
         plugins: {
           legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } },
           tooltip: {
@@ -234,7 +264,7 @@ function renderStats() {
   _charts.push(new Chart($("#chartCountry"), {
     type: "bar",
     data: { labels: cTop.labels, datasets: [{ data: cTop.values, backgroundColor: "#10b981", borderRadius: 6 }] },
-    options: { ...commonOpts, onClick: clickToFilter(l => l === "미상" ? null : { country: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    options: { ...commonOpts, onClick: clickToFilter(l => l === "미상" ? null : l === "기타" ? restPatch("country", cTop) : { country: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // OTT
@@ -242,18 +272,88 @@ function renderStats() {
   _charts.push(new Chart($("#chartOtt"), {
     type: "bar",
     data: { labels: oTop.labels, datasets: [{ data: oTop.values, backgroundColor: "#f59e0b", borderRadius: 6 }] },
-    /* "정보 없음"·"기타"는 필터로 걸 수 있는 값이 아니라 클릭해도 아무 일 없게 둔다 */
-    options: { ...commonOpts, onClick: clickToFilter(l => (l === "정보 없음" || l === "기타") ? null : { ott: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    /* "정보 없음"은 필터로 걸 값이 없어 눌러도 아무 일 없게 둔다. "기타"는 묶인 OTT들을 그대로 건다 */
+    options: { ...commonOpts, onClick: clickToFilter(l => l === "정보 없음" ? null : l === "기타" ? restPatch("ott", oTop) : { ott: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
-  // 별점
-  // 소수 별점(4.5 등)은 올림해서 해당 구간에 넣는다 (예: 4.5 → ♥5 구간)
-  const rCount = [1,2,3,4,5,6,7,8,9,10].map(n => items.filter(i => i.rating && Math.ceil(i.rating) === n).length);
-  _charts.push(new Chart($("#chartRating"), {
+  /* 별점 분포 — 내 별점과 TMDB 평점을 같은 눈금에 나란히 세운다.
+     소수(4.5 등)는 올림해서 그 칸에 넣으므로 `5`칸이 뜻하는 범위는 4.1~5.0이다.
+     칸을 눌렀을 때 거는 필터 범위도 그것과 같아야 목록 개수가 막대 높이와 맞는다. */
+  const BUCKETS = [1,2,3,4,5,6,7,8,9,10];
+  const bucketOf = (vals) => BUCKETS.map(n => vals.filter(v => Math.ceil(v) === n).length);
+  if ($("#chartRating")) _charts.push(new Chart($("#chartRating"), {
     type: "bar",
-    data: { labels: ["♥1","♥2","♥3","♥4","♥5","♥6","♥7","♥8","♥9","♥10"], datasets: [{ data: rCount, backgroundColor: "#f43f5e", borderRadius: 6 }] },
-    options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    data: {
+      labels: BUCKETS.map(String),
+      datasets: [
+        { label: "♥ 내 별점", data: bucketOf(pairs.map(i => i.rating)), backgroundColor: "#e0567f", borderRadius: 6 },
+        { label: "★ TMDB 평점", data: bucketOf(pairs.map(i => i.voteAverage)), backgroundColor: "#eab308", borderRadius: 6 }
+      ]
+    },
+    options: {
+      ...commonOpts,
+      /* 어느 계열을 눌렀는지에 따라 거는 필터가 다르다 (내 별점 rMin/rMax, TMDB 평점 vMin/vMax).
+         TMDB 쪽에 `rMin: 0.1`을 함께 거는 건 **이 차트가 별점을 매긴 기록만 세기 때문**이다.
+         안 걸면 별점 없는 기록까지 조회돼 막대 높이(11)와 목록 개수(14)가 어긋난다. */
+      onClick: (evt, els, chart) => {
+        if (!els.length || typeof jumpToList !== "function") return;
+        const n = +chart.data.labels[els[0].index];
+        const lo = +(n - 0.9).toFixed(1);
+        jumpToList(els[0].datasetIndex === 0 ? { rMin: lo, rMax: n } : { vMin: lo, vMax: n, rMin: 0.1 });
+      },
+      plugins: { legend: { position: "top", labels: { font: { size: 12, weight: 500 }, boxWidth: 12 } } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+    }
   }));
+
+  /* 작품별로 견줘보기 — 점 하나가 작품, 대각선이 "두 점수가 같은" 선이다.
+     분포 막대는 "어느 점수대에 몰리나"만 보여줄 뿐 **어떤 작품에서 갈렸는지**는 못 보여준다. */
+  if ($("#chartGap") && pairs.length) {
+    const GAP = 0.5;                       // 이만큼 차이 나야 후하다/박하다고 본다
+    const pt = (i) => ({ x: i.voteAverage, y: i.rating, id: i.id, t: i.title });
+    const groups = [
+      { label: "내가 더 후함", color: "#e0567f", data: pairs.filter(i => i.rating - i.voteAverage > GAP).map(pt) },
+      { label: "비슷",        color: "#94a3b8", data: pairs.filter(i => Math.abs(i.rating - i.voteAverage) <= GAP).map(pt) },
+      { label: "내가 더 박함", color: "#0ea5e9", data: pairs.filter(i => i.rating - i.voteAverage < -GAP).map(pt) }
+    ];
+    /* 두 축의 눈금이 같아야 대각선이 기준선 노릇을 한다 → 아래끝을 함께 맞춘다 */
+    const lo = Math.max(0, Math.floor(Math.min(...pairs.map(i => Math.min(i.rating, i.voteAverage)))) - 0.5);
+    const axis = (text) => ({ min: lo, max: 10, ticks: { stepSize: 1 }, title: { display: true, text, font: { size: 11, weight: 500 } } });
+    _charts.push(new Chart($("#chartGap"), {
+      type: "scatter",
+      data: {
+        datasets: groups.map(g => ({
+          label: `${g.label} ${g.data.length}`, data: g.data,
+          backgroundColor: g.color + "b3", pointRadius: 5, pointHoverRadius: 7
+        })).concat([{
+          // 범례에 낼 것이 아니라 배경 눈금이라 이름 앞에 _를 붙여 걸러낸다
+          label: "_같은 점수", type: "line", data: [{ x: lo, y: lo }, { x: 10, y: 10 }],
+          borderColor: "#cbd5e1", borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, order: 9
+        }])
+      },
+      options: {
+        ...commonOpts,
+        onClick: (evt, els, chart) => {
+          const hit = els.find(e => chart.data.datasets[e.datasetIndex].type !== "line");
+          if (!hit) return;
+          const p = chart.data.datasets[hit.datasetIndex].data[hit.index];
+          if (p && typeof openDetail === "function") openDetail(p.id);
+        },
+        plugins: {
+          legend: { position: "top", labels: { font: { size: 11, weight: 500 }, boxWidth: 10, filter: (l) => l.text[0] !== "_" } },
+          tooltip: {
+            callbacks: {
+              label: (c) => {
+                const p = c.raw, d = p.y - p.x;
+                return `${p.t} — ♥${p.y} · ★${p.x.toFixed(1)} (${d > 0 ? "+" : ""}${d.toFixed(1)})`;
+              }
+            }
+          }
+        },
+        scales: { x: axis("★ TMDB 평점"), y: axis("♥ 내 별점") }
+      }
+    }));
+  }
 
   // 월별 추이
   const monthLabelsShort = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
@@ -320,7 +420,9 @@ function topN(obj, n) {
     labels.push("기타");
     values.push(rest.reduce((s, x) => s + x[1], 0));
   }
-  return { labels, values };
+  /* '기타'에 어떤 값들이 묶였는지 함께 돌려준다 — 그래야 그 조각을 눌렀을 때
+     목록에서 조회할 수 있다(다중 선택 필터는 배열을 받는다). 없으면 눌러도 아무 일 없다. */
+  return { labels, values, rest: rest.map(x => x[0]) };
 }
 
 /* ---------- 히트맵 ---------- */
