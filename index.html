@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260812d">
+<link rel="stylesheet" href="style.css?v=20260813b">
 </head>
 <body>
 
@@ -151,6 +151,7 @@
           <button class="dc-nav active" data-view="reco"><i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i>추천</button>
           <button class="dc-nav" data-view="next"><i class="fa-solid fa-forward mr-1.5"></i>이어보기 <span id="dcNextCount" class="dc-num">0</span></button>
           <button class="dc-nav" data-view="fr"><i class="fa-solid fa-layer-group mr-1.5"></i>시리즈</button>
+          <button class="dc-nav" data-view="person"><i class="fa-solid fa-user-group mr-1.5"></i>인물</button>
           <button class="dc-nav" data-view="wish"><i class="fa-solid fa-bookmark mr-1.5"></i>보고싶어요 <span id="dcWishCount" class="dc-num">0</span></button>
           <button class="dc-nav hidden" data-view="hide"><i class="fa-solid fa-ban mr-1.5"></i>관심없음 <span id="dcHideCount" class="dc-num">0</span></button>
         </div>
@@ -208,6 +209,13 @@
         <button id="dcPartsBtn" class="btn btn-sm btn-primary shrink-0">
           <i class="fa-solid fa-layer-group mr-1"></i>시리즈 편 정보 가져오기
         </button>
+      </div>
+
+      <!-- 인물: 배우·감독 고르기 + 진도 -->
+      <div id="dcPersonBar" class="hidden space-y-2">
+        <div id="dcPersonKind" class="flex gap-1.5 flex-wrap"></div>
+        <div id="dcPersonChips" class="flex gap-1.5 flex-wrap"></div>
+        <div id="dcPersonMsg" class="text-sm font-semibold text-slate-600"></div>
       </div>
 
       <!-- 관심없음: 시리즈를 아직 확인 못 한 작품이 있을 때 안내 -->
@@ -672,10 +680,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260812d"></script>
-<script src="tmdb.js?v=20260812d"></script>
-<script src="watchlog.js?v=20260812d"></script>
-<script src="discover.js?v=20260812d"></script>
-<script src="stats.js?v=20260812d"></script>
+<script src="core.js?v=20260813b"></script>
+<script src="tmdb.js?v=20260813b"></script>
+<script src="watchlog.js?v=20260813b"></script>
+<script src="discover.js?v=20260813b"></script>
+<script src="stats.js?v=20260813b"></script>
 </body>
 </html>

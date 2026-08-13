@@ -17,6 +17,11 @@ const Discover = {
      그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
   recoDir: "desc",
   reco: null,        // 캐시된 추천 결과
+  personKind: "actor",   // 인물 뷰: actor=배우 | director=감독
+  personName: "",        // 고른 사람 (빈 값이면 아직 안 골랐다)
+  personId: null,
+  filmo: [],             // 그 사람의 작품 목록 (안 본 것만 카드로 그린다)
+  filmoLoading: false,
   query: "",
   usedQuery: "",
   wasFallback: false,
@@ -1039,11 +1044,13 @@ function renderDiscover() {
   if (Discover.view !== "next") $("#dcPartsBar").classList.add("hidden");
   if (Discover.view !== "fr") $("#dcFrBar").classList.add("hidden");
   if (Discover.view !== "hide" && $("#dcHideBar")) $("#dcHideBar").classList.add("hidden");
+  if (Discover.view !== "person" && $("#dcPersonBar")) $("#dcPersonBar").classList.add("hidden");
 
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "search") return renderDcSearch();
   if (Discover.view === "wish") return renderDcWish();
   if (Discover.view === "hide") return renderDcHide();
+  if (Discover.view === "person") return renderDcPerson();
   if (Discover.view === "fr") return renderDcFranchise();
   return renderDcNext();
 }
@@ -1337,6 +1344,125 @@ function renderDcHide() {
     <i class="fa-solid fa-ban text-4xl mb-3"></i>
     <p class="font-medium">관심없음으로 표시한 작품이 없어요</p>
     <p class="text-sm mt-1">추천이나 이어보기에서 <i class="fa-solid fa-ban mx-1"></i>를 누르면 여기로 옵니다.</p>`);
+}
+
+/* ---------- 인물 — 배우·감독 필모에서 안 본 작품 ----------
+   추천과는 다른 갈래다. 추천이 "취향에 맞는 걸 골라줘"라면 이쪽은
+   **"이 사람 것은 다 보고 싶다"**에 답한다. 그래서 점수를 매기지 않고 필모를 통째로 보여준다. */
+
+const _filmoCache = new Map();      // personId → 작품 목록 (새로고침하면 비는 세션 캐시로 충분하다)
+
+/* 내 기록에 나온 사람들을 많이 나온 순으로.
+   id는 기록에 저장된 것을 먼저 쓴다 — 이름 한글화(`runFixNames`)를 돌렸으면 채워져 있다. */
+function personRank(kind) {
+  const map = new Map();
+  const add = (name, id) => {
+    if (!name) return;
+    const cur = map.get(name) || { name, id: null, n: 0 };
+    cur.n++;
+    if (!cur.id && id) cur.id = id;
+    map.set(name, cur);
+  };
+  State.items.forEach(i => {
+    if (kind === "director") add(i.director, i.directorId);
+    else (i.cast || []).forEach(c => add(c.name, c.id));
+  });
+  return [...map.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "ko"));
+}
+
+/* 이름만 아는 사람의 id 찾기.
+   ① 한글 표기 캐시는 `{사람id: 한글이름}`이라 **뒤집으면 이름→id**가 나온다 (조회 없이 끝난다).
+   ② 그래도 없으면 이름으로 검색 — 한글로 바꿔둔 이름은 TMDB 대표 표기와 달라 실패할 수 있다. */
+async function personIdOf(p) {
+  if (p.id) return p.id;
+  const c = getPersonCache();
+  const hit = Object.keys(c).find(k => /^\d+$/.test(k) && c[k] === p.name);
+  if (hit) return +hit;
+  return await tmdbFindPersonId(p.name);
+}
+
+async function pickPerson(name) {
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+  const p = personRank(Discover.personKind).find(x => x.name === name);
+  if (!p) return;
+
+  Discover.personName = name;
+  Discover.filmo = [];
+  Discover.filmoLoading = true;
+  renderDiscover();
+
+  try {
+    const id = await personIdOf(p);
+    if (!id) {
+      Discover.personId = null;
+      toast(`「${name}」을 TMDB에서 찾지 못했습니다`, "error");
+      return;
+    }
+    Discover.personId = id;
+    const ck = id + ":" + Discover.personKind;
+    if (!_filmoCache.has(ck)) _filmoCache.set(ck, await tmdbFilmography(id, Discover.personKind));
+    Discover.filmo = _filmoCache.get(ck);
+  } catch (e) {
+    toast("필모그래피 조회 실패: " + e.message, "error");
+  } finally {
+    Discover.filmoLoading = false;
+    renderDiscover();
+  }
+}
+
+function renderDcPerson() {
+  $("#dcHint").classList.add("hidden");
+  const bar = $("#dcPersonBar");
+  const people = personRank(Discover.personKind).slice(0, 24);
+
+  if (bar) {
+    bar.classList.remove("hidden");
+    $("#dcPersonKind").innerHTML = [["actor", "배우", "fa-user"], ["director", "감독", "fa-clapperboard"]]
+      .map(k => `<button class="fchip ${Discover.personKind === k[0] ? "on" : ""}" data-pkind="${k[0]}">
+        <i class="fa-solid ${k[2]} mr-1"></i>${k[1]}</button>`).join("");
+    /* 많이 본 순 상위 24명. 전부 늘어놓으면 1300명이라 바가 화면을 다 먹는다 */
+    $("#dcPersonChips").innerHTML = people.length
+      ? people.map(p => `<button class="fchip ${Discover.personName === p.name ? "on" : ""}"
+          data-pname="${esc(p.name)}">${esc(p.name)}<span class="dc-num">${p.n}</span></button>`).join("")
+      : `<span class="text-xs font-semibold text-slate-500">TMDB 정보를 채우면 여기에 사람이 모입니다</span>`;
+  }
+
+  if (Discover.filmoLoading) {
+    paintDcCards([], `<i class="fa-solid fa-spinner fa-spin text-4xl mb-3"></i>
+      <p class="font-medium">「${esc(Discover.personName)}」의 작품을 찾는 중...</p>`);
+    return;
+  }
+  if (!Discover.personName) {
+    paintDcCards([], `<i class="fa-solid fa-user-group text-4xl mb-3"></i>
+      <p class="font-medium">사람을 고르면 안 본 작품을 찾아옵니다</p>
+      <p class="text-sm mt-1">위 칩은 내 기록에 많이 나온 순서입니다.</p>`);
+    return;
+  }
+
+  const all = Discover.filmo;
+  const watched = all.filter(f => State.items.some(i => i.tmdbId === f.tmdbId)).length;
+  const list = all
+    .filter(f => !State.items.some(i => i.tmdbId === f.tmdbId) && !isHidden(f.tmdbId))
+    .map(f => ({
+      tmdbId: f.tmdbId, mediaType: f.mediaType, title: f.title, poster: f.poster,
+      year: f.year, voteAverage: f.voteAverage,
+      note: f.character ? `<span class="badge badge-cast">${esc(f.character)}</span>` : "",
+      actions: [
+        { act: "wish", label: "보고싶어요", icon: "fa-bookmark", cls: "dc-btn-main" },
+        { act: "add", label: "봤어요", icon: "fa-plus" },
+        { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 이 목록에서 숨기기" }
+      ]
+    }));
+
+  /* "몇 편 중 몇 편 봤나"를 먼저 알려준다 — 이 뷰의 재미가 그 진도에 있다 */
+  $("#dcPersonMsg").innerHTML = all.length
+    ? `<b>${esc(Discover.personName)}</b> — 평가가 쌓인 작품 ${all.length}편 중
+       <b>${watched}편</b>을 봤어요 · 안 본 것 ${list.length}편`
+    : `<b>${esc(Discover.personName)}</b>의 작품을 찾지 못했습니다`;
+
+  paintDcCards(list, `<i class="fa-solid fa-circle-check text-4xl mb-3"></i>
+    <p class="font-medium">안 본 작품이 없어요</p>
+    <p class="text-sm mt-1">이 사람 것은 다 보셨네요.</p>`);
 }
 
 /* 검색 결과 */
@@ -1705,6 +1831,21 @@ function initDiscover() {
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
   /* 관심없음 — 예전에 넘겨둬서 시리즈를 모르는 작품들을 한 번에 확인 */
   if ($("#dcHideFillBtn")) $("#dcHideFillBtn").addEventListener("click", runFillHideColls);
+
+  /* 인물 — 배우/감독 전환과 사람 칩 (그릴 때마다 새로 만들어지므로 위임) */
+  if ($("#dcPersonBar")) {
+    $("#dcPersonBar").addEventListener("click", e => {
+      const kind = e.target.closest("[data-pkind]");
+      if (kind) {
+        if (Discover.personKind === kind.dataset.pkind) return;
+        Object.assign(Discover, { personKind: kind.dataset.pkind, personName: "", personId: null, filmo: [] });
+        renderDiscover();
+        return;
+      }
+      const who = e.target.closest("[data-pname]");
+      if (who) pickPerson(who.dataset.pname);
+    });
+  }
   /* 필터·정렬은 팝업으로 (바에 다 펼치면 결과보다 바가 길어진다) */
   const closeRecoFilter = () => $("#dcRecoModal").classList.add("hidden");
   $("#dcRecoFilterBtn").addEventListener("click", () => {

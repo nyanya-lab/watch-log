@@ -466,6 +466,16 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .stat-label { font-size: 13px; font-weight: 600; color: #6f7468; margin-bottom: 6px; }
 .stat-value { font-size: 26px; font-weight: 700; color: #2c3129; line-height: 1.1; }
 
+/* ===== 탐색: 인물 =====
+   칩은 **많이 본 순**이라 앞쪽이 중요하다. 폰에서는 24개가 여덟 줄이 되어 화면 절반을 먹으므로
+   한 줄로 흐르게 두고 밀어서 본다 (데스크톱은 세 줄쯤이라 그대로 접히는 편이 낫다). */
+@media (max-width: 639px) {
+  #dcPersonChips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  #dcPersonChips::-webkit-scrollbar { display: none; }
+  #dcPersonChips .fchip { flex: 0 0 auto; }
+}
+#dcPersonChips .dc-num { margin-left: 5px; }
+
 /* ===== 연간 결산 =====
    그 해를 한 장으로 훑는 자리라 차트를 안 쓴다 — 큰 문장 · 숫자 · 포스터 · 칩. */
 .yr-hero { font-size: 17px; color: #2c3129; margin-bottom: 14px; -webkit-text-stroke: 0.3px currentColor; }

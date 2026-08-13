@@ -417,6 +417,52 @@ async function tmdbFindPersonId(name) {
   } catch { return null; }
 }
 
+/* ---------- 필모그래피 ----------
+   그 사람의 작품 목록. 배우는 **출연작**(`cast`), 감독은 **연출작**(`crew`의 job=Director)만 본다.
+   `combined_credits`는 영화·TV를 한 번에 주므로 호출이 1회다.
+
+   ⚠ 그대로 쓰면 **단역·토크쇼 출연·미개봉작**이 잔뜩 들어와 목록이 못 쓰게 된다:
+   - 배우는 `order`(크레딧 순서)로 자른다 — 뒤로 갈수록 단역이다.
+   - 아직 안 나온 작품은 뺀다(개봉일이 없거나 오늘 이후). "볼 것"을 찾는 자리이기 때문.
+   - 평가가 거의 없는 작품(`vote_count`)도 뺀다 — 평점이 흔들려 순서가 뒤죽박죽이 된다. */
+async function tmdbFilmography(personId, kind) {
+  const key = getTmdbKey();
+  if (!key || !personId) return [];
+  const url = `${TMDB_BASE}/person/${personId}/combined_credits?api_key=${key}&language=ko-KR`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`TMDB 필모그래피 조회 실패 (${res.status})`);
+  const d = await res.json();
+
+  const today = new Date().toISOString().slice(0, 10);
+  const raw = kind === "director"
+    ? (d.crew || []).filter(c => c.job === "Director")
+    : (d.cast || []).filter(c => (c.order ?? 99) <= 12);
+
+  const seen = new Set();
+  return raw
+    .filter(c => {
+      if (c.media_type !== "movie" && c.media_type !== "tv") return false;
+      if (!c.poster_path) return false;
+      const date = c.release_date || c.first_air_date || "";
+      if (!date || date > today) return false;          // 미개봉·미방영
+      if ((c.vote_count || 0) < 30) return false;
+      if (seen.has(c.id)) return false;                 // 같은 작품이 여러 배역으로 들어오기도 한다
+      seen.add(c.id);
+      return true;
+    })
+    .map(c => ({
+      tmdbId: c.id,
+      mediaType: c.media_type,
+      title: c.title || c.name || "",
+      poster: TMDB_IMG + c.poster_path,
+      year: (c.release_date || c.first_air_date || "").slice(0, 4),
+      voteAverage: c.vote_average ? Math.round(c.vote_average * 10) / 10 : null,
+      voteCount: c.vote_count || 0,
+      character: c.character || ""
+    }))
+    .sort((a, b) => (b.voteAverage || 0) - (a.voteAverage || 0));
+}
+
 /* 이름 자체로 "확인했지만 한글 표기를 못 찾음"을 기억하는 키.
    id를 못 구한 사람은 id로 기억할 수 없어서, 안 그러면 목록에서 영원히 세어진다. */
 function nameKey(name) { return "n:" + String(name || "").trim(); }
