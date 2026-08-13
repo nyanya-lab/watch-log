@@ -493,7 +493,11 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 /* 5장이라 줄바꿈보다 한 줄로 흐르는 편이 읽기 낫다 (폰에서는 밀어서 본다) */
 .yr-posters { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .yr-posters::-webkit-scrollbar { display: none; }
-.yr-poster { flex: 0 0 104px; text-align: left; position: relative; }
+/* ⚠ `min-width: 0`이 없으면 **제목이 긴 작품만 포스터가 커진다.**
+   flex 항목의 기본값 `min-width: auto`가 flex-basis보다 우선하는데, 제목이 `nowrap`이라
+   그 항목의 최소 폭이 제목 전체 길이가 되기 때문이다(overflow:hidden은 최소 폭을 줄여주지 않는다).
+   포스터는 `aspect-ratio`라 폭을 따라 높이까지 커진다. */
+.yr-poster { flex: 0 0 104px; min-width: 0; text-align: left; position: relative; }
 .yr-poster img, .yr-poster-none {
   width: 100%; aspect-ratio: 2/3; object-fit: cover;
   border-radius: 8px; display: block; background: #e9f0e1;
