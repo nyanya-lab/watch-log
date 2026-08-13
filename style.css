@@ -466,6 +466,56 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .stat-label { font-size: 13px; font-weight: 600; color: #6f7468; margin-bottom: 6px; }
 .stat-value { font-size: 26px; font-weight: 700; color: #2c3129; line-height: 1.1; }
 
+/* ===== 연간 결산 =====
+   그 해를 한 장으로 훑는 자리라 차트를 안 쓴다 — 큰 문장 · 숫자 · 포스터 · 칩. */
+.yr-hero { font-size: 17px; color: #2c3129; margin-bottom: 14px; -webkit-text-stroke: 0.3px currentColor; }
+.yr-hero b { color: #4d7c2a; }
+.yr-diff { font-size: 13px; margin-left: 6px; -webkit-text-stroke: 0; }
+.yr-diff.up { color: #4d7c2a; }
+.yr-diff.down { color: #94a3b8; }
+
+.yr-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 640px) { .yr-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.yr-h { font-size: 14px; color: #2f3a2a; margin: 22px 0 10px; }
+.yr-h i { color: #4d7c2a; margin-right: 7px; }
+
+/* 5장이라 줄바꿈보다 한 줄로 흐르는 편이 읽기 낫다 (폰에서는 밀어서 본다) */
+.yr-posters { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.yr-posters::-webkit-scrollbar { display: none; }
+.yr-poster { flex: 0 0 104px; text-align: left; position: relative; }
+.yr-poster img, .yr-poster-none {
+  width: 100%; aspect-ratio: 2/3; object-fit: cover;
+  border-radius: 8px; display: block; background: #e9f0e1;
+}
+.yr-poster-none { display: flex; align-items: center; justify-content: center; color: #6d8a4a; font-size: 22px; }
+.yr-poster:hover img { filter: brightness(1.05); }
+.yr-poster-r {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(28,34,25,.72); color: #fff;
+  font-size: 11px; padding: 2px 6px; border-radius: 999px;
+}
+.yr-poster-r i { color: #f2a0bb; margin-right: 3px; }
+.yr-poster-t {
+  display: block; margin-top: 6px; font-size: 12.5px; color: #2c3129;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.yr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.yr-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 999px;
+  background: #fff; border: 1px solid #e6ecdd; font-size: 13px; color: #2c3129;
+}
+.yr-chip:hover { border-color: #b9c9a6; background: #f4f8ee; }
+.yr-chip i { color: #4d7c2a; }
+.yr-chip-l { color: #6f7468; }
+.yr-chip-n { color: #94a3b8; font-size: 12px; }
+
+.yr-edge { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-top: 8px; }
+.yr-link { color: #4d7c2a; -webkit-text-stroke: 0.3px currentColor; }
+.yr-link:hover { text-decoration: underline; }
+
 .stat-sec { padding: 26px 0; border-top: 1px solid #e6ecdd; }
 .stat-sec:first-child { border-top: 0; padding-top: 8px; }
 .stat-h {

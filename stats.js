@@ -112,6 +112,17 @@ function renderStats() {
       <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${totalHours.toLocaleString()}<span class="text-base font-semibold text-slate-400">시간</span></div></div>
     </div>
 
+    <!-- 연간 결산 — 전체 요약(위) 다음에 "올해 이야기", 그 아래가 기간 전체 차트들 -->
+    <section class="stat-sec">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="stat-h" style="margin-bottom:0"><i class="fa-solid fa-award"></i>연간 결산</h3>
+        <select id="yrYear" class="filter-select">
+          ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
+        </select>
+      </div>
+      <div id="yrBody"></div>
+    </section>
+
     <!-- 장르 + 구분 -->
     <section class="stat-sec">
       <div class="stat-grid2">
@@ -394,6 +405,30 @@ function renderStats() {
     }));
   }
 
+  /* 연간 결산 — 차트가 아니라 다시 그리기만 하면 되므로 destroyCharts와 무관하다.
+     칩·포스터 클릭은 위임으로 받는다(연도를 바꿀 때마다 새로 그려지기 때문). */
+  const yrSel = $("#yrYear");
+  if (yrSel) {
+    const drawYr = () => renderYearReview(parseInt(yrSel.value));
+    yrSel.addEventListener("change", drawYr);
+    drawYr();
+    const body = $("#yrBody");
+    if (body && !body._bound) {
+      body._bound = true;
+      body.addEventListener("click", e => {
+        const jump = e.target.closest("[data-jump]");
+        if (jump && typeof jumpToList === "function") {
+          const patch = JSON.parse(jump.dataset.jump);
+          Object.keys(patch).forEach(k => { if (!patch[k]) delete patch[k]; });
+          jumpToList(patch);
+          return;
+        }
+        const open = e.target.closest("[data-open]");
+        if (open && typeof openDetail === "function") openDetail(open.dataset.open);
+      });
+    }
+  }
+
   // 히트맵
   const heatSel = $("#heatYear");
   if (heatSel) {
@@ -401,6 +436,107 @@ function renderStats() {
     heatSel.addEventListener("change", draw);
     draw();
   }
+}
+
+/* ---------- 연간 결산 ----------
+   그 해를 한 장으로 훑는 자리. 차트가 아니라 **숫자와 포스터**로 보여준다.
+
+   ⚠ 기준은 **처음 본 날(`startDate`)** 하나로 통일한다. 재시청까지 함께 세면
+   "그 해에 본 것"으로는 맞지만 목록 탭 연도 필터(`startDate`만 본다)와 어긋나서,
+   결산에서 `액션 12편`을 누르면 목록에 11개가 나오는 일이 생긴다.
+   재시청은 그래서 **따로 센다**(그 해에 다시 본 작품 수). */
+function renderYearReview(year) {
+  const box = $("#yrBody");
+  if (!box) return;
+
+  const Y = String(year);
+  const inY = (d) => (d || "").slice(0, 4) === Y;
+  const list = State.items.filter(i => inY(i.startDate));
+  const rewatch = State.items.filter(i => inY(i.lastWatchStart));
+
+  if (!list.length && !rewatch.length) {
+    box.innerHTML = `<p class="stat-note text-center" style="margin:0">${Y}년에 남긴 기록이 없습니다</p>`;
+    return;
+  }
+
+  const prev = State.items.filter(i => (i.startDate || "").slice(0, 4) === String(year - 1)).length;
+  const diff = list.length - prev;
+
+  const min = list.reduce((s, i) => {
+    const rt = i.runtime || 0;
+    return s + (rt ? (i.type === "영화" ? rt : rt * (i.totalEpisodes || 1)) : 0);
+  }, 0);
+  const days = Object.keys(watchDays(year)).length;
+
+  /* 1위만 뽑는다 — 결산은 훑어보는 자리라 목록이 아니라 한 줄이어야 한다 */
+  const first = (obj) => {
+    const e = Object.entries(obj).sort((a, b) => b[1] - a[1])[0];
+    return e ? { name: e[0], n: e[1] } : null;
+  };
+  const topGenre = first(countBy(list.flatMap(i => visibleGenres(i.genres)), g => g));
+  const topActor = first(countBy(list.flatMap(i => (i.cast || []).map(c => c.name)), n => n));
+  const topDir = first(countBy(list.map(i => i.director).filter(Boolean), d => d));
+  const ottCount = {};
+  list.forEach(i => ottList(i).forEach(o => { ottCount[o] = (ottCount[o] || 0) + 1; }));
+  const topOtt = first(ottCount);
+
+  const byMonth = {};
+  list.forEach(i => { const m = +(i.startDate || "").slice(5, 7); if (m) byMonth[m] = (byMonth[m] || 0) + 1; });
+  const hotMonth = first(byMonth);
+
+  const best = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating).slice(0, 5);
+  const sorted = list.slice().sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  const firstWork = sorted[0], lastWork = sorted[sorted.length - 1];
+
+  /* 칩을 누르면 그 조건으로 목록을 조회한다 — 연도를 함께 걸어야 결산에 적힌 개수와 맞는다 */
+  const chip = (icon, label, v, patch) => v
+    ? `<button class="yr-chip" data-jump='${esc(JSON.stringify(patch))}'>
+         <i class="fa-solid ${icon}"></i>
+         <span class="yr-chip-l">${label}</span>
+         <b>${esc(v.name)}</b><span class="yr-chip-n">${v.n}편</span>
+       </button>` : "";
+
+  const poster = (i) => `
+    <button class="yr-poster" data-open="${esc(i.id)}" title="${esc(i.title)}">
+      ${i.poster ? `<img src="${i.poster}" alt="" loading="lazy">`
+                 : `<div class="yr-poster-none"><i class="fa-solid fa-film"></i></div>`}
+      <span class="yr-poster-r"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>
+      <span class="yr-poster-t">${esc(i.title)}</span>
+    </button>`;
+
+  const work = (label, i) => i
+    ? `<div class="yr-edge"><span class="yr-chip-l">${label}</span>
+         <button class="yr-link" data-open="${esc(i.id)}">${esc(i.title)}</button>
+         <span class="wl-meta">${esc(i.startDate || "")}</span></div>` : "";
+
+  box.innerHTML = `
+    <p class="yr-hero">${Y}년에 <b>${list.length}편</b>을 처음 봤어요${
+      prev ? ` <span class="yr-diff ${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "▲" : "▼"} 작년보다 ${Math.abs(diff)}편</span>` : ""}</p>
+
+    <div class="yr-tiles">
+      <div class="stat-box"><div class="stat-label">처음 본 작품</div><div class="stat-value">${list.length}</div></div>
+      <div class="stat-box"><div class="stat-label">본 날</div><div class="stat-value">${days}<span class="text-sm font-semibold text-slate-400">일</span></div></div>
+      <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${Math.round(min / 60).toLocaleString()}<span class="text-sm font-semibold text-slate-400">시간</span></div></div>
+      <div class="stat-box"><div class="stat-label">다시 본 작품</div><div class="stat-value">${rewatch.length}</div></div>
+    </div>
+
+    ${best.length ? `
+      <div class="yr-h"><i class="fa-solid fa-heart" style="color:#e0567f"></i>가장 좋았던 작품</div>
+      <div class="yr-posters">${best.map(poster).join("")}</div>` : ""}
+
+    ${(topGenre || topActor || topDir || topOtt) ? `
+      <div class="yr-h"><i class="fa-solid fa-ranking-star"></i>가장 많이 본</div>
+      <div class="yr-chips">
+        ${chip("fa-masks-theater", "장르", topGenre, { year: Y, genre: topGenre && topGenre.name })}
+        ${chip("fa-user", "배우", topActor, { year: Y, person: topActor && topActor.name })}
+        ${chip("fa-clapperboard", "감독", topDir, { year: Y, person: topDir && topDir.name })}
+        ${chip("fa-tv", "OTT", topOtt, { year: Y, ott: topOtt && topOtt.name })}
+      </div>` : ""}
+
+    ${hotMonth ? `<p class="stat-note" style="margin:16px 0 0">
+      가장 몰아본 달은 <b>${hotMonth.name}월</b>이었어요 — ${hotMonth.n}편</p>` : ""}
+    ${work("첫 작품", firstWork)}
+    ${firstWork !== lastWork ? work("마지막 작품", lastWork) : ""}`;
 }
 
 /* ---------- 집계 헬퍼 ---------- */
@@ -428,8 +564,9 @@ function topN(obj, n) {
   return { labels, values, rest: rest.map(x => x[0]) };
 }
 
-/* ---------- 히트맵 ---------- */
-function renderHeatmap(year) {
+/* 그 해에 시청한 날짜별 편수. 히트맵과 연간 결산이 함께 쓴다 —
+   "며칠이나 봤나"는 시작~종료 범위를 날짜로 펼쳐야 나오는 값이라 따로 세지 않는다. */
+function watchDays(year) {
   const counts = {};
   State.items.forEach(i => {
     const ranges = [[i.startDate, i.endDate], [i.lastWatchStart, i.lastWatchEnd]];
@@ -445,6 +582,12 @@ function renderHeatmap(year) {
       }
     });
   });
+  return counts;
+}
+
+/* ---------- 히트맵 ---------- */
+function renderHeatmap(year) {
+  const counts = watchDays(year);
 
   const jan1 = new Date(year, 0, 1);
   const dec31 = new Date(year, 11, 31);
