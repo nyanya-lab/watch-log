@@ -22,6 +22,8 @@ const Discover = {
   personId: null,
   filmo: [],             // 그 사람의 작품 목록 (안 본 것만 카드로 그린다)
   filmoLoading: false,
+  newFound: [],          // 마지막 "새로 나온 것 확인" 결과 (안내바에 남긴다)
+  newFailed: 0,
   query: "",
   usedQuery: "",
   wasFallback: false,
@@ -582,6 +584,92 @@ function movieContinueList() {
   return out;
 }
 
+/* ---------- 새로 나온 시즌·편 확인 ----------
+   이어보기는 **저장된 값**(`totalSeasons` · 컬렉션 캐시) 기준이라, TMDB에 시즌이 하나 더 생겨도
+   [최신 정보로 갱신]을 돌리기 전에는 모른다. 그래서 "늘어났는지"만 따로 확인한다.
+   [최신 정보로 갱신]과 달리 **시즌 수·편 목록만** 건드린다 — 확인이 목적이지 갱신이 아니다. */
+function newCheckTargets() {
+  const tv = new Map(), colls = new Map();
+  State.items.forEach(i => {
+    if (i.tmdbId && mediaTypeOf(i) === "tv") {
+      const cur = tv.get(i.tmdbId) || { tmdbId: i.tmdbId, title: i.title, total: 0 };
+      cur.total = Math.max(cur.total, i.totalSeasons || 0);
+      tv.set(i.tmdbId, cur);
+    }
+    if (i.collectionId && !colls.has(i.collectionId))
+      colls.set(i.collectionId, { id: i.collectionId, name: i.collectionName || i.title });
+  });
+  return { tv: [...tv.values()], colls: [...colls.values()] };
+}
+
+let _newChecking = false;
+async function runCheckNew() {
+  if (_newChecking) return;
+  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
+  const { tv, colls } = newCheckTargets();
+  const total = tv.length + colls.length;
+  if (!total) { toast("확인할 시리즈가 없습니다"); return; }
+
+  _newChecking = true;
+  Discover.newFound = [];
+  const msg = $("#dcNewMsg");
+  const today = new Date().toISOString().slice(0, 10);
+  const found = [];
+  let done = 0, failed = 0;
+  const step = (name) => {
+    if (msg) msg.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>${++done} / ${total} — ${esc(name)}`;
+  };
+
+  try {
+    for (const t of tv) {
+      step(t.title);
+      try {
+        const d = await tmdbDetail(t.tmdbId, "tv");
+        const recs = State.items.filter(i => i.tmdbId === t.tmdbId);
+        /* ⚠ 받아온 게 같은 작품일 때만 저장한다 — `mediaTypeOf`는 짐작이라 틀릴 수 있고,
+           확인 없이 저장하던 옛 버튼들이 남의 정보를 덮어쓴 사고가 있었다. */
+        if (recs.some(i => sameWork(i, d))) {
+          const now = d.totalSeasons || 0;
+          if (now > t.total) {
+            recs.forEach(i => { i.totalSeasons = now; i.newSeasonAt = today; });
+            found.push(`${t.title} 시즌 ${t.total}→${now}`);
+          }
+        }
+      } catch { failed++; }
+      await new Promise(r => setTimeout(r, 240));
+    }
+
+    for (const c of colls) {
+      step(c.name);
+      try {
+        /* 개봉한 편만 센다 — 컬렉션에는 발표만 된 속편도 들어 있어서
+           그것까지 세면 "새로 나왔다"가 거짓이 된다 */
+        const before = getCollCache()[c.id] || {};
+        const beforeN = (before.parts || []).filter(p => p.releaseDate && p.releaseDate <= today).length;
+        const info = await tmdbCollection(c.id, true);
+        saveCollInfo(info);
+        const afterN = info.parts.filter(p => p.releaseDate && p.releaseDate <= today).length;
+        // 캐시가 없던 시리즈(beforeN=0)는 비교 대상이 아니다 — 처음 받은 것을 "새로 나왔다"고 할 수 없다
+        if (beforeN && afterN > beforeN) {
+          State.items.filter(i => i.collectionId === c.id).forEach(i => { i.newPartAt = today; });
+          found.push(`${info.name || c.name} ${beforeN}→${afterN}편`);
+        }
+      } catch { failed++; }
+      await new Promise(r => setTimeout(r, 240));
+    }
+  } finally {
+    _newChecking = false;
+  }
+
+  saveLocal();
+  markUpd("newcheck");
+  Discover.newFound = found;
+  Discover.newFailed = failed;
+  if (found.length) toast(`새로 나온 것 ${found.length}개를 찾았습니다`, "success");
+  else toast(failed ? `새로 나온 건 없습니다 (${failed}개는 못 받음)` : "새로 나온 건 없습니다");
+  renderDiscover();
+}
+
 /* 편 정보를 아직 안 가져온 영화 시리즈.
    조회에 실패해 `failed`로 기록된 것은 제외한다 — 없어진 컬렉션이면 다시 눌러도 계속 실패하고,
    그러면 안내바가 영원히 뜬 채로 버튼이 먹지 않는 것처럼 보인다. */
@@ -1045,6 +1133,7 @@ function renderDiscover() {
   if (Discover.view !== "fr") $("#dcFrBar").classList.add("hidden");
   if (Discover.view !== "hide" && $("#dcHideBar")) $("#dcHideBar").classList.add("hidden");
   if (Discover.view !== "person" && $("#dcPersonBar")) $("#dcPersonBar").classList.add("hidden");
+  if (Discover.view !== "next" && $("#dcNewBar")) $("#dcNewBar").classList.add("hidden");
 
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "search") return renderDcSearch();
@@ -1077,6 +1166,12 @@ function updateDcNav() {
   if (sb) sb.classList.toggle("hidden", !Discover.results.length && Discover.view !== "search");
 }
 
+/* "새로 나옴" 표시. `runCheckNew`가 남긴 자국(`newSeasonAt`/`newPartAt`)이 있을 때만.
+   그 시즌·편을 기록하면 이어보기에서 그 작품이 통째로 빠지므로 배지도 함께 사라진다. */
+function newBadge(mark, label) {
+  return mark ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${label || "새 시즌"}</span>` : "";
+}
+
 /* 이어보기 — TV의 안 본 시즌 + 영화 시리즈의 안 본 편을 함께 */
 function renderDcNext() {
   $("#dcHint").classList.add("hidden");
@@ -1100,7 +1195,8 @@ function renderDcNext() {
         key: `tv:${c.tmdbId}`,
         icon: `<i class="fa-solid fa-tv mr-1.5 text-slate-400"></i>`,
         name: c.item.title,
-        sub: `<span class="badge badge-season">본 시즌 ${esc(seen)}</span>
+        sub: newBadge(c.item.newSeasonAt) +
+             `<span class="badge badge-season">본 시즌 ${esc(seen)}</span>
               <span class="badge badge-cert">안 본 시즌 ${esc(miss)}</span>
               <span class="wl-meta ml-1">총 ${st.totalSeasons}시즌</span>`
       },
@@ -1131,7 +1227,8 @@ function renderDcNext() {
         key: `mv:${c.collectionId}`,
         icon: `<i class="fa-solid fa-layer-group mr-1.5 text-amber-400"></i>`,
         name: c.info.name,
-        sub: `<span class="badge badge-season">본 편 ${c.seenNos.length ? c.seenNos.map(n => "S" + n).join("·") : `${c.watched}편`}</span>
+        sub: newBadge(c.recs.some(r => r.newPartAt) ? "1" : "", "새 편") +
+             `<span class="badge badge-season">본 편 ${c.seenNos.length ? c.seenNos.map(n => "S" + n).join("·") : `${c.watched}편`}</span>
               <span class="badge badge-cert">안 본 편 ${c.missing.map(m => "S" + m.no).join("·")}</span>
               <span class="wl-meta ml-1">총 ${c.info.total}편</span>
               ${c.upcoming ? `<span class="badge badge-genre">미개봉 ${c.upcoming}편 제외</span>` : ""}`
@@ -1173,6 +1270,23 @@ function renderDcNext() {
       그 시리즈만 안 본 편이 안 잡힙니다. 작품 정보를 다시 받아 <b>지금의 시리즈로 연결</b>할 수 있어요.`;
     btn.innerHTML = `<i class="fa-solid fa-wrench mr-1"></i>시리즈 연결 고치기`;
     btn.dataset.retry = "1";
+  }
+
+  /* 새로 나온 것 확인 — 이어보기는 저장된 값 기준이라 새 시즌이 생겨도 스스로는 모른다.
+     확인 중에는 진행 상황을 그 자리에 쓰므로 덮지 않는다. */
+  const nb = $("#dcNewBar");
+  if (nb && !_newChecking) {
+    const t = newCheckTargets();
+    const n = t.tv.length + t.colls.length;
+    nb.classList.toggle("hidden", n === 0);
+    if (n) {
+      const found = Discover.newFound || [];
+      $("#dcNewMsg").innerHTML = found.length
+        ? `<i class="fa-solid fa-star mr-1"></i><b>${found.length}개</b>에 새 시즌·편이 생겼어요 —
+           ${esc(found.join(" · "))}`
+        : `<i class="fa-solid fa-circle-info mr-1"></i>시리즈 <b>${n}개</b>에 새 시즌·편이 나왔는지
+           확인할 수 있어요 (약 ${Math.ceil(n * 0.25)}초) · ${fmtUpd(getUpd().newcheck)}`;
+    }
   }
 
   paintDcCards(list, `
@@ -1831,6 +1945,8 @@ function initDiscover() {
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
   /* 관심없음 — 예전에 넘겨둬서 시리즈를 모르는 작품들을 한 번에 확인 */
   if ($("#dcHideFillBtn")) $("#dcHideFillBtn").addEventListener("click", runFillHideColls);
+  /* 이어보기 — 새 시즌·편이 나왔는지 확인 */
+  if ($("#dcNewBtn")) $("#dcNewBtn").addEventListener("click", runCheckNew);
 
   /* 인물 — 배우/감독 전환과 사람 칩 (그릴 때마다 새로 만들어지므로 위임) */
   if ($("#dcPersonBar")) {

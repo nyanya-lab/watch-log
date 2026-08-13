@@ -517,8 +517,10 @@ async function applyKoreanNames(d) {
    컬렉션에 속한 작품들을 개봉일 순으로 정렬해 "몇 번째 편"을 계산할 수 있게 한다.
    같은 컬렉션을 여러 번 조회하지 않도록 캐시. */
 const _collCache = new Map();
-async function tmdbCollection(collectionId) {
-  if (_collCache.has(collectionId)) return _collCache.get(collectionId);
+/* `force`는 **새 편이 나왔는지 확인할 때**만 쓴다 — 캐시가 있으면 그대로 돌려주므로
+   그 길로는 "늘어났는지"를 영영 알 수 없다. 평소에는 캐시를 쓴다. */
+async function tmdbCollection(collectionId, force) {
+  if (!force && _collCache.has(collectionId)) return _collCache.get(collectionId);
   const key = getTmdbKey();
   const url = `${TMDB_BASE}/collection/${collectionId}?api_key=${key}&language=ko-KR`;
   const res = await fetch(url);
