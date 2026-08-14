@@ -454,6 +454,10 @@ async function tmdbFilmography(personId, kind) {
       tmdbId: c.id,
       mediaType: c.media_type,
       title: c.title || c.name || "",
+      /* 원제·줄거리는 여기서 담아둔다 — 보고싶어요에 담을 때 이 값을 그대로 쓴다.
+         안 담으면 위시 카드의 줄거리가 빈 채로 저장된다(추천·검색은 `_raw`로 넘겨준다). */
+      originalTitle: c.original_title || c.original_name || "",
+      overview: c.overview || "",
       poster: TMDB_IMG + c.poster_path,
       year: (c.release_date || c.first_air_date || "").slice(0, 4),
       voteAverage: c.vote_average ? Math.round(c.vote_average * 10) / 10 : null,

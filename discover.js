@@ -1403,7 +1403,9 @@ function renderDcHide() {
   const need = hidesNeedingColl();
   const bar = $("#dcHideBar");
   if (bar) {
-    bar.classList.toggle("hidden", !need.length || _hideFilling);
+    /* 확인 중에는 바를 **숨기지 않는다** — 진행 상황을 그 자리에 쓰고 있기 때문이다.
+       문구만 덮지 않는다 (`#dcNewBar`도 같은 방식). */
+    bar.classList.toggle("hidden", !need.length && !_hideFilling);
     if (need.length && !_hideFilling) {
       $("#dcHideMsg").innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>
         아직 시리즈를 확인 안 한 작품이 <b>${need.length}개</b> 있어요.
@@ -1561,6 +1563,7 @@ function renderDcPerson() {
       tmdbId: f.tmdbId, mediaType: f.mediaType, title: f.title, poster: f.poster,
       year: f.year, voteAverage: f.voteAverage,
       note: f.character ? `<span class="badge badge-cast">${esc(f.character)}</span>` : "",
+      _raw: f,          // 보고싶어요에 담을 때 원제·줄거리를 여기서 가져간다
       actions: [
         { act: "wish", label: "보고싶어요", icon: "fa-bookmark", cls: "dc-btn-main" },
         { act: "add", label: "봤어요", icon: "fa-plus" },
@@ -1697,9 +1700,11 @@ async function dcToggleWish(tmdbId) {
    조회하면 그만큼 기다려야 한다. "담을 때 1개씩"이면 기다림 없이 최신 정보를 얻는다. */
 async function fillWishOtt(tmdbId, mediaType) {
   try {
-    let otts = await tmdbProviders(tmdbId, mediaType);
-    // 구분 추정이 빗나갈 수 있어(애니 극장판 등) 비면 반대쪽도 한 번 시도
-    if (!otts.length) otts = await tmdbProviders(tmdbId, mediaType === "movie" ? "tv" : "movie");
+    /* ⚠ **"비면 반대 타입도 시도"는 하지 않는다.** 국내 정액제가 없는 작품(대여·구매만 있는
+       최신 영화)이 흔한데 그걸 "타입을 잘못 짚었나?"로 해석하면 `tv/{영화id}`를 조회해
+       **남의 OTT를 저장**하게 된다. 위시는 담을 때 TMDB가 준 `media_type`을 그대로 저장하므로
+       짐작이 아니다 — 빈 건 그냥 비어 있는 것이다. (`runRefreshAll`에서 같은 이유로 없앴다.) */
+    const otts = await tmdbProviders(tmdbId, mediaType);
     const w = State.wishes.find(x => x.tmdbId === tmdbId);
     if (w) { w.otts = otts; saveLocal(); renderDiscover(); }
   } catch { /* OTT를 못 가져와도 담긴 건 유지 */ }
