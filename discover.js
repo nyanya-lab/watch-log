@@ -1051,13 +1051,7 @@ function dcCardHtml(e) {
 
   return `
     <div class="wl-card dc-card" data-act="detail" data-tid="${e.tmdbId}">
-      <div class="wl-poster-wrap">
-        ${e.poster
-          ? `<img class="wl-poster" src="${e.poster}" alt="" loading="lazy">`
-          : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
-        ${ratingChip({ rating: st.rating, voteAverage: e.voteAverage })}
-        ${flag}
-      </div>
+      ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }) + flag)}
       <div class="wl-body">
         <div class="wl-title-row">
           <i class="fa-solid ${e.mediaType === "tv" ? "fa-tv" : "fa-film"} wl-type"

@@ -336,6 +336,18 @@ function fmtRating(n) {
   if (!v) return "";
   return Number.isInteger(v) ? String(v) : v.toFixed(1);
 }
+/* 카드 포스터 블록 — 목록 카드·시리즈 카드·탐색 카드가 **모두 같은 구조**를 쓴다.
+   포스터가 없을 때의 대체 표시가 세 곳에 흩어져 있으면 한 곳만 고치는 실수가 난다.
+   오버레이(평점 띠·시즌·편수·flag)는 카드마다 달라서 그대로 받아 얹는다. */
+function posterBlock(src, overlay) {
+  return `<div class="wl-poster-wrap">
+        ${src
+          ? `<img class="wl-poster" src="${src}" alt="" loading="lazy">`
+          : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
+        ${overlay || ""}
+      </div>`;
+}
+
 function hearts(n, big) {
   const v = fmtRating(n);
   if (!v) return "";
@@ -605,12 +617,8 @@ function renderSeriesCards() {
 
   grid.innerHTML = show.map(s => `
     <div class="wl-card wl-series-card" data-key="${esc(s.key)}">
-      <div class="wl-poster-wrap">
-        ${s.poster
-          ? `<img class="wl-poster" src="${s.poster}" alt="" loading="lazy">`
-          : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
-        <span class="wl-season wl-season-multi"><i class="fa-solid fa-layer-group mr-1"></i>${s.items.length}편</span>
-      </div>
+      ${posterBlock(s.poster,
+        `<span class="wl-season wl-season-multi"><i class="fa-solid fa-layer-group mr-1"></i>${s.items.length}편</span>`)}
       <div class="wl-body">
         <div class="wl-title-row">
           <i class="fa-solid fa-layer-group wl-type" style="color:#e0700f"></i>
@@ -839,13 +847,8 @@ function renderCards() {
 
   grid.innerHTML = show.map(i => `
     <div class="wl-card ${!i.tmdbId ? "wl-pending" : ""}" data-id="${i.id}">
-      <div class="wl-poster-wrap">
-        ${i.poster
-          ? `<img class="wl-poster" src="${i.poster}" alt="" loading="lazy">`
-          : `<div class="wl-poster-empty"><i class="fa-solid fa-film"></i></div>`}
-        ${ratingChip(i)}
-        ${seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : ""}
-      </div>
+      ${posterBlock(i.poster, ratingChip(i) +
+        (seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : ""))}
       <div class="wl-body">
         <div class="wl-title-row">
           <i class="fa-solid ${typeIcon(i.type)} wl-type" title="${esc(i.type || "")}"></i>
