@@ -348,7 +348,18 @@ async function runReco() {
       const i = s.item;
       setStatus(`「${i.title}」과 비슷한 작품 찾는 중...`, ++step / totalSteps * 100);
       try {
-        const list = await tmdbRecommendations(i.tmdbId, mediaTypeOf(i));
+        /* 저장된 `mediaType`은 이미 `sameWork`로 확인된 값이라 그대로 믿는다.
+           없으면 `mediaTypeOf`의 **짐작**인데, 짐작이 틀리면 같은 번호의 **남의 작품** 기준으로
+           추천이 들어오고 카드에는 「내 작품」과 비슷하다는 이유까지 붙는다.
+           그래서 확인 안 된 짐작은 한 번 확인하고, 그래도 안 맞으면 그 시드를 건너뛴다. */
+        let mt = i.mediaType;
+        if (!mt) {
+          const d = await tmdbDetail(i.tmdbId, mediaTypeOf(i)).catch(() => null);
+          await new Promise(r => setTimeout(r, 240));
+          if (!sameWork(i, d)) continue;
+          mt = mediaTypeOf(i);
+        }
+        const list = await tmdbRecommendations(i.tmdbId, mt);
         const label = `「${i.title}」${josa(i.title, "과", "와")} 비슷`;
         list.slice(0, 12).forEach((c, idx) => bump(c, s.w * (1.2 - idx * 0.04), label));
       } catch { /* 한 시드가 실패해도 계속 */ }

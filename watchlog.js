@@ -1638,11 +1638,23 @@ function initSettings() {
   renderUpdInfo();
 
   $("#exportBtn").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(State.items, null, 2)], { type: "application/json" });
+    /* 기록만 담으면 **반쪽 백업**이다 — 보고싶어요·관심없음·TMDB 참고 정보까지 넣어야
+       이 파일 하나로 되돌릴 수 있다. 서버에 올리는 것과 같은 구성(`collectCache`)으로 맞춘다. */
+    const dump = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      items: State.items,
+      wishes: State.wishes,
+      hides: State.hides,
+      cache: collectCache()
+    };
+    const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    a.href = url;
     a.download = `watchlog-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
+    URL.revokeObjectURL(url);
   });
 
   $("#importFile").addEventListener("change", e => {
@@ -1652,12 +1664,28 @@ function initSettings() {
     r.onload = () => {
       try {
         const data = JSON.parse(r.result);
-        if (!Array.isArray(data)) throw new Error("배열이 아닙니다");
-        if (!confirm(`${data.length}개 항목을 불러옵니다. 기존 데이터를 덮어쓸까요?`)) return;
-        State.items = data;
+        /* 예전에 내보낸 파일에는 기록 배열만 들어 있다 — 두 형태를 다 받는다 */
+        const items = Array.isArray(data) ? data : data.items;
+        if (!Array.isArray(items)) throw new Error("기록을 찾을 수 없습니다");
+
+        /* 무엇을 덮어쓰는지 세어서 보여준다 — "몇 개"만으로는 곁 목록까지 바뀌는 걸 알 수 없다 */
+        const full = !Array.isArray(data);
+        const what = [`기록 ${items.length}개`];
+        if (full && Array.isArray(data.wishes)) what.push(`보고싶어요 ${data.wishes.length}개`);
+        if (full && Array.isArray(data.hides)) what.push(`관심없음 ${data.hides.length}개`);
+        if (full && data.cache) what.push("TMDB 참고 정보");
+        if (!confirm(`${what.join(" · ")}을 불러옵니다.
+
+지금 이 기기의 내용을 덮어쓸까요?`)) return;
+
+        State.items = items;
+        /* `adoptLists`가 wishes·hides·cache를 **있을 때만** 반영한다 —
+           기록만 든 옛 파일로 곁 목록이 지워지지 않는다. */
+        if (full) adoptLists(data);
         saveLocal();
         applyFilters();
-        toast(`${data.length}개 불러왔습니다`, "success");
+        renderDiscover();
+        toast(`${what.join(" · ")}을 불러왔습니다`, "success");
       } catch (err) { toast("파일 오류: " + err.message, "error"); }
     };
     r.readAsText(file);

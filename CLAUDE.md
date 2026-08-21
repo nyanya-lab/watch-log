@@ -16,15 +16,15 @@
 전부 같은 폴더에 평면 배치 (GitHub Pages 복붙 업로드 편의).
 
 ```
-index.html      673줄  전체 마크업 (헤더/목록/탐색/통계/설정 + 모달 9개)
-style.css       719줄  커스텀 CSS (Tailwind CDN 위에 얹음)
-core.js         873줄  동기화(REST), 상태(State), 탭, Escape, 유틸
-tmdb.js         731줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션 캐시
-watchlog.js    2421줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
-discover.js    1658줄  탐색 탭 (추천·이어보기·보고싶어요·관심없음·검색)
-stats.js        403줄  Chart.js 통계 + 히트맵
-dev-local.js          로컬 테스트 전용 (.gitignore, 배포에 없음)
-.gitignore            dev-local.js, .claude/ 제외
+index.html        697줄  전체 마크업 (헤더/목록/탐색/통계/설정 + 모달 9개)
+style.css         822줄  커스텀 CSS (Tailwind CDN 위에 얹음)
+core.js           873줄  동기화(REST), 상태(State), 탭, Escape, 유틸
+tmdb.js           783줄  TMDB 검색/상세/OTT/추천·발굴/컬렉션/필모
+watchlog.js      2447줄  카드 목록, 필터, 등록·수정 모달, 별점 몰아넣기, 설정 탭
+discover.js      2066줄  탐색 탭 (추천·이어보기·시리즈·인물·보고싶어요·관심없음·검색)
+stats.js          651줄  Chart.js 통계 + 연간 결산 + 히트맵
+dev-local.js            로컬 테스트 전용 (.gitignore, 배포에 없음)
+.gitignore              dev-local.js, .claude/ 제외
 ```
 
 로드 순서 고정 (index.html 하단): `core → tmdb → watchlog → discover → stats`
@@ -89,6 +89,7 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 
   // --- 아래는 TMDB 자동 채움 ---
   tmdbId: 93405,           // null이면 "미등록" 취급
+  mediaType: "tv",         // "movie"|"tv" — TMDB는 영화·TV가 다른 번호판이라 짐작하지 않으려고 저장한다
   poster: "https://image.tmdb.org/t/p/w500/...",
   backdrop: "...",
   genres: ["드라마", "미스터리"],
@@ -102,13 +103,18 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
   cert: "청소년관람불가",
   voteAverage: 7.9,        // TMDB 평점 (사용자 rating과 별개)
   companies: ["싸이런픽쳐스"],
-  cast: [{name, character}],  // 상위 8명
+  cast: [{name, character, id}],  // 상위 8명. `id`는 필모·한글 표기 조회에 쓴다
   collectionId: 1241,      // TMDB 공식 시리즈 ID (영화만). 시리즈 묶기 기준
   collectionName: "해리 포터 컬렉션",
   seriesNo: 3,             // 컬렉션 안에서 몇 번째 편 (개봉일 순). 영화만
   seriesTotal: 8,          // 그 컬렉션의 총 편수
   director: "황동혁",
-  otts: ["넷플릭스"]        // TMDB 자동판별 결과
+  directorId: 21684,       // 인물 뷰가 필모를 받을 때 쓴다 (이름 한글화가 채운다)
+  otts: ["넷플릭스"],       // TMDB 자동판별 결과
+
+  // --- 앱이 남기는 표시 (있을 때만) ---
+  newSeasonAt: null,       // 새 시즌이 나왔다고 확인된 날. 이어보기 `새 시즌` 배지 (runCheckNew)
+  newPartAt: null          // 시리즈에 새 편이 나왔다고 확인된 날. `새 편` 배지
 }
 ```
 
@@ -133,7 +139,8 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 배지와 [다시 관심] 버튼을 보여준다. 관심없음으로 넘기면 위시에서는 자동으로 빠진다(`addHide`).
 
 ```js
-{ id, tmdbId, mediaType, title, poster, year, voteAverage, addedAt }
+{ id, tmdbId, mediaType, title, poster, year, voteAverage, addedAt,
+  noColl: true }   // 시리즈에 속하지 않는다고 **확인된** 영화. 안 남기면 안내바가 영원히 뜬다
 ```
 
 관심없음 뷰(`renderDcHide`)는 **시리즈로 묶어서** 보여준다(2026-08-08) — 시리즈째로 넘기는 일이
@@ -189,6 +196,13 @@ TMDB가 준 `media_type`을 그대로 저장하므로 짐작이 아니고, 국�
   방어는 유지한다. 새로 붙지 않고, `saveLocal()`이 한 번 돌면 지워진다.
 - `watchlog_tmdb_key`
 - `watchlog_sync_password` — 동기화 비밀번호(= 서버 데이터 경로). 이 기기에만 저장.
+
+### 파일로 내보내기·가져오기 (설정 탭)
+
+`{ version, exportedAt, items, wishes, hides, cache }` — **서버에 올리는 것과 같은 구성**이다.
+예전에는 `items` 배열만 담아서 **보고싶어요·관심없음·캐시가 통째로 빠진 반쪽 백업**이었다(2026-08-14에 고침).
+가져오기는 두 형태를 다 받는다 — 배열이면 옛 파일로 보고 **기록만** 바꾼다(`adoptLists`를 부르지 않으므로
+곁 목록이 지워지지 않는다). 무엇을 덮어쓰는지 개수까지 confirm에 적는다.
 
 ### 서버 (Realtime Database REST, SDK 안 씀)
 
@@ -724,6 +738,10 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
     **3점 미만은 0**(취향 신호에서 제외). 같은 작품·같은 `collectionId`는 시드에 한 번만
     (해리포터 8편이 시드를 다 잡아먹지 않게). 동점이면 셔플 → "다시 추천받기"마다 결과가 바뀐다.
   - 제외: 이미 본 `tmdbId`, 포스터 없음, `voteCount < 50`.
+  - ⚠ **시드의 `mediaType`이 저장돼 있으면 그대로 믿고, 없으면 한 번 확인한다**(2026-08-14).
+    `/recommendations`는 영화·TV가 다른 번호판이라 짐작이 틀리면 **같은 번호의 남의 작품** 기준으로
+    추천이 들어오고, 카드에는 「내 작품」과 비슷하다는 이유까지 붙는다. `tmdbDetail` 1회로
+    `sameWork`를 확인하고 **안 맞으면 그 시드를 건너뛴다**. 저장값이 있으면 조회가 늘지 않는다.
   - **볼 수 있는 곳(`otts`)을 추천 만들 때 카드마다 조회한다**(2026-08-06). TMDB는 스트리밍 정보를
     목록 응답에 안 주고 작품별 `/watch/providers`에만 주기 때문에 60건이면 호출도 60번(약 15초)이다.
     그래도 여기서 받아 캐시에 넣어두면 다음부터는 기다림 없이 **OTT 필터·카드 배지**를 쓴다.
@@ -957,7 +975,7 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
       `totalEpisodes:8`이 들어 있고 장르·감독·줄거리·러닝타임이 전부 비어 있다.
       [최신 정보로 갱신]에서 "확인 필요"로 걸러져 건드려지지 않으므로, **수정창에서 다시 연결**하면 된다.
       2026-08-07 기준 283개 중 이 1건만 `mediaTypeOf` 짐작과 어긋난다.
-- [ ] watchlog.js가 2300줄 (카드·필터·모달·설정이 한 파일). 쪼개면 편해지지만 구조 변경이라 확인 필요.
+- [ ] watchlog.js가 2400줄 (카드·필터·모달·설정이 한 파일). 쪼개면 편해지지만 구조 변경이라 확인 필요.
 - [ ] 카드 렌더러가 watchlog.js·discover.js에 따로 있음 (통합 후보)
 - [x] ~~시즌 묶기~~ → 표시 전용 그룹핑으로 해결 (위 "시즌 묶기" 참고). 데이터는 시즌별로 유지.
 - [x] ~~속편이 1편과 같은 `tmdbId`~~ → 2026-07-27 사용자가 직접 재매칭해 해결.
