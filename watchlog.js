@@ -211,6 +211,44 @@ function initWatchlog() {
 
   $("#loadMoreBtn").addEventListener("click", () => { State.page++; renderCards(); });
 
+  /* 끝까지 내리면 **자동으로 다음 장을 붙인다**(2026-09-10 요청).
+     283장을 한 번에 다 그려도 6.5ms라(측정) 페이지를 나눈 건 성능이 아니라 스크롤 길이 문제였고,
+     그렇다면 버튼을 누르게 할 이유가 없다.
+     [더 보기] 버튼은 **남겨둔다** — 남은 개수를 알려주는 자리이고, 눌러서 넘길 수도 있어야 한다.
+
+     감시 대상은 버튼 줄(`#loadMoreWrap`)이다. 더 볼 게 없으면 `renderCards`가 `hidden`을 붙여
+     교차가 아예 안 일어나므로 멈춤 조건이 따로 필요 없다.
+     `IntersectionObserver`가 주력이고 **scroll은 폴백**이다 — 둘 다 같은 함수를 부르고
+     `busy`로 겹침을 막는다. (폴백을 둔 김에 미리보기 환경에서도 동작을 확인할 수 있었다.) */
+  const moreWrap = $("#loadMoreWrap");
+  if (moreWrap) {
+    let busy = false;
+    const loadMore = () => {
+      if (busy || moreWrap.classList.contains("hidden")) return;
+      const r = moreWrap.getBoundingClientRect();
+      if (r.top > window.innerHeight + 300) return;      // 바닥에 닿기 전 300px부터 미리 붙인다
+      busy = true;
+      State.page++;
+      renderCards();
+      /* ⚠ 여기서 `requestAnimationFrame`으로 풀면 **탭이 백그라운드일 때 영영 안 풀린다** —
+         프레임이 안 돌기 때문이다(폴백을 검증하다 이 환경에서 그대로 재현됐다).
+         새 카드가 붙는 동안 겹쳐 들어오는 신호만 막으면 되므로 타이머로 푼다. */
+      setTimeout(() => { busy = false; }, 100);
+    };
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(es => { if (es[0].isIntersecting) loadMore(); },
+        { rootMargin: "300px" }).observe(moreWrap);
+    }
+    // throttle도 같은 이유로 rAF가 아니라 타임스탬프로 한다
+    let last = 0;
+    window.addEventListener("scroll", () => {
+      const now = Date.now();
+      if (now - last < 100) return;
+      last = now;
+      loadMore();
+    }, { passive: true });
+  }
+
   /* 별점 (숫자 입력, 10점 만점 소수 가능) */
   $("#clearStar").addEventListener("click", () => { $("#fRating").value = ""; });
 
