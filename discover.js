@@ -477,12 +477,18 @@ function renderRecoFilters(all) {
 
   const otts = [...new Set(all.flatMap(c => c.otts || []))].sort((a, b) => a.localeCompare(b, "ko"));
 
-  /* 제작국 칩은 **많은 순**으로 (OTT처럼 가나다순이면 "기타"가 앞에 온다).
-     `origin`이 없는 옛 캐시에서는 줄을 아예 안 그린다 — 전부 "기타"로 잡혀 칩 하나만 뜨면
-     고를 것도 없이 자리만 차지한다. 다시 뽑으면 채워진다. */
+  /* 제작국 칩은 **한국 / 외국 둘뿐**이다(2026-09-10 사용자 요청). 나라별로 다 세우면
+     영어권·일본·중화권·기타…로 줄이 길어지는데, 실제로 가르고 싶은 건 그 하나였다.
+     카드 배지는 세부 국가를 그대로 보여준다 — 거기서 "미국인지 일본인지"는 읽을 수 있다.
+     `origin`이 없는 옛 캐시에서는 줄을 아예 안 그린다(다시 뽑으면 채워진다). */
   const oCount = {};
-  all.forEach(c => { if (c.origin) oCount[c.origin] = (oCount[c.origin] || 0) + 1; });
-  const origins = Object.entries(oCount).sort((a, b) => b[1] - a[1]);
+  all.forEach(c => {
+    if (!c.origin) return;
+    const k = c.origin === "한국" ? "한국" : "외국";
+    oCount[k] = (oCount[k] || 0) + 1;
+  });
+  // 순서를 개수가 아니라 한국 → 외국으로 고정한다 — 자리가 바뀌면 누를 때마다 찾아야 한다
+  const origins = ["한국", "외국"].filter(k => oCount[k]).map(k => [k, oCount[k]]);
   const arrow = (k) => Discover.recoSort === k
     ? `<span class="fdir">${Discover.recoDir === "asc" ? "↑" : "↓"}</span>` : "";
 
@@ -564,7 +570,8 @@ function renderDcReco() {
     /* OTT 필터 — 고른 게 없으면 통과, 있으면 그중 하나라도 있어야 한다 */
     .filter(c => !Discover.recoOtt.length || (c.otts || []).some(o => Discover.recoOtt.includes(o)))
     /* 제작국 필터 — 옛 캐시에는 `origin`이 없으므로 그때는 거르지 않는다(전부 사라지면 안 된다) */
-    .filter(c => !Discover.recoOrigin.length || !c.origin || Discover.recoOrigin.includes(c.origin))
+    .filter(c => !Discover.recoOrigin.length || !c.origin
+      || Discover.recoOrigin.includes(c.origin === "한국" ? "한국" : "외국"))
     .sort((a, b) => {
       const sgn = Discover.recoDir === "asc" ? 1 : -1;
       return Discover.recoSort === "vote"

@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260910b">
+<link rel="stylesheet" href="style.css?v=20260910c">
 </head>
 <body>
 
@@ -24,7 +24,8 @@
     <div class="max-w-6xl mx-auto px-4">
       <div class="flex items-center justify-between h-16">
         <div class="flex items-center gap-3">
-          <span class="text-2xl">🎬</span>
+          <!-- 폰에는 Ctrl+Shift+R이 없다 — 로고가 그 자리를 대신한다 -->
+          <button id="hardReloadBtn" class="text-2xl leading-none" title="새로 받아오기 (캐시 비우고 다시 열기)">🎬</button>
           <h1 class="text-lg font-bold text-slate-800">냐냐's Watch LOG</h1>
           <span id="totalBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-white text-sm font-semibold" style="background:#4d7c2a">
             <span id="totalCount">0</span>
@@ -688,10 +689,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260910b"></script>
-<script src="tmdb.js?v=20260910b"></script>
-<script src="watchlog.js?v=20260910b"></script>
-<script src="discover.js?v=20260910b"></script>
-<script src="stats.js?v=20260910b"></script>
+<script src="core.js?v=20260910c"></script>
+<script src="tmdb.js?v=20260910c"></script>
+<script src="watchlog.js?v=20260910c"></script>
+<script src="discover.js?v=20260910c"></script>
+<script src="stats.js?v=20260910c"></script>
 </body>
 </html>

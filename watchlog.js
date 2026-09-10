@@ -96,6 +96,26 @@ function autoFixTargets() {
   }).filter(Boolean);
 }
 
+/* 헤더 로고 = **강력 새로고침**.
+   배포 직후 새 버전을 받으려면 `Ctrl+Shift+R`이 필요한데 **폰에는 그 조합이 없고**,
+   홈 화면에 추가해 쓰면 주소창조차 없다(그래서 `#pullBtn`도 있는 것이다).
+
+   `location.reload(true)`는 이제 무시되므로 두 단계로 한다:
+   ① `cache: "reload"`로 index.html을 **HTTP 캐시를 건너뛰고** 다시 받아 캐시를 갱신하고
+   ② 그다음 평범하게 reload한다. 새 index.html의 `?v=`가 바뀌어 있으면 js·css도 따라 새로 받는다.
+   저장 대기 중이던 변경은 이미 localStorage에 있고, 다음 부팅의 `syncOnBoot`이 올려준다. */
+async function hardReload() {
+  toast("새로 받아오는 중...");
+  try {
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch { /* 캐시 API가 없거나 막혀도 아래 단계만으로 대개 충분하다 */ }
+  try { await fetch(location.pathname, { cache: "reload" }); } catch { /* 오프라인이면 그냥 reload */ }
+  location.reload();
+}
+
 function initWatchlog() {
   $("#addBtn").addEventListener("click", () => openEdit(null));
   $("#closeModal").addEventListener("click", closeEdit);
@@ -104,6 +124,7 @@ function initWatchlog() {
   $("#deleteBtn").addEventListener("click", deleteItem);
   $("#syncBtn").addEventListener("click", async () => { await pushToServer(); });
   $("#pullBtn").addEventListener("click", manualPull);
+  $("#hardReloadBtn").addEventListener("click", hardReload);
 
   $("#searchInput").addEventListener("input", debounce(() => {
     Filters.q = $("#searchInput").value.trim().toLowerCase();
