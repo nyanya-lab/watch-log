@@ -125,6 +125,38 @@ async function tmdbSearch(q) { return (await tmdbSearchSmart(q)).results; }
 
 /* ---------- 추천용 (탐색 탭) ---------- */
 /* 목록형 응답 한 건을 카드용 공통 모양으로 */
+/* ---------- 목록 카드의 "어느 나라 작품인가" ----------
+   ⚠ 목록 응답(`/discover`·`/recommendations`)에는 **제작국이 없다.** 상세에만 있다.
+   대신 `origin_country`(주로 TV)와 `original_language`가 오므로 둘을 합쳐 잡는다 —
+   작품마다 상세를 다시 받지 않고 얻을 수 있는 최선이다.
+   그래서 `country`(상세에서 온 정확한 제작국)와 이름을 달리해 `origin`으로 둔다. */
+const ORIGIN_KO = {
+  KR: "한국", US: "미국", JP: "일본", GB: "영국", CN: "중국", HK: "홍콩", TW: "대만",
+  FR: "프랑스", DE: "독일", ES: "스페인", IT: "이탈리아", IN: "인도",
+  TH: "태국", CA: "캐나다", AU: "호주"
+};
+/* 언어는 나라를 하나로 못 짚는다(en = 미국·영국·호주…) — 그래서 "영어권"처럼 묶어서 부른다 */
+const LANG_KO = {
+  ko: "한국", ja: "일본", en: "영어권", zh: "중화권", cn: "중화권",
+  fr: "프랑스", de: "독일", es: "스페인어권", it: "이탈리아", pt: "포르투갈어권",
+  hi: "인도", th: "태국", ru: "러시아", tr: "터키", vi: "베트남", id: "인도네시아"
+};
+/* 내 기록의 `country`(한글 제작국) → TMDB `with_original_language` 코드.
+   추천 발굴에서 "내가 많이 본 나라"를 조회 조건으로 바꿀 때 쓴다.
+   영어권은 굳이 지정할 필요가 없어(기본 결과가 이미 영어권이다) 발굴 쪽에서 걸러낸다. */
+const COUNTRY_LANG = {
+  "한국": "ko", "일본": "ja", "중국": "zh", "대만": "zh", "홍콩": "zh",
+  "프랑스": "fr", "독일": "de", "스페인": "es", "이탈리아": "it",
+  "태국": "th", "인도": "hi", "러시아": "ru", "터키": "tr",
+  "브라질": "pt", "멕시코": "es", "미국": "en", "영국": "en", "캐나다": "en", "호주": "en"
+};
+
+function originOf(r) {
+  const oc = (r.origin_country || [])[0];
+  if (oc && ORIGIN_KO[oc]) return ORIGIN_KO[oc];
+  return LANG_KO[r.original_language] || "기타";
+}
+
 function normTmdbCard(r, mediaType) {
   return {
     tmdbId: r.id,
@@ -136,7 +168,8 @@ function normTmdbCard(r, mediaType) {
     overview: r.overview || "",
     voteAverage: r.vote_average ? Math.round(r.vote_average * 10) / 10 : null,
     voteCount: r.vote_count || 0,
-    genreIds: r.genre_ids || []
+    genreIds: r.genre_ids || [],
+    origin: originOf(r)
   };
 }
 

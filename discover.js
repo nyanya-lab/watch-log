@@ -12,6 +12,7 @@ const Discover = {
   frStory: false,    // 스토리 시간순으로 볼지 (기본은 개봉일 순)
   recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
   recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
+  recoOrigin: [],    // 추천 뷰의 제작국 필터 (여러 개, 빈 배열 = 전체)
   recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순
   /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
      그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
@@ -339,7 +340,15 @@ async function runReco() {
   $("#dcRecoProgress").classList.remove("hidden");
 
   const genreNames = prof.genres.slice(0, 2).map(g => g[0]);
-  const totalSteps = seeds.length + genreNames.length * 2;
+  /* 내가 많이 본 나라 중 **영어권이 아닌 것**만 따로 발굴한다 —
+     아래 장르 발굴은 글로벌 인기순이라 영어권이 앞자리를 다 가져가서, 한국·일본 작품이
+     후보에 거의 안 남는다("추천에 외국 소재가 너무 많다", 2026-09-10).
+     미국·영국은 그 발굴로 이미 충분히 들어오므로 여기서 뺀다. */
+  const originLangs = prof.countries
+    .map(c => [c[0], COUNTRY_LANG[c[0]], c[1]])
+    .filter(c => c[1] && c[1] !== "en")
+    .slice(0, 2);
+  const totalSteps = seeds.length + genreNames.length * 2 + originLangs.length * 2;
   let step = 0;
 
   try {
@@ -381,6 +390,26 @@ async function runReco() {
           });
           const gw = (profMap.get(gname) || 1) / maxW;
           list.slice(0, 16).forEach((c, idx) => bump(c, 0.9 * gw * (1 - idx * 0.03), `${gname} 취향`));
+        } catch { /* 무시하고 계속 */ }
+        await new Promise(r => setTimeout(r, 240));
+      }
+    }
+
+    // ③ 취향 국가로 발굴 — 장르 발굴만으로는 비영어권이 후보에 거의 안 남는다
+    for (const [cname, lang, cw] of originLangs) {
+      for (const mt of ["movie", "tv"]) {
+        setStatus(`${cname} ${mt === "movie" ? "영화" : "시리즈"} 찾아보는 중...`, ++step / totalSteps * 100);
+        try {
+          const list = await tmdbDiscoverList(mt, {
+            with_original_language: lang,
+            sort_by: "popularity.desc",
+            "vote_average.gte": "7",
+            /* ⚠ 장르 발굴은 200인데 여기는 **50**이다. 비영어권 작품은 글로벌 투표수가 적어
+               같은 기준을 쓰면 거의 아무것도 안 남는다 — 그게 애초에 밀리던 이유다. */
+            "vote_count.gte": "50"
+          });
+          const w = cw / (prof.countries[0][1] || 1);
+          list.slice(0, 16).forEach((c, idx) => bump(c, 1.1 * w * (1 - idx * 0.03), `${cname} 작품`));
         } catch { /* 무시하고 계속 */ }
         await new Promise(r => setTimeout(r, 240));
       }
@@ -447,6 +476,13 @@ function renderRecoFilters(all) {
   if (!box) return;
 
   const otts = [...new Set(all.flatMap(c => c.otts || []))].sort((a, b) => a.localeCompare(b, "ko"));
+
+  /* 제작국 칩은 **많은 순**으로 (OTT처럼 가나다순이면 "기타"가 앞에 온다).
+     `origin`이 없는 옛 캐시에서는 줄을 아예 안 그린다 — 전부 "기타"로 잡혀 칩 하나만 뜨면
+     고를 것도 없이 자리만 차지한다. 다시 뽑으면 채워진다. */
+  const oCount = {};
+  all.forEach(c => { if (c.origin) oCount[c.origin] = (oCount[c.origin] || 0) + 1; });
+  const origins = Object.entries(oCount).sort((a, b) => b[1] - a[1]);
   const arrow = (k) => Discover.recoSort === k
     ? `<span class="fdir">${Discover.recoDir === "asc" ? "↑" : "↓"}</span>` : "";
 
@@ -468,6 +504,14 @@ function renderRecoFilters(all) {
           data-rott="${esc(o)}">${esc(o)}</button>`).join("")}
       </div>
     </div>` : ""}
+    ${origins.length ? `<div class="fsec">
+      <div class="fsec-h">제작국 <span class="fsec-hint">(여러 개)</span></div>
+      <div class="fchips">
+        <button class="fchip ${Discover.recoOrigin.length ? "" : "on"}" data-rorigin="">전체</button>
+        ${origins.map(o => `<button class="fchip ${Discover.recoOrigin.includes(o[0]) ? "on" : ""}"
+          data-rorigin="${esc(o[0])}">${esc(o[0])}<span class="dc-num">${o[1]}</span></button>`).join("")}
+      </div>
+    </div>` : ""}
     <div class="fsec">
       <div class="fsec-h">정렬 <span class="fsec-hint">(같은 칩을 한 번 더 누르면 ↕)</span></div>
       <div class="fchips">
@@ -477,7 +521,7 @@ function renderRecoFilters(all) {
     </div>`;
 
   // 팝업을 닫아둬도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
-  const on = Discover.recoType || Discover.recoOtt.length
+  const on = Discover.recoType || Discover.recoOtt.length || Discover.recoOrigin.length
     || Discover.recoSort !== "vote" || Discover.recoDir !== "desc";
   const dot = $("#dcRecoDot");
   if (dot) dot.classList.toggle("hidden", !on);
@@ -519,6 +563,8 @@ function renderDcReco() {
     .filter(c => (c.otts || []).length > 0)
     /* OTT 필터 — 고른 게 없으면 통과, 있으면 그중 하나라도 있어야 한다 */
     .filter(c => !Discover.recoOtt.length || (c.otts || []).some(o => Discover.recoOtt.includes(o)))
+    /* 제작국 필터 — 옛 캐시에는 `origin`이 없으므로 그때는 거르지 않는다(전부 사라지면 안 된다) */
+    .filter(c => !Discover.recoOrigin.length || !c.origin || Discover.recoOrigin.includes(c.origin))
     .sort((a, b) => {
       const sgn = Discover.recoDir === "asc" ? 1 : -1;
       return Discover.recoSort === "vote"
@@ -528,7 +574,8 @@ function renderDcReco() {
     .map(c => ({
       tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
       poster: c.poster, year: c.year, voteAverage: c.voteAverage,
-      note: (c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "")
+      note: (c.origin ? `<span class="badge badge-country">${esc(c.origin)}</span>` : "")
+        + (c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "")
         + (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
       actions: [
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
@@ -1982,7 +2029,7 @@ function initDiscover() {
   $("#applyRecoFilter").addEventListener("click", closeRecoFilter);
   onBackdropClose("#dcRecoModal", closeRecoFilter);
   $("#resetRecoFilter").addEventListener("click", () => {
-    Object.assign(Discover, { recoType: "", recoOtt: [], recoSort: "vote", recoDir: "desc" });
+    Object.assign(Discover, { recoType: "", recoOtt: [], recoOrigin: [], recoSort: "vote", recoDir: "desc" });
     renderDiscover();
   });
   window.closeRecoFilterModal = closeRecoFilter;   // Escape 처리용
@@ -1999,6 +2046,12 @@ function initDiscover() {
       else Discover.recoOtt = Discover.recoOtt.includes(v)
         ? Discover.recoOtt.filter(x => x !== v)
         : Discover.recoOtt.concat([v]);
+    } else if (chip.dataset.rorigin !== undefined) {
+      const v = chip.dataset.rorigin;
+      if (v === "") Discover.recoOrigin = [];
+      else Discover.recoOrigin = Discover.recoOrigin.includes(v)
+        ? Discover.recoOrigin.filter(x => x !== v)
+        : Discover.recoOrigin.concat([v]);
     } else if (chip.dataset.rsort) {
       const v = chip.dataset.rsort;
       // 같은 칩을 다시 누르면 방향만 뒤집는다 (목록 탭 정렬과 같은 규칙)
