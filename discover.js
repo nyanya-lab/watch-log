@@ -439,8 +439,8 @@ async function runReco() {
        한 건씩 물어봐야 한다(240ms 간격). 그래서 60개를 채우거나 조회 상한에 닿으면 멈춘다 —
        전부 훑으면 후보가 수백 개라 하염없이 기다리게 된다.
        ⚠ `otts`는 정액제·무료·광고형만 센다(`tmdbProviders`). 대여·구매만 있는 작품은 빠진다. */
-    /* 한국 몫은 사용자가 고른다(`Discover.recoKo`, 추천 바의 칩). `null`이면 나누지 않는다. */
-    const TARGET = 60, MAX_CALLS = 150;
+    /* 한국 몫은 사용자가 고른다 (`Discover.recoKo`, 추천 바의 비율 바) */
+    const TARGET = RECO_TARGET, MAX_CALLS = 150;
     const KO_TARGET = Discover.recoKo;
     const list = [];
     const picked = new Set();
@@ -465,11 +465,9 @@ async function runReco() {
        나왔다. 자기 몫을 채운 쪽은 **조회조차 건너뛴다**(한 건에 240ms라 그냥 넘기는 게 이득). */
     for (const c of ranked) {
       if (list.length >= TARGET || checked >= MAX_CALLS) break;
-      if (KO_TARGET !== null) {
-        const isKo = c.origin === "한국";
-        if (isKo && koN >= KO_TARGET) continue;
-        if (!isKo && fgN >= TARGET - KO_TARGET) continue;
-      }
+      const isKo = c.origin === "한국";
+      if (isKo && koN >= KO_TARGET) continue;
+      if (!isKo && fgN >= TARGET - KO_TARGET) continue;
       await tryPick(c);
     }
 
@@ -575,35 +573,41 @@ function renderRecoFilters(all) {
 
 /* 추천 목록 */
 /* 한국 작품 몫 고르기 — 뽑을 때 쓰는 값이라 [다시 추천받기] 바로 아래에 둔다.
-   고른 값은 이 기기에 남긴다(매번 다시 고르게 하면 그것대로 번거롭다). */
+   고른 값은 이 기기에 남긴다(매번 다시 고르게 하면 그것대로 번거롭다).
+
+   칩 네 개(위주/반반/조금만/상관없음)로 두었다가 **비율 바**로 바꿨다(2026-09-10 요청) —
+   단계를 고르는 것보다 비율 그 자체를 움직이는 편이 무엇을 정하는지 한눈에 읽힌다.
+   저장은 **개수**로 한다(0~60). 쿼터 로직이 개수로 돌고, 화면에만 %로 보여준다. */
 const LS_RECO_KO = "watchlog_reco_ko";
-const RECO_KO_OPTS = [
-  [40, "한국 위주", "60개 중 한국 40 · 외국 20"],
-  [30, "반반", "60개 중 한국 30 · 외국 30"],
-  [20, "조금만", "60개 중 한국 20 · 외국 40"],
-  [null, "상관없음", "몫을 나누지 않고 점수 높은 순으로 채웁니다"]
-];
+const RECO_TARGET = 60;
 
 function loadRecoKo() {
   try {
     const raw = localStorage.getItem(LS_RECO_KO);
-    if (raw === null) return 30;
-    return raw === "" ? null : (parseInt(raw) || 0);   // 빈 문자열 = 상관없음
+    if (raw === null || raw === "") return 30;     // ""는 옛 "상관없음" 값 — 이제 반반으로 본다
+    const n = parseInt(raw);
+    return isFinite(n) ? Math.min(RECO_TARGET, Math.max(0, n)) : 30;
   } catch { return 30; }
 }
 
-function renderRecoKoChips() {
-  const box = $("#dcRecoKo");
-  if (!box) return;
-  box.innerHTML = RECO_KO_OPTS.map(o => `<button class="fchip ${Discover.recoKo === o[0] ? "on" : ""}"
-    data-rko="${o[0] === null ? "" : o[0]}" title="${o[2]}">${o[1]}</button>`).join("");
+/* 슬라이더에 현재 값을 반영한다. `range`는 채워진 부분을 CSS만으로 칠할 수 없어서
+   배경 그라디언트를 직접 갈아 끼운다. */
+function renderRecoKoSlider() {
+  const r = $("#dcRecoKoRange"), label = $("#dcRecoKoLabel");
+  if (!r) return;
+  const ko = Discover.recoKo;
+  const pct = Math.round(ko / RECO_TARGET * 100);
+  if (document.activeElement !== r) r.value = pct;   // 끌고 있는 중이면 건드리지 않는다
+  r.style.background = `linear-gradient(90deg, #4d7c2a 0 ${pct}%, #e6ecdd ${pct}% 100%)`;
+  r.title = `${RECO_TARGET}개 중 한국 ${ko} · 외국 ${RECO_TARGET - ko}`;
+  if (label) label.textContent = `한국 ${ko} · 외국 ${RECO_TARGET - ko}`;
 }
 
 function renderDcReco() {
   $("#dcHint").classList.add("hidden");
   $("#dcRecoBar").classList.remove("hidden");
 
-  renderRecoKoChips();
+  renderRecoKoSlider();
   const data = loadReco();
   const info = $("#dcRecoInfo");
   $("#dcRecoBtn").innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>${data ? "다시 추천받기" : "추천 받기"}`;
@@ -2084,15 +2088,16 @@ function initDiscover() {
   /* 이어보기 — 새 시즌·편이 나왔는지 확인 */
   if ($("#dcNewBtn")) $("#dcNewBtn").addEventListener("click", runCheckNew);
 
-  /* 한국 작품 몫 칩 — 그릴 때마다 새로 만들어지므로 위임 */
-  if ($("#dcRecoKo")) {
-    $("#dcRecoKo").addEventListener("click", e => {
-      const chip = e.target.closest("[data-rko]");
-      if (!chip) return;
-      const v = chip.dataset.rko;
-      Discover.recoKo = v === "" ? null : parseInt(v);
-      try { localStorage.setItem(LS_RECO_KO, v); } catch { /* 저장 못 해도 이번 판은 적용된다 */ }
-      renderRecoKoChips();
+  /* 한국 작품 비중 바 — 끄는 동안(`input`) 숫자가 따라오고, 놓을 때(`change`) 저장한다 */
+  const koRange = $("#dcRecoKoRange");
+  if (koRange) {
+    koRange.addEventListener("input", () => {
+      Discover.recoKo = Math.round(parseInt(koRange.value) / 100 * RECO_TARGET);
+      renderRecoKoSlider();
+    });
+    koRange.addEventListener("change", () => {
+      try { localStorage.setItem(LS_RECO_KO, String(Discover.recoKo)); }
+      catch { /* 저장 못 해도 이번 판은 적용된다 */ }
     });
   }
 

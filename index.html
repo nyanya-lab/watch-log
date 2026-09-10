@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260910j">
+<link rel="stylesheet" href="style.css?v=20260911c">
 </head>
 <body>
 
@@ -175,9 +175,10 @@
           </div>
         </div>
         <!-- 뽑을 때 쓰는 값이라 필터(보는 조건)와 나란히 두지 않고 [다시 추천받기] 아래에 둔다 -->
-        <div class="flex items-center gap-2 flex-wrap mt-3">
+        <div class="flex items-center gap-3 flex-wrap mt-3">
           <span class="text-xs font-semibold text-slate-500 shrink-0">한국 작품 비중</span>
-          <div id="dcRecoKo" class="flex gap-1.5 flex-wrap"></div>
+          <input type="range" id="dcRecoKoRange" class="dc-range" min="0" max="100" step="5" value="50">
+          <span id="dcRecoKoLabel" class="text-xs font-semibold text-slate-600 shrink-0"></span>
         </div>
 
         <div id="dcRecoProgress" class="hidden mt-3">
@@ -695,10 +696,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260910j"></script>
-<script src="tmdb.js?v=20260910j"></script>
-<script src="watchlog.js?v=20260910j"></script>
-<script src="discover.js?v=20260910j"></script>
-<script src="stats.js?v=20260910j"></script>
+<script src="core.js?v=20260911c"></script>
+<script src="tmdb.js?v=20260911c"></script>
+<script src="watchlog.js?v=20260911c"></script>
+<script src="discover.js?v=20260911c"></script>
+<script src="stats.js?v=20260911c"></script>
 </body>
 </html>

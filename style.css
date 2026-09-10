@@ -607,6 +607,29 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-flag-wish { background: rgba(224,112,15,.9); }
 .dc-flag-next { background: rgba(220,68,68,.9); }
 
+/* ===== 탐색: 한국 작품 비중 슬라이더 =====
+   칩 네 개(위주/반반/조금만/상관없음)로 두었다가 바 형태로 바꿨다(2026-09-10 요청) —
+   단계가 아니라 **비율 그 자체**를 보여주는 쪽이 무엇을 정하는지 한눈에 읽힌다.
+   채워진 부분은 JS가 `background`를 갈아 끼워 칠한다(range는 CSS만으로 칠할 수 없다). */
+.dc-range {
+  -webkit-appearance: none; appearance: none;
+  height: 6px; border-radius: 999px; background: #e6ecdd;
+  /* ⚠ `min-width`를 두면 폰에서 줄이 안 접히고 **가로로 넘친다**(375px에서 확인).
+     0으로 두고 basis로만 희망 폭을 준다. */
+  flex: 1 1 120px; min-width: 0; max-width: 240px; cursor: pointer;
+}
+.dc-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #4d7c2a; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.22); cursor: pointer;
+}
+.dc-range::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #4d7c2a; border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.22); cursor: pointer;
+}
+
 /* ===== 탐색: 시리즈 묶음 (이어보기·관심없음) =====
    **묶음 하나가 그리드 한 칸**이다. 머리글 아래로 그 시리즈의 카드가 가로로 흐르고
    넘치면 화살표로 넘긴다. 카드 폭이 고정이라 카드가 1장이든 9장이든 칸 높이가 같다.
@@ -649,6 +672,10 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-flag-hide { background: rgba(100,116,139,.9); }
 
 .dc-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 5px 0 2px; }
+/* ⚠ 추천 이유 배지에는 **작품 제목이 들어간다**(「…」과 비슷) — 제목이 길면 `.badge`의
+   `white-space: nowrap` 때문에 카드 밖으로 뻗어 폰에서 가로 스크롤이 생겼다(2026-09-11 발견).
+   배지 모양은 지키고 넘치는 글자만 자른다. */
+.dc-note .badge { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
 
 .dc-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .dc-btn {
