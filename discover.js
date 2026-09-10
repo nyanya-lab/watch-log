@@ -13,6 +13,9 @@ const Discover = {
   recoType: "",      // 추천 뷰의 구분 필터 ("" | movie | tv)
   recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
   recoOrigin: [],    // 추천 뷰의 제작국 필터 (여러 개, 빈 배열 = 전체)
+  /* 60개 중 한국 작품 몫. **뽑을 때** 쓰는 값이라 위 필터(보는 조건)와 성격이 다르다.
+     `null`이면 몫을 나누지 않고 예전처럼 점수순으로만 채운다. */
+  recoKo: 30,
   recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순
   /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
      그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
@@ -436,7 +439,9 @@ async function runReco() {
        한 건씩 물어봐야 한다(240ms 간격). 그래서 60개를 채우거나 조회 상한에 닿으면 멈춘다 —
        전부 훑으면 후보가 수백 개라 하염없이 기다리게 된다.
        ⚠ `otts`는 정액제·무료·광고형만 센다(`tmdbProviders`). 대여·구매만 있는 작품은 빠진다. */
-    const TARGET = 60, KO_TARGET = 30, MAX_CALLS = 150;
+    /* 한국 몫은 사용자가 고른다(`Discover.recoKo`, 추천 바의 칩). `null`이면 나누지 않는다. */
+    const TARGET = 60, MAX_CALLS = 150;
+    const KO_TARGET = Discover.recoKo;
     const list = [];
     const picked = new Set();
     let checked = 0, koN = 0, fgN = 0;
@@ -460,9 +465,11 @@ async function runReco() {
        나왔다. 자기 몫을 채운 쪽은 **조회조차 건너뛴다**(한 건에 240ms라 그냥 넘기는 게 이득). */
     for (const c of ranked) {
       if (list.length >= TARGET || checked >= MAX_CALLS) break;
-      const isKo = c.origin === "한국";
-      if (isKo && koN >= KO_TARGET) continue;
-      if (!isKo && fgN >= TARGET - KO_TARGET) continue;
+      if (KO_TARGET !== null) {
+        const isKo = c.origin === "한국";
+        if (isKo && koN >= KO_TARGET) continue;
+        if (!isKo && fgN >= TARGET - KO_TARGET) continue;
+      }
       await tryPick(c);
     }
 
@@ -567,10 +574,36 @@ function renderRecoFilters(all) {
 }
 
 /* 추천 목록 */
+/* 한국 작품 몫 고르기 — 뽑을 때 쓰는 값이라 [다시 추천받기] 바로 아래에 둔다.
+   고른 값은 이 기기에 남긴다(매번 다시 고르게 하면 그것대로 번거롭다). */
+const LS_RECO_KO = "watchlog_reco_ko";
+const RECO_KO_OPTS = [
+  [40, "한국 위주", "60개 중 한국 40 · 외국 20"],
+  [30, "반반", "60개 중 한국 30 · 외국 30"],
+  [20, "조금만", "60개 중 한국 20 · 외국 40"],
+  [null, "상관없음", "몫을 나누지 않고 점수 높은 순으로 채웁니다"]
+];
+
+function loadRecoKo() {
+  try {
+    const raw = localStorage.getItem(LS_RECO_KO);
+    if (raw === null) return 30;
+    return raw === "" ? null : (parseInt(raw) || 0);   // 빈 문자열 = 상관없음
+  } catch { return 30; }
+}
+
+function renderRecoKoChips() {
+  const box = $("#dcRecoKo");
+  if (!box) return;
+  box.innerHTML = RECO_KO_OPTS.map(o => `<button class="fchip ${Discover.recoKo === o[0] ? "on" : ""}"
+    data-rko="${o[0] === null ? "" : o[0]}" title="${o[2]}">${o[1]}</button>`).join("");
+}
+
 function renderDcReco() {
   $("#dcHint").classList.add("hidden");
   $("#dcRecoBar").classList.remove("hidden");
 
+  renderRecoKoChips();
   const data = loadReco();
   const info = $("#dcRecoInfo");
   $("#dcRecoBtn").innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>${data ? "다시 추천받기" : "추천 받기"}`;
@@ -2026,6 +2059,7 @@ window.addFromDiscover = addFromDiscover;
 /* ---------- 초기화 ---------- */
 function initDiscover() {
   if (!$("#tab-discover")) return;
+  Discover.recoKo = loadRecoKo();
 
   $("#dcSearchBtn").addEventListener("click", runDiscoverSearch);
   $("#dcQuery").addEventListener("keydown", e => {
@@ -2049,6 +2083,18 @@ function initDiscover() {
   if ($("#dcHideFillBtn")) $("#dcHideFillBtn").addEventListener("click", runFillHideColls);
   /* 이어보기 — 새 시즌·편이 나왔는지 확인 */
   if ($("#dcNewBtn")) $("#dcNewBtn").addEventListener("click", runCheckNew);
+
+  /* 한국 작품 몫 칩 — 그릴 때마다 새로 만들어지므로 위임 */
+  if ($("#dcRecoKo")) {
+    $("#dcRecoKo").addEventListener("click", e => {
+      const chip = e.target.closest("[data-rko]");
+      if (!chip) return;
+      const v = chip.dataset.rko;
+      Discover.recoKo = v === "" ? null : parseInt(v);
+      try { localStorage.setItem(LS_RECO_KO, v); } catch { /* 저장 못 해도 이번 판은 적용된다 */ }
+      renderRecoKoChips();
+    });
+  }
 
   /* 인물 — 배우/감독 전환과 사람 칩 (그릴 때마다 새로 만들어지므로 위임) */
   if ($("#dcPersonBar")) {
