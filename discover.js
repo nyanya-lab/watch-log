@@ -340,15 +340,14 @@ async function runReco() {
   $("#dcRecoProgress").classList.remove("hidden");
 
   const genreNames = prof.genres.slice(0, 2).map(g => g[0]);
-  /* 내가 많이 본 나라 중 **영어권이 아닌 것**만 따로 발굴한다 —
-     아래 장르 발굴은 글로벌 인기순이라 영어권이 앞자리를 다 가져가서, 한국·일본 작품이
-     후보에 거의 안 남는다("추천에 외국 소재가 너무 많다", 2026-09-10).
-     미국·영국은 그 발굴로 이미 충분히 들어오므로 여기서 뺀다. */
-  const originLangs = prof.countries
-    .map(c => [c[0], COUNTRY_LANG[c[0]], c[1]])
-    .filter(c => c[1] && c[1] !== "en")
-    .slice(0, 2);
-  const totalSteps = seeds.length + genreNames.length * 2 + originLangs.length * 2;
+  /* **한국어 작품을 한 갈래로 따로 발굴한다**(2026-09-10).
+     ①②는 글로벌 인기순이라 한국 작품이 후보에 거의 안 남는다("추천에 외국 소재가 너무 많다").
+     ⚠ "외국어"는 따로 뽑을 필요가 없다 — ①②가 **이미 그쪽**이다. 모자란 건 한국 쪽 하나뿐이라
+     그 한 갈래만 더하면 균형이 맞는다. (나라별로 상위 몇 개를 뽑던 것을 이렇게 줄였다.)
+     비중은 **내 기록의 한국 비중**을 따른다 — 한국 작품을 많이 봤으면 많이, 아니면 조금만. */
+  const koWeight = (prof.countries.find(c => c[0] === "한국") || ["한국", 0])[1];
+  const koShare = prof.countries.length ? koWeight / prof.countries[0][1] : 0;
+  const totalSteps = seeds.length + genreNames.length * 2 + (koShare > 0 ? 2 : 0);
   let step = 0;
 
   try {
@@ -395,21 +394,20 @@ async function runReco() {
       }
     }
 
-    // ③ 취향 국가로 발굴 — 장르 발굴만으로는 비영어권이 후보에 거의 안 남는다
-    for (const [cname, lang, cw] of originLangs) {
+    // ③ 한국어 작품 발굴 — ①②만으로는 한국 작품이 후보에 거의 안 남는다
+    if (koShare > 0) {
       for (const mt of ["movie", "tv"]) {
-        setStatus(`${cname} ${mt === "movie" ? "영화" : "시리즈"} 찾아보는 중...`, ++step / totalSteps * 100);
+        setStatus(`한국 ${mt === "movie" ? "영화" : "시리즈"} 찾아보는 중...`, ++step / totalSteps * 100);
         try {
           const list = await tmdbDiscoverList(mt, {
-            with_original_language: lang,
+            with_original_language: "ko",
             sort_by: "popularity.desc",
             "vote_average.gte": "7",
-            /* ⚠ 장르 발굴은 200인데 여기는 **50**이다. 비영어권 작품은 글로벌 투표수가 적어
+            /* ⚠ 장르 발굴은 200인데 여기는 **50**이다. 한국 작품은 글로벌 투표수가 적어
                같은 기준을 쓰면 거의 아무것도 안 남는다 — 그게 애초에 밀리던 이유다. */
             "vote_count.gte": "50"
           });
-          const w = cw / (prof.countries[0][1] || 1);
-          list.slice(0, 16).forEach((c, idx) => bump(c, 1.1 * w * (1 - idx * 0.03), `${cname} 작품`));
+          list.slice(0, 16).forEach((c, idx) => bump(c, 1.1 * koShare * (1 - idx * 0.03), "한국 작품"));
         } catch { /* 무시하고 계속 */ }
         await new Promise(r => setTimeout(r, 240));
       }

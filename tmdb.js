@@ -141,16 +141,6 @@ const LANG_KO = {
   fr: "프랑스", de: "독일", es: "스페인어권", it: "이탈리아", pt: "포르투갈어권",
   hi: "인도", th: "태국", ru: "러시아", tr: "터키", vi: "베트남", id: "인도네시아"
 };
-/* 내 기록의 `country`(한글 제작국) → TMDB `with_original_language` 코드.
-   추천 발굴에서 "내가 많이 본 나라"를 조회 조건으로 바꿀 때 쓴다.
-   영어권은 굳이 지정할 필요가 없어(기본 결과가 이미 영어권이다) 발굴 쪽에서 걸러낸다. */
-const COUNTRY_LANG = {
-  "한국": "ko", "일본": "ja", "중국": "zh", "대만": "zh", "홍콩": "zh",
-  "프랑스": "fr", "독일": "de", "스페인": "es", "이탈리아": "it",
-  "태국": "th", "인도": "hi", "러시아": "ru", "터키": "tr",
-  "브라질": "pt", "멕시코": "es", "미국": "en", "영국": "en", "캐나다": "en", "호주": "en"
-};
-
 function originOf(r) {
   const oc = (r.origin_country || [])[0];
   if (oc && ORIGIN_KO[oc]) return ORIGIN_KO[oc];
