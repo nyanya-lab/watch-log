@@ -347,7 +347,7 @@ async function runReco() {
      비중은 **내 기록의 한국 비중**을 따른다 — 한국 작품을 많이 봤으면 많이, 아니면 조금만. */
   const koWeight = (prof.countries.find(c => c[0] === "한국") || ["한국", 0])[1];
   const koShare = prof.countries.length ? koWeight / prof.countries[0][1] : 0;
-  const totalSteps = seeds.length + genreNames.length * 2 + (koShare > 0 ? 2 : 0);
+  const totalSteps = seeds.length + genreNames.length * 2 + (koShare > 0 ? 4 : 0);
   let step = 0;
 
   try {
@@ -394,22 +394,30 @@ async function runReco() {
       }
     }
 
-    // ③ 한국어 작품 발굴 — ①②만으로는 한국 작품이 후보에 거의 안 남는다
+    /* ③ 한국어 작품 발굴 — ①②만으로는 한국 작품이 후보에 거의 안 남는다.
+       ⚠ **2페이지까지 받고 응답을 통째로 쓴다**(2026-09-10). 1페이지 16개만 담았더니
+       한국 후보가 최대 32개인데 외국은 유사작 120 + 장르 64라, 60자리를 점수순으로 채우면
+       외국이 다 가져갔다(실제 결과 한국 13 / 외국 47). 아래 쿼터와 짝이다 — 자리를 나눠도
+       후보가 없으면 못 채운다. */
     if (koShare > 0) {
       for (const mt of ["movie", "tv"]) {
-        setStatus(`한국 ${mt === "movie" ? "영화" : "시리즈"} 찾아보는 중...`, ++step / totalSteps * 100);
-        try {
-          const list = await tmdbDiscoverList(mt, {
-            with_original_language: "ko",
-            sort_by: "popularity.desc",
-            "vote_average.gte": "7",
-            /* ⚠ 장르 발굴은 200인데 여기는 **50**이다. 한국 작품은 글로벌 투표수가 적어
-               같은 기준을 쓰면 거의 아무것도 안 남는다 — 그게 애초에 밀리던 이유다. */
-            "vote_count.gte": "50"
-          });
-          list.slice(0, 16).forEach((c, idx) => bump(c, 1.1 * koShare * (1 - idx * 0.03), "한국 작품"));
-        } catch { /* 무시하고 계속 */ }
-        await new Promise(r => setTimeout(r, 240));
+        for (const page of ["1", "2"]) {
+          setStatus(`한국 ${mt === "movie" ? "영화" : "시리즈"} 찾아보는 중...`, ++step / totalSteps * 100);
+          try {
+            const list = await tmdbDiscoverList(mt, {
+              with_original_language: "ko",
+              sort_by: "popularity.desc",
+              "vote_average.gte": "7",
+              /* ⚠ 장르 발굴은 200인데 여기는 **50**이다. 한국 작품은 글로벌 투표수가 적어
+                 같은 기준을 쓰면 거의 아무것도 안 남는다 — 그게 애초에 밀리던 이유다. */
+              "vote_count.gte": "50",
+              page
+            });
+            const base = page === "1" ? 0 : 20;
+            list.forEach((c, idx) => bump(c, 1.1 * koShare * (1 - (base + idx) * 0.015), "한국 작품"));
+          } catch { /* 무시하고 계속 */ }
+          await new Promise(r => setTimeout(r, 240));
+        }
       }
     }
 
@@ -428,17 +436,44 @@ async function runReco() {
        한 건씩 물어봐야 한다(240ms 간격). 그래서 60개를 채우거나 조회 상한에 닿으면 멈춘다 —
        전부 훑으면 후보가 수백 개라 하염없이 기다리게 된다.
        ⚠ `otts`는 정액제·무료·광고형만 센다(`tmdbProviders`). 대여·구매만 있는 작품은 빠진다. */
-    const TARGET = 60, MAX_CALLS = 130;
+    const TARGET = 60, KO_TARGET = 30, MAX_CALLS = 150;
     const list = [];
-    let checked = 0;
-    for (const c of ranked) {
-      if (list.length >= TARGET || checked >= MAX_CALLS) break;
+    const picked = new Set();
+    let checked = 0, koN = 0, fgN = 0;
+
+    /* 한 건 확인하고 담기. 담았으면 true. */
+    const tryPick = async (c) => {
       checked++;
-      setStatus(`볼 수 있는 곳 확인 ${checked}개째 — ${list.length} / ${TARGET}개 확보`,
+      setStatus(`볼 수 있는 곳 확인 ${checked}개째 — ${list.length} / ${TARGET}개 확보 (한국 ${koN})`,
                 60 + list.length / TARGET * 38);
       c.otts = await tmdbProviders(c.tmdbId, c.mediaType);
-      if (c.otts.length) list.push(c);
       await new Promise(r => setTimeout(r, 240));
+      if (!c.otts.length) return false;
+      list.push(c);
+      picked.add(c.tmdbId);
+      if (c.origin === "한국") koN++; else fgN++;
+      return true;
+    };
+
+    /* ⚠ **한국과 외국의 자리를 나눠서 채운다**(2026-09-10).
+       점수 순으로만 훑으면 후보가 훨씬 많은 외국이 자리를 다 가져간다 — 실제로 한국 13 / 외국 47이
+       나왔다. 자기 몫을 채운 쪽은 **조회조차 건너뛴다**(한 건에 240ms라 그냥 넘기는 게 이득). */
+    for (const c of ranked) {
+      if (list.length >= TARGET || checked >= MAX_CALLS) break;
+      const isKo = c.origin === "한국";
+      if (isKo && koN >= KO_TARGET) continue;
+      if (!isKo && fgN >= TARGET - KO_TARGET) continue;
+      await tryPick(c);
+    }
+
+    /* 한쪽이 몫을 못 채웠으면(안 본 한국 작품이 그만큼 없는 경우) **남는 자리는 다른 쪽으로 메운다.**
+       비워두면 60개를 채우라는 목적 자체를 못 지킨다. */
+    if (list.length < TARGET) {
+      for (const c of ranked) {
+        if (list.length >= TARGET || checked >= MAX_CALLS) break;
+        if (picked.has(c.tmdbId) || c.otts) continue;   // 이미 담았거나 이미 확인한 것
+        await tryPick(c);
+      }
     }
 
     const data = { generatedAt: new Date().toISOString(), basis: genreNames, list };
@@ -544,9 +579,14 @@ function renderDcReco() {
     const p = (n) => String(n).padStart(2, "0");
     /* "지금 국내에서 볼 수 있는 것만"이라는 걸 밝혀둔다 — 안 그러면 아는 작품이 안 보일 때
        추천이 이상한 줄 안다. 대여·구매만 있는 작품은 여기 안 들어온다(`tmdbProviders`). */
+    /* 한국이 몇 개인지 여기서 바로 보여준다 — 쿼터를 채웠는지(못 채웠는지) 알 수 있어야
+       "왜 한국이 적지"를 안 헤아리게 된다. `origin`이 있는 새 캐시에서만 붙인다. */
+    const koN = (data.list || []).filter(c => c.origin === "한국").length;
+    const hasOrigin = (data.list || []).some(c => c.origin);
     info.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>
       ${(data.basis || []).length ? `<b>${esc(data.basis.join("·"))}</b> 취향 기준 · ` : ""}
       ${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 기준
+      ${hasOrigin ? `· 한국 <b>${koN}</b> · 외국 <b>${(data.list || []).length - koN}</b> ` : ""}
       <span class="opacity-70">· 국내 정액제로 볼 수 있는 것만</span>`;
   } else {
     info.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>아직 추천을 만들지 않았어요. 오른쪽 버튼을 눌러보세요.`;
