@@ -39,6 +39,11 @@ function isWatching(i) { return !!(i.startDate && !i.endDate); }
 function isRewatching(i) { return !!(i.lastWatchStart && !i.lastWatchEnd); }
 function watchingNow(i) { return isWatching(i) || isRewatching(i); }
 
+/* 별점 몰아넣기 대상 — 보는 중인 기록은 뺀다.
+   아직 다 안 봤으면 점수가 정해지지 않은 상태라 물어봐야 답이 안 나온다
+   (보는 중에 TMDB 평점을 가리는 것과 같은 이유). 다 보고 체크를 풀면 다시 들어온다. */
+function needsRating(i) { return !i.rating && !watchingNow(i); }
+
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
 function needsSeason(i) {
   return !i.season && (i.totalSeasons || 0) > 1;
@@ -925,7 +930,7 @@ function renderHeaderCount() {
   }
 
   // 별점 채우기 버튼 (필터가 아니라 몰아넣기 모달을 여는 버튼 — 0개면 숨김)
-  const noRate = State.items.filter(i => !i.rating).length;
+  const noRate = State.items.filter(needsRating).length;
   const qb = $("#quickRateBtn");
   if (qb) {
     $("#quickRateCount").textContent = noRate;
@@ -1360,7 +1365,7 @@ const QuickRate = { queue: [], idx: 0, done: 0 };
 /* 최근 본 것부터 — 기억이 선명한 순서 */
 function quickRateTargets() {
   const dkey = (i) => i.lastWatchStart || i.startDate || "";
-  return State.items.filter(i => !i.rating).sort((a, b) => dkey(b).localeCompare(dkey(a)));
+  return State.items.filter(needsRating).sort((a, b) => dkey(b).localeCompare(dkey(a)));
 }
 
 function openQuickRate() {
@@ -1389,7 +1394,7 @@ function renderQuickRate() {
   if (QuickRate.idx >= total) {
     $("#qrProgress").textContent = "";
     $("#qrBar").style.width = "100%";
-    const left = q.filter(i => !i.rating).length;
+    const left = q.filter(needsRating).length;
     body.innerHTML = `
       <div class="text-center py-8">
         <i class="fa-solid fa-circle-check text-4xl text-emerald-500 mb-3"></i>
@@ -1404,7 +1409,7 @@ function renderQuickRate() {
     $("#qrDone").addEventListener("click", closeQuickRate);
     const rs = $("#qrRestart");
     if (rs) rs.addEventListener("click", () => {
-      QuickRate.queue = q.filter(i => !i.rating);
+      QuickRate.queue = q.filter(needsRating);
       QuickRate.idx = 0;
       renderQuickRate();
     });
