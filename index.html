@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260911c">
+<link rel="stylesheet" href="style.css?v=20260914a">
 </head>
 <body>
 
@@ -93,6 +93,9 @@
           <!-- 필터 토글이 아니라 별점 몰아넣기 모달을 연다 -->
           <button id="quickRateBtn" class="wl-chip wl-chip-rate" title="별점 없는 기록을 한 장씩 넘기며 빠르게 입력">
             <i class="fa-solid fa-heart"></i>별점 채우기 <span id="quickRateCount">0</span>개
+          </button>
+          <button id="watchingBtn" class="wl-chip wl-chip-live" title="종료일을 안 적고 보는 중으로 표시한 기록">
+            <i class="fa-solid fa-circle-play"></i>보는 중 <span id="watchingCount">0</span>개
           </button>
           <button id="engNameBtn" class="wl-chip wl-chip-name" title="배우·감독 이름이 영문으로 남아 있는 기록">
             <i class="fa-solid fa-language"></i>이름 영문 <span id="engNameCount">0</span>개
@@ -588,7 +591,12 @@
         <div>
           <label class="form-label">본 날짜 (종료)</label>
           <input type="date" id="fEnd" class="form-input">
-          <p class="text-xs text-slate-400 mt-1">하루면 비워두면 시작일과 동일</p>
+          <p id="fEndHint" class="text-xs text-slate-400 mt-1">하루면 비워두면 시작일과 동일</p>
+          <!-- 종료일을 그냥 비워두는 것과 구분해야 한다 — 안 그러면 깜빡 안 적은 것까지 "보는 중"이 된다 -->
+          <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mt-2">
+            <input type="checkbox" id="fWatching" class="w-4 h-4 rounded">
+            <i class="fa-solid fa-circle-play text-emerald-600"></i>아직 보는 중
+          </label>
         </div>
       </div>
 
@@ -604,6 +612,10 @@
           <div>
             <label class="form-label">마지막 시청 (종료)</label>
             <input type="date" id="fLastEnd" class="form-input">
+            <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mt-2">
+              <input type="checkbox" id="fReWatching" class="w-4 h-4 rounded">
+              <i class="fa-solid fa-rotate text-emerald-600"></i>다시 보는 중
+            </label>
           </div>
         </div>
       </div>
@@ -696,10 +708,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260911c"></script>
-<script src="tmdb.js?v=20260911c"></script>
-<script src="watchlog.js?v=20260911c"></script>
-<script src="discover.js?v=20260911c"></script>
-<script src="stats.js?v=20260911c"></script>
+<script src="core.js?v=20260914a"></script>
+<script src="tmdb.js?v=20260914a"></script>
+<script src="watchlog.js?v=20260914a"></script>
+<script src="discover.js?v=20260914a"></script>
+<script src="stats.js?v=20260914a"></script>
 </body>
 </html>

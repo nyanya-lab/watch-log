@@ -23,9 +23,21 @@ const Filters = {
   noSeasonOnly: false,              // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
   engNameOnly: false,               // 배우·감독 이름이 영문으로 남은 항목만
   dupOnly: false,                   // 제목이 다른데 tmdbId가 같은 항목만 (매칭 오류 의심)
+  watchingOnly: false,              // 아직 보는 중인 기록만
   group: "",                        // 시리즈 모아보기에서 고른 그룹 키
   seriesView: false                 // 목록 자리에 시리즈 카드를 보여주는 모드
 };
+
+/* ---------- "아직 보는 중" ----------
+   **시작일은 있는데 종료일이 없는** 기록이다. 예전엔 `saveItem`이 종료일을 비우면 시작일로
+   채워버려서 이 상태가 아예 만들어지지 않았다(2026-09-14에 체크박스를 달면서 열었다).
+
+   ⚠ "종료일을 비우면 보는 중"으로는 안 된다 — **깜빡 안 적은 것과 구분이 안 된다.**
+   그래서 수정창의 체크박스(`#fWatching`/`#fReWatching`)로 **명시적으로** 받고,
+   저장할 때만 `endDate`를 비운다. 기존 기록은 전부 종료일이 차 있어 영향이 없다. */
+function isWatching(i) { return !!(i.startDate && !i.endDate); }
+function isRewatching(i) { return !!(i.lastWatchStart && !i.lastWatchEnd); }
+function watchingNow(i) { return isWatching(i) || isRewatching(i); }
 
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
 function needsSeason(i) {
@@ -191,7 +203,7 @@ function initWatchlog() {
   });
 
   /* 유지보수 칩 토글 — 서로 배타적으로 켜진다 (하나 켜면 나머지는 꺼짐) */
-  const EXCLUSIVE = ["pendingOnly", "noSeasonOnly", "engNameOnly", "dupOnly"];
+  const EXCLUSIVE = ["pendingOnly", "noSeasonOnly", "engNameOnly", "dupOnly", "watchingOnly"];
   const toggleOnly = (key) => {
     const on = !Filters[key];
     EXCLUSIVE.forEach(k => { Filters[k] = false; });
@@ -202,12 +214,18 @@ function initWatchlog() {
   $("#noSeasonBtn").addEventListener("click", () => toggleOnly("noSeasonOnly"));
   $("#engNameBtn").addEventListener("click", () => toggleOnly("engNameOnly"));
   $("#dupBtn").addEventListener("click", () => toggleOnly("dupOnly"));
+  $("#watchingBtn").addEventListener("click", () => toggleOnly("watchingOnly"));
   $("#nameFixBtn").addEventListener("click", () => runFixNames(State.filtered));
 
   /* 별점 몰아넣기 */
   $("#quickRateBtn").addEventListener("click", openQuickRate);
   $("#qrClose").addEventListener("click", closeQuickRate);
   onBackdropClose("#quickRateModal", closeQuickRate);
+
+  ["#fWatching", "#fReWatching"].forEach(sel => {
+    const el = $(sel);
+    if (el) el.addEventListener("change", syncWatchingFields);
+  });
 
   $("#loadMoreBtn").addEventListener("click", () => { State.page++; renderCards(); });
 
@@ -527,6 +545,22 @@ function buildSeasonSelect(seasons) {
   }
 }
 
+/* [아직 보는 중]을 켜면 종료일 칸을 잠그고 비운다.
+   `syncOttFields`와 같은 이유다 — **안 보이는(또는 뜻이 없는) 칸의 값이 그대로 저장되면 안 된다.**
+   잠그기만 하고 안 비우면 "보는 중"인데 종료일이 남아 있는 어긋난 상태가 만들어진다. */
+function syncWatchingFields() {
+  const pairs = [["#fWatching", "#fEnd", "#fEndHint"], ["#fReWatching", "#fLastEnd", null]];
+  pairs.forEach(([cb, input, hint]) => {
+    const c = $(cb), el = $(input);
+    if (!c || !el) return;
+    const on = c.checked;
+    if (on) el.value = "";
+    el.disabled = on;
+    el.classList.toggle("opacity-50", on);
+    if (hint && $(hint)) $(hint).textContent = on ? "다 보면 체크를 풀고 종료일을 적어주세요" : "하루면 비워두면 시작일과 동일";
+  });
+}
+
 /* ---------- 필터 팝업 ---------- */
 function openFilterModal() {
   buildFilterOptions();
@@ -581,7 +615,7 @@ function hasActiveFilter() {
   const ranged = Object.keys(RANGE0).some(k => Filters[k] !== RANGE0[k]);
   return !!(MULTI.some(k => Filters[k].length) || ranged || Filters.year || Filters.person ||
             Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.engNameOnly ||
-            Filters.dupOnly || Filters.group ||
+            Filters.dupOnly || Filters.watchingOnly || Filters.group ||
             Filters.seriesView ||
             Filters.sort !== "date" || Filters.sortDir !== "desc");
 }
@@ -592,7 +626,7 @@ function clearAllFilters() {
   Object.assign(Filters, RANGE0, {
     q: "", year: "", person: "", sort: "date", sortDir: "desc",
     pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
-    group: "", seriesView: false
+    watchingOnly: false, group: "", seriesView: false
   });
   const s = $("#searchInput"); if (s) s.value = "";
   applyFilters();
@@ -610,7 +644,8 @@ function jumpToList(patch) {
   const cleared = {};
   MULTI.forEach(k => { cleared[k] = []; });
   Object.assign(Filters, cleared, RANGE0,
-    { year: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false, group: "", seriesView: false },
+    { year: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
+      watchingOnly: false, group: "", seriesView: false },
     norm);
   applyFilters();
 
@@ -730,6 +765,7 @@ function applyFilters() {
     if (F.noSeasonOnly && !needsSeason(i)) return false;
     if (F.engNameOnly && !needsKoName(i)) return false;
     if (F.dupOnly && !isDupTmdb(i)) return false;
+    if (F.watchingOnly && !watchingNow(i)) return false;
     if (F.group && groupKeyOf(i) !== F.group) return false;
     if (F.q && !matchesQuery(i, F.q)) return false;
     /* 다중 선택: 고른 게 없으면 통과, 있으면 그중 하나라도 맞아야 한다 */
@@ -860,6 +896,23 @@ function renderHeaderCount() {
     }
   }
 
+  /* 보는 중 칩 — 토글식. 0개면 숨는다(켜둔 채로 0이 되면 남겨서 되돌아갈 길을 준다) */
+  const wb = $("#watchingBtn");
+  if (wb) {
+    const nWatching = State.items.filter(watchingNow).length;
+    if (Filters.watchingOnly) {
+      wb.className = "wl-chip wl-chip-live on";
+      /* 다른 칩은 켜지면 "N개 보는 중"이라고 쓰는데 이 칩은 이름이 이미 "보는 중"이라
+         그대로 두면 **"보는 중 3개 보는 중"**이 된다 — 끄기 아이콘만 바꾼다 */
+      wb.innerHTML = `<i class="fa-solid fa-xmark"></i>보는 중 ${nWatching}개`;
+    } else {
+      wb.className = "wl-chip wl-chip-live";
+      wb.innerHTML = `<i class="fa-solid fa-circle-play"></i>보는 중 ${nWatching}개`;
+    }
+    wb.title = "종료일을 안 적고 보는 중으로 표시한 기록";
+    wb.classList.toggle("hidden", nWatching === 0 && !Filters.watchingOnly);
+  }
+
   // 별점 채우기 버튼 (필터가 아니라 몰아넣기 모달을 여는 버튼 — 0개면 숨김)
   const noRate = State.items.filter(i => !i.rating).length;
   const qb = $("#quickRateBtn");
@@ -907,7 +960,9 @@ function renderCards() {
   grid.innerHTML = show.map(i => `
     <div class="wl-card ${!i.tmdbId ? "wl-pending" : ""}" data-id="${i.id}">
       ${posterBlock(i.poster, ratingChip(i) +
-        (seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : ""))}
+        (seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : "") +
+        (watchingNow(i) ? `<span class="wl-live"><i class="fa-solid fa-circle-play"></i>${
+          isWatching(i) ? "보는 중" : "다시 보는 중"}</span>` : ""))}
       <div class="wl-body">
         <div class="wl-title-row">
           <i class="fa-solid ${typeIcon(i.type)} wl-type" title="${esc(i.type || "")}"></i>
@@ -955,10 +1010,12 @@ function openDetail(id) {
           : `<button class="dt-rate-empty" onclick="document.getElementById('detailModal').classList.add('hidden'); openEdit('${i.id}')">
                <i class="fa-regular fa-heart"></i>별점 매기기</button>`}
         <div class="dt-when">
-          <div class="dt-when-main">${fmtRange(i.startDate, i.endDate) || "본 날짜 없음"}</div>
+          <div class="dt-when-main">${fmtRange(i.startDate, i.endDate) || "본 날짜 없음"}${
+            isWatching(i) ? ` <span class="dt-live"><i class="fa-solid fa-circle-play mr-1"></i>보는 중</span>` : ""}</div>
           <div class="dt-when-sub">
             ${(i.watchCount || 1) > 1 ? `${i.watchCount}번 봄` : "처음 본 날"}
-            ${i.lastWatchStart ? ` · 마지막 ${fmtRange(i.lastWatchStart, i.lastWatchEnd)}` : ""}
+            ${i.lastWatchStart ? ` · 마지막 ${fmtRange(i.lastWatchStart, i.lastWatchEnd)}${
+              isRewatching(i) ? ` <span class="dt-live"><i class="fa-solid fa-rotate mr-1"></i>다시 보는 중</span>` : ""}` : ""}
           </div>
         </div>
       </div>
@@ -1460,6 +1517,9 @@ function openEdit(id) {
     $("#fSeason").value = parseInt(String(i.season || "").replace(/\D/g, "")) || 0;
     $("#fStart").value = i.startDate || "";
     $("#fEnd").value = i.endDate || "";
+    $("#fWatching").checked = isWatching(i);
+    $("#fReWatching").checked = isRewatching(i);
+    syncWatchingFields();
     $("#fReview").value = i.review || "";
     $("#fRating").value = i.rating || "";
 
@@ -1505,6 +1565,9 @@ function openEdit(id) {
     $("#fRating").value = "";
     $("#rewatchToggle").checked = false;
     $("#rewatchFields").classList.add("hidden");
+    $("#fWatching").checked = false;
+    $("#fReWatching").checked = false;
+    syncWatchingFields();
     $("#deleteBtn").classList.add("hidden");
   }
 
@@ -1546,10 +1609,14 @@ function saveItem() {
   if (!title) { toast("제목을 입력하세요", "error"); return; }
 
   const start = $("#fStart").value || null;
-  const end = $("#fEnd").value || start;
+  /* 보는 중이면 종료일을 **비운 채로** 저장한다 — 그게 곧 "아직 안 끝났다"는 뜻이다.
+     시작일이 없으면 체크를 무시한다(시작도 안 한 걸 보는 중이라 할 수 없다). */
+  const watching = start && $("#fWatching").checked;
+  const end = watching ? null : ($("#fEnd").value || start);
   const useRe = $("#rewatchToggle").checked;
   const lastS = useRe ? ($("#fLastStart").value || null) : null;
-  const lastE = useRe ? ($("#fLastEnd").value || lastS) : null;
+  const reWatching = lastS && $("#fReWatching").checked;
+  const lastE = useRe ? (reWatching ? null : ($("#fLastEnd").value || lastS)) : null;
   const seasonNum = parseInt($("#fSeason").value) || 0;
 
   /* 시즌이 여러 개인 작품은 **어느 시즌인지 고르고 저장한다.**

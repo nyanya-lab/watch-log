@@ -250,6 +250,28 @@ textarea.form-input { height: auto; }
 /* TMDB 미등록 — 테두리를 벗었으니 포스터에 윤곽선으로 표시 */
 .wl-card.wl-pending .wl-poster-wrap { box-shadow: inset 0 0 0 2px #eab308; }
 
+/* "아직 보는 중" — 포스터 **우상단**(좌상단은 시즌, 하단은 평점 띠라 비어 있는 자리다).
+   상태 표시라 색은 액센트를 쓴다. 배지 색 규칙(구분=연두, 국가=파랑…)과 겹치지 않는다. */
+.wl-live {
+  position: absolute; top: 6px; right: 6px;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(77,124,42,.92); color: #fff;
+  font-size: 11px; padding: 3px 8px; border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
+.wl-live i { font-size: 9px; }
+
+/* 상세 모달의 같은 표시 — 날짜 줄 옆에 붙는다 */
+.dt-live {
+  display: inline-flex; align-items: center;
+  background: #e8f2dc; color: #3b6d11;
+  font-size: 12px; padding: 2px 8px; border-radius: 999px;
+  margin-left: 6px; vertical-align: middle;
+}
+
+/* 보는 중 칩 (유지보수 칩 줄) — 아이콘 색으로만 성격을 구분하는 규칙을 따른다 */
+.wl-chip-live i { color: #4d7c2a; }
+
 /* 포스터 위 오버레이 — 좌상단=시즌, 우상단=두 평점을 한 칩에 */
 .wl-season {
   position: absolute; top: 6px; left: 6px;
