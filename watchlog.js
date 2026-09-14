@@ -304,6 +304,13 @@ function initWatchlog() {
 
   onBackdropClose("#editModal", closeEdit);
   onBackdropClose("#detailModal", () => $("#detailModal").classList.add("hidden"));
+
+  /* 가려둔 TMDB 평점 펼치기 — 상세는 열 때마다 새로 그려지므로 위임으로 받는다 */
+  $("#detailModal").addEventListener("click", e => {
+    const b = e.target.closest(".dt-vote-show");
+    if (!b) return;
+    b.outerHTML = `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${esc(b.dataset.vote)}</span>`;
+  });
 }
 
 /* 남은 스테퍼는 시청 횟수 하나뿐 (시즌 스테퍼는 없앴다) */
@@ -391,10 +398,14 @@ function typeIcon(type) { return TYPE_ICON[type] || TYPE_ICON["기타"]; }
 
 /* 포스터 하단 평점 띠 — 내 별점과 TMDB 평점을 한 줄에 나란히.
    둘 다 없으면 띠 자체를 안 그린다 (포스터를 괜히 가리지 않게). */
-function ratingChip(i) {
+/* `hideVote`를 주면 TMDB 평점을 안 그린다 — **아직 보는 중인 기록**에 쓴다.
+   별점 몰아넣기에서 TMDB 평점을 뺀 것과 같은 이유다: 남의 점수가 눈에 있으면 내 점수가 그쪽으로
+   끌려간다. 아직 보는 중이면 내 점수가 아직 안 정해진 상태라 영향이 가장 크다.
+   다 보고 체크를 풀면 평소처럼 다시 보인다. */
+function ratingChip(i, hideVote) {
   const mine = i.rating
     ? `<span class="wl-rt wl-rt-mine"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>` : "";
-  const tmdb = i.voteAverage
+  const tmdb = (i.voteAverage && !hideVote)
     ? `<span class="wl-rt wl-rt-tmdb"><i class="fa-solid fa-star"></i>${i.voteAverage}</span>` : "";
   if (!mine && !tmdb) return "";
   return `<div class="wl-tr">${mine}${tmdb}</div>`;
@@ -959,7 +970,7 @@ function renderCards() {
 
   grid.innerHTML = show.map(i => `
     <div class="wl-card ${!i.tmdbId ? "wl-pending" : ""}" data-id="${i.id}">
-      ${posterBlock(i.poster, ratingChip(i) +
+      ${posterBlock(i.poster, ratingChip(i, watchingNow(i)) +
         (seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : "") +
         (watchingNow(i) ? `<span class="wl-live"><i class="fa-solid fa-circle-play"></i>${
           isWatching(i) ? "보는 중" : "다시 보는 중"}</span>` : ""))}
@@ -1095,7 +1106,16 @@ function openDetail(id) {
               ${i.collectionId ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
             </span>` : ""}
             ${i.ott ? `<span class="badge badge-ott"><i class="fa-solid ${i.ott === "영화관" ? "fa-film" : "fa-user-check"} mr-1"></i>${esc(i.ott)}</span>` : ""}
-            ${i.voteAverage ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>` : ""}
+            ${i.voteAverage ? (watchingNow(i)
+              /* 항상 보이는 것과 **눌러서 보는 것**은 다르다 — 전자는 점수를 끌어당기지만
+                 후자는 사용자가 고른 것이다(별점 몰아넣기의 [기억이 안 나요] 버튼과 같은 판단).
+                 그래서 숨기되 길은 남긴다. 버튼에 점수를 적지 않는다 — 누르기 전엔 안 보여야 한다.
+                 ⚠ 처리는 **위임**으로 한다. `onclick` 속성에 HTML 문자열을 넣으면 따옴표에서 깨진다
+                 (`findOtt`를 함수로 뺀 것과 같은 이유). */
+              ? `<button class="badge badge-vote dt-vote-show" data-vote="${i.voteAverage}"
+                   title="보는 중에는 내 점수가 끌려가지 않게 가려둡니다">
+                   <i class="fa-solid fa-eye-slash mr-1"></i>TMDB 평점 보기</button>`
+              : `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>`) : ""}
           </div>
         </div>
       </div>
