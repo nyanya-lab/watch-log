@@ -30,10 +30,23 @@ function watchingItems() {
     .sort((a, b) => (b.start || "").localeCompare(a.start || ""));
 }
 
+/* 분량 — 영화는 러닝타임(`2시간 3분`), TV는 몇 부작(2026-09-17 요청: 보는 중 배너에 "얼마나 남았나" 감을 주려고).
+   ⚠ `totalEpisodes`는 TMDB의 **작품 전체** 화수라 시즌이 여러 개면 "N부작"이 거짓이 된다 → 그땐 `전체 N화`로 쓴다 */
+function lengthLabel(i) {
+  if (mediaTypeOf(i) === "movie") {
+    const m = +i.runtime || 0;
+    if (!m) return "";
+    return m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`;
+  }
+  const n = +i.totalEpisodes || 0;
+  if (!n) return "";
+  return (i.totalSeasons || 0) > 1 ? `전체 ${n}화` : `${n}부작`;
+}
+
 function heroHtml(w, cls) {
   const i = w.i;
   const live = !!w.start;
-  const meta = [i.type, ...visibleGenres(i.genres).slice(0, 2), i.releaseYear, ottList(i)[0]].filter(Boolean);
+  const meta = [i.type, ...visibleGenres(i.genres).slice(0, 2), i.releaseYear, lengthLabel(i), ottList(i)[0]].filter(Boolean);
   const days = live ? daysSince(w.start) : 0;
   const act = live
     ? `<button class="btn btn-primary" data-finish="${esc(i.id)}"><i class="fa-solid fa-flag-checkered"></i>다 봤어요</button>`
@@ -78,7 +91,7 @@ function heroArea(ws, latest) {
         ${w.i.poster ? `<img src="${esc(w.i.poster)}" alt="" data-open="${esc(w.i.id)}">` : `<div class="hm-also-ph" data-open="${esc(w.i.id)}"></div>`}
         <div style="min-width:0" data-open="${esc(w.i.id)}">
           <div class="t hm-watch-title">${esc(w.i.title)}${seriesLabel(w.i) ? ` <span class="hm-sn">${esc(seriesLabel(w.i))}</span>` : ""}</div>
-          <div class="s"><b>${daysSince(w.start)}</b>일째${ottList(w.i)[0] ? ` · ${esc(ottList(w.i)[0])}` : ""}</div>
+          <div class="s"><b>${daysSince(w.start)}</b>일째${lengthLabel(w.i) ? ` · ${esc(lengthLabel(w.i))}` : ""}${ottList(w.i)[0] ? ` · ${esc(ottList(w.i)[0])}` : ""}</div>
         </div>
         <button class="btn btn-ghost btn-sm" data-finish="${esc(w.i.id)}" title="다 봤어요"><i class="fa-solid fa-flag-checkered" style="margin:0"></i></button>
       </div>`).join("")}
