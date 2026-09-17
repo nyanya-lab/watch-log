@@ -130,8 +130,15 @@ function renderStats() {
   const totalHours = Math.round(totalMin / 60);
 
   wrap.innerHTML = `
+    <!-- 연간 결산이 **맨 위**(2026-09-17 요청) — 그 아래가 전체 요약, 그 아래가 기간 전체 차트들 -->
+    <section class="stat-sec">
+      <!-- 박스로 묶는다 — 헤어라인만 두면 "가장 많이 본 배우" 같은 칩이 **그 해 기준**인지
+           아래 기간 전체 차트(배우 TOP10 등)와 같은 기준인지 구분이 안 됐다(2026-09-17 사용자 혼동) -->
+      <div class="yr-card" id="yrBody"></div>
+    </section>
+
     <!-- 요약 — 타일만 흰 면을 갖고, 아래 차트들은 박스 없이 헤어라인으로 나뉜다 -->
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2 mb-2">
       <div class="stat-box"><div class="stat-label">시청 기록 <span class="text-slate-400">(편·시즌별)</span></div><div class="stat-value">${items.length}</div></div>
       <div class="stat-box"><div class="stat-label">작품 수 <span class="text-slate-400">(시리즈 묶음)</span></div><div class="stat-value">${totalWorks}</div></div>
       <div class="stat-box"><div class="stat-label">${currentYear}년 시청</div><div class="stat-value">${thisYearCount}</div></div>
@@ -142,13 +149,6 @@ function renderStats() {
       </div>
       <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${totalHours.toLocaleString()}<span class="text-base font-semibold text-slate-400">시간</span></div></div>
     </div>
-
-    <!-- 연간 결산 — 전체 요약(위) 다음에 "올해 이야기", 그 아래가 기간 전체 차트들 -->
-    <section class="stat-sec">
-      <!-- 박스로 묶는다 — 헤어라인만 두면 "가장 많이 본 배우" 같은 칩이 **그 해 기준**인지
-           아래 기간 전체 차트(배우 TOP10 등)와 같은 기준인지 구분이 안 됐다(2026-09-17 사용자 혼동) -->
-      <div class="yr-card" id="yrBody"></div>
-    </section>
 
     <!-- 장르 + 구분 -->
     <section class="stat-sec">
@@ -537,6 +537,8 @@ function renderYearReview(year) {
   const flowMax = Math.max(1, ...flow.map(f => f.n));
   const hot = flow.reduce((a, b) => (b.n > a.n ? b : a), flow[0]);
 
+  /* 타일 넷째 칸은 "다시 본 작품" 대신 **평균 별점**(2026-09-17 요청) — 그 해에 처음 본 작품 중 별점 매긴 것 */
+  const yrRated = list.filter(i => i.rating);
   const best = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating).slice(0, 7);   // 7장 — 한 줄을 꽉 채운다(2026-09-17)
   const sorted = list.filter(i => i.startDate).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   const firstWork = sorted[0], lastWork = sorted[sorted.length - 1];
@@ -587,7 +589,7 @@ function renderYearReview(year) {
         ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편")}
         ${tile("fa-calendar-check", "본 날", days, "일")}
         ${tile("fa-hourglass-half", "예상 시청시간", Math.round(min / 60).toLocaleString(), "시간")}
-        ${tile("fa-rotate", "다시 본 작품", rewatch.length, "편")}
+        ${tile("fa-heart", "평균 별점", yrRated.length ? (yrRated.reduce((s, i) => s + +i.rating, 0) / yrRated.length).toFixed(1) : "-", "")}
       </div>
 
       ${best.length ? `

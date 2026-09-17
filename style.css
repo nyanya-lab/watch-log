@@ -601,10 +601,9 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
    ② 숫자 타일 4개 ③ 가장 좋았던 작품(순위 번호) ④ 가장 많이 본 · 달마다 막대 · 첫/마지막 작품.
    카드로 묶는 이유는 그대로다 — "가장 많이 본 배우"가 **그 해 기준**인지 아래 전체 기간 차트와 헷갈렸다. */
 .yr-card { border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: #fff; }
-/* 머리 띠는 **포인트 색**(2026-09-17 요청). 처음엔 가장 좋았던 작품의 사진 색을 어둡게 깔았는데 검게 보였다.
-   한 색 면이 밋밋하지 않게 오른쪽 위로 살짝 밝아지는 빛만 얹는다 */
-.yr-band { position: relative; overflow: hidden; color: #fff;
-  background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--ac) 70%, #fff) 0%, var(--ac) 45%, var(--ac-d) 100%); }
+/* 머리 띠는 **포인트 색 한 가지로 진하게**(2026-09-17 요청). 처음엔 작품 사진 색을 어둡게 깔아 검게 보였고,
+   그다음 오른쪽 위로 밝아지는 빛을 얹었더니 "그냥 통일해서 찐하게"라고 해서 단색으로 뒀다 */
+.yr-band { position: relative; overflow: hidden; color: #fff; background: var(--ac); }
 .yr-band-in { position: relative; z-index: 1; padding: 22px 26px 24px; }
 .yr-band-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .yr-kicker { font-family: var(--font-num); font-size: 16px; letter-spacing: .14em; color: rgba(255,255,255,.72); }
@@ -615,7 +614,8 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .yr-select option { color: var(--ink); }
 .yr-year { font-family: var(--font-num); font-size: 76px; line-height: .9; letter-spacing: .02em; margin-top: 8px; }
 .yr-card .yr-hero { font-size: 20px; color: #fff; margin: 8px 0 0; -webkit-text-stroke: var(--head-stroke) currentColor; }
-.yr-card .yr-hero b { color: #fff; font-weight: 400; box-shadow: inset 0 -.36em 0 rgba(255,255,255,.28); }
+/* 숫자는 강조 없이 문장 그대로 — 밑줄 형광펜을 깔았더니 글자 위로 어긋나 보였다(2026-09-17 지적) */
+.yr-card .yr-hero b { color: #fff; font-weight: 400; }
 .yr-diff { display: inline-block; font-family: var(--font-body); font-size: 12px; font-weight: 700; margin-left: 8px; padding: 3px 9px;
   border-radius: 999px; background: rgba(255,255,255,.16); vertical-align: 3px; -webkit-text-stroke: 0; }
 .yr-diff.up, .yr-diff.down { color: #fff; }
@@ -626,6 +626,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .yr-tile { background: var(--sink); border-radius: 14px; padding: 13px 15px 12px; }
 .yr-tile .l { font-size: 12px; font-weight: 700; color: var(--ink-3); }
 .yr-tile .l i { color: var(--ac); margin-right: 6px; font-size: 11px; }
+.yr-tile .l i.fa-heart { color: var(--heart-ic); }   /* 내 별점 하트는 포인트 색과 무관하게 고정 */
 .yr-tile .n { font-family: var(--font-num); font-size: 38px; line-height: 1; margin-top: 6px; color: var(--ink); }
 .yr-tile .n small { font-family: var(--font-body); font-size: 12px; font-weight: 700; color: var(--ink-3); margin-left: 3px; }
 

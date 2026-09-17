@@ -197,7 +197,7 @@ function periodHtml({ big, sub, from, to, diary }) {
   return `<div class="hm-period">
     <div class="hm-period-head">
       <div><div class="big">${big}</div><div class="sub">${esc(sub)}</div></div>
-      ${diary ? `<button class="hm-more" data-diary>다이어리 <i class="fa-solid fa-arrow-right"></i></button>` : ""}
+      ${diary ? `<button class="hm-more" data-go="stats">통계 <i class="fa-solid fa-arrow-right"></i></button>` : ""}
     </div>
     <div class="hm-year">
       <div><div class="n">${list.length}<small>편</small></div><div class="l">본 작품</div></div>
@@ -276,8 +276,13 @@ function initHome() {
     }
     if (t("[data-diary]")) { setListView("diary"); return jumpToList({}); }
     if ((el = t("[data-go]"))) {
-      const b = document.querySelector(`.tab-btn[data-tab="${el.dataset.go}"]`);
+      const go = el.dataset.go;
+      /* 이번 달 칸의 [통계 →] — 통계 맨 위 연간 결산을 **올해로** 맞춰 연다(전체로 봐뒀어도).
+         기록은 [최근 본 작품]의 [전체 기록]이 이미 가므로 여기는 통계로 보낸다(2026-09-17 요청) */
+      if (go === "stats") _yrPick = undefined;
+      const b = document.querySelector(`.tab-btn[data-tab="${go}"]`);
       if (b) b.click();
+      if (go === "stats") setTimeout(() => window.scrollTo(0, 0), 30);
       return;
     }
     if ((el = t("[data-open]"))) return openDetail(el.dataset.open);
