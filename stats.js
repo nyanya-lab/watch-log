@@ -114,13 +114,17 @@ function renderStats() {
 
     <!-- 연간 결산 — 전체 요약(위) 다음에 "올해 이야기", 그 아래가 기간 전체 차트들 -->
     <section class="stat-sec">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="stat-h" style="margin-bottom:0"><i class="fa-solid fa-award"></i>연간 결산</h3>
-        <select id="yrYear" class="filter-select">
-          ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
-        </select>
+      <!-- 박스로 묶는다 — 헤어라인만 두면 "가장 많이 본 배우" 같은 칩이 **그 해 기준**인지
+           아래 기간 전체 차트(배우 TOP10 등)와 같은 기준인지 구분이 안 됐다(2026-09-17 사용자 혼동) -->
+      <div class="yr-card">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="stat-h" style="margin-bottom:0"><i class="fa-solid fa-award"></i>연간 결산</h3>
+          <select id="yrYear" class="filter-select">
+            ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
+          </select>
+        </div>
+        <div id="yrBody"></div>
       </div>
-      <div id="yrBody"></div>
     </section>
 
     <!-- 장르 + 구분 -->

@@ -510,6 +510,15 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 
 /* ===== 연간 결산 =====
    그 해를 한 장으로 훑는 자리라 차트를 안 쓴다 — 큰 문장 · 숫자 · 포스터 · 칩. */
+/* 결산 전체를 한 면으로 묶는다. 안의 숫자 타일·칩이 흰색이라 면은 **옅은 연두**로 둔다
+   (흰 면이면 타일이 사라진다). 통계 탭은 원래 박스를 안 쓰지만, 여기는 "그 해만의 이야기"라
+   기간 전체 차트들과 기준이 달라서 경계가 보여야 한다. */
+.yr-card {
+  background: #eef4e6; border: 1px solid #dfe8d2;
+  border-radius: 16px; padding: 20px 22px 22px;
+}
+@media (max-width: 639px) { .yr-card { padding: 16px 14px 18px; } }
+.yr-card .yr-poster img, .yr-card .yr-poster-none { background: #dde7d0; }
 .yr-hero { font-size: 17px; color: #2c3129; margin-bottom: 14px; -webkit-text-stroke: 0.3px currentColor; }
 .yr-hero b { color: #4d7c2a; }
 .yr-diff { font-size: 13px; margin-left: 6px; -webkit-text-stroke: 0; }
