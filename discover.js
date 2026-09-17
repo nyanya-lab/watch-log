@@ -732,10 +732,12 @@ function renderDcReco() {
   }
 
   const mt = Discover.recoType;   // "" | movie | tv
-  const all = (data ? data.list : [])
-    // 캐시를 만든 뒤에 기록하거나 관심없음으로 넘긴 작품은 빼고 보여준다
-    .filter(c => !State.items.some(i => i.tmdbId === c.tmdbId))
-    .filter(c => !isHidden(c.tmdbId));
+  const seenRec = (c) => State.items.find(i => i.tmdbId === c.tmdbId);
+  /* 캐시를 만든 뒤에 기록하거나 관심없음으로 넘긴 작품도 **빼지 않고 흐리게 남긴다**(2026-09-17).
+     예전엔 누르는 순간 빠져서 뒤 카드가 한 칸씩 당겨졌다 — 가나다순으로 한 줄씩 훑는 중에
+     자리가 계속 밀려 어디까지 봤는지 놓쳤다. **빠지는 건 [다시 추천받기]를 누를 때뿐이다**
+     (`runReco`가 기록·관심없음을 애초에 후보에서 뺀다). 새로고침·탭 이동으로는 안 빠진다. */
+  const all = (data ? data.list : []);
 
   renderRecoFilters(all);
 
@@ -764,11 +766,18 @@ function renderDcReco() {
       note: (c.origin ? `<span class="badge badge-country">${esc(c.origin)}</span>` : "")
         + (c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "")
         + (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
-      actions: [
+      dim: !!(seenRec(c) || isHidden(c.tmdbId)),
+      /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
+         기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
+      actions: seenRec(c) ? [
+        { act: "open", id: seenRec(c).id, label: "내 기록", icon: "fa-book-open" }
+      ] : isHidden(c.tmdbId) ? [
+        { act: "unhide", label: "되돌리기", icon: "fa-rotate-left" }
+      ] : [
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
         { act: "add", label: "봤어요", icon: "fa-plus" },
-        { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 추천에서 빼기" }
+        { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 다시 추천받을 때 빠진다" }
       ],
       _raw: c
     }));
@@ -777,6 +786,9 @@ function renderDcReco() {
     <i class="fa-solid fa-wand-magic-sparkles text-4xl mb-3"></i>
     <p class="font-medium">아직 추천이 없어요</p>
     <p class="text-sm mt-1">"추천 받기"를 누르면 내 기록을 바탕으로 골라옵니다.</p>`);
+  // 흐리게 남은 카드가 몇 개인지 — 다시 추천받으면 이만큼 빠진다
+  const nDim = list.filter(e => e.dim).length;
+  if (nDim) $("#dcCount").textContent = `${list.length}개 · 정리 ${nDim}`;
 }
 
 /* ---------- 영화 시리즈 이어보기 ----------
@@ -1265,7 +1277,7 @@ function frOrder(parts, f, story) {
 }
 
 /* ---------- 카드 ---------- */
-/* e = { tmdbId, mediaType, title, poster, year, voteAverage, hideVote, note, flag, actions[] } */
+/* e = { tmdbId, mediaType, title, poster, year, voteAverage, hideVote, dim, note, flag, actions[] } */
 function dcCardHtml(e) {
   const st = myStatus(e.tmdbId);
 
@@ -1284,7 +1296,7 @@ function dcCardHtml(e) {
     </button>`).join("");
 
   return `
-    <div class="wl-card dc-card" data-act="detail" data-tid="${e.tmdbId}">
+    <div class="wl-card dc-card${e.dim ? " dc-dim" : ""}" data-act="detail" data-tid="${e.tmdbId}">
       ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }, e.hideVote) + flag)}
       <div class="wl-body">
         <div class="wl-title-row">

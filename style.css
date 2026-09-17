@@ -704,6 +704,9 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-arrow-l { left: -8px; }
 .dc-arrow-r { right: -8px; }
 .dc-flag-hide { background: rgba(100,116,139,.9); }
+/* 추천에서 정리한 카드 — 자리는 지키고 흐리게. 배지(봤어요·관심없음)와 버튼은 또렷하게 둔다 */
+.dc-dim .wl-poster, .dc-dim .wl-poster-empty { opacity: .35; filter: grayscale(1); }
+.dc-dim .wl-title-row, .dc-dim .wl-meta, .dc-dim .dc-note { opacity: .45; }
 
 .dc-note { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 5px 0 2px; }
 /* ⚠ 추천 이유 배지에는 **작품 제목이 들어간다**(「…」과 비슷) — 제목이 길면 `.badge`의
