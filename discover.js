@@ -14,8 +14,9 @@ const Discover = {
   recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
   recoOrigin: [],    // 추천 뷰의 제작국 필터 (여러 개, 빈 배열 = 전체)
   /* 60개 중 한국 작품 몫. **뽑을 때** 쓰는 값이라 위 필터(보는 조건)와 성격이 다르다.
-     `null`이면 몫을 나누지 않고 예전처럼 점수순으로만 채운다. */
-  recoKo: 30,
+     입력은 퍼센트(`recoKoPct`)로 받고, 쿼터 로직은 개수(`recoKo`)로 돈다. 기본 67% = 한국 40 · 외국 20. */
+  recoKoPct: 67,
+  recoKo: 40,
   recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순 | title=가나다순
   /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
      그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
@@ -451,7 +452,7 @@ async function runReco() {
        한 건씩 물어봐야 한다(240ms 간격). 그래서 60개를 채우거나 조회 상한에 닿으면 멈춘다 —
        전부 훑으면 후보가 수백 개라 하염없이 기다리게 된다.
        ⚠ `otts`는 정액제·무료·광고형만 센다(`tmdbProviders`). 대여·구매만 있는 작품은 빠진다. */
-    /* 한국 몫은 사용자가 고른다 (`Discover.recoKo`, 추천 바의 비율 바) */
+    /* 한국 몫은 사용자가 고른다 (`Discover.recoKo`, 추천 바의 퍼센트 입력) */
     const TARGET = RECO_TARGET, MAX_CALLS = 150;
     const KO_TARGET = Discover.recoKo;
     const list = [];
@@ -588,10 +589,13 @@ function renderRecoFilters(all) {
 /* 한국 작품 몫 고르기 — 뽑을 때 쓰는 값이라 [다시 추천받기] 바로 아래에 둔다.
    고른 값은 이 기기에 남긴다(매번 다시 고르게 하면 그것대로 번거롭다).
 
-   칩 네 개(위주/반반/조금만/상관없음)로 두었다가 **비율 바**로 바꿨다(2026-09-10 요청) —
-   단계를 고르는 것보다 비율 그 자체를 움직이는 편이 무엇을 정하는지 한눈에 읽힌다.
-   저장은 **개수**로 한다(0~60). 쿼터 로직이 개수로 돌고, 화면에만 %로 보여준다. */
-const LS_RECO_KO = "watchlog_reco_ko";
+   칩 네 개 → 비율 바(2026-09-10) → **퍼센트 직접 입력**(2026-09-17 요청). 바는 원하는 값에
+   딱 맞추기 어려웠다. 저장도 **입력한 퍼센트 그대로** 한다 — 개수로 저장하면 67을 넣었는데
+   다음에 열 때 반올림으로 다른 숫자가 떠 있게 된다.
+   ⚠ 키를 새로 뒀다. 옛 키(`watchlog_reco_ko`, 개수)에 바를 끌어둔 값이 남아 있으면
+   새 기본값(40·20)이 안 먹기 때문 — 기본값을 바꾸자는 요청이라 옛 값은 버린다. */
+const LS_RECO_KO = "watchlog_reco_ko_pct";
+const RECO_KO_PCT0 = 67;
 const RECO_TARGET = 60;
 const LS_RECO_HIDE_VOTE = "watchlog_reco_hide_vote";   // "0"이면 보이기, 없거나 "1"이면 숨김
 
@@ -686,25 +690,28 @@ function engToHangul(word) {
   return out || word;
 }
 
-function loadRecoKo() {
-  try {
-    const raw = localStorage.getItem(LS_RECO_KO);
-    if (raw === null || raw === "") return 30;     // ""는 옛 "상관없음" 값 — 이제 반반으로 본다
-    const n = parseInt(raw);
-    return isFinite(n) ? Math.min(RECO_TARGET, Math.max(0, n)) : 30;
-  } catch { return 30; }
+/* 퍼센트 → 개수. 0~100 밖이나 숫자가 아니면 null (호출하는 쪽이 이전 값을 지킨다) */
+function koPctToCount(pct) {
+  const n = parseFloat(pct);
+  if (!isFinite(n)) return null;
+  return Math.round(Math.min(100, Math.max(0, n)) / 100 * RECO_TARGET);
 }
 
-/* 슬라이더에 현재 값을 반영한다. `range`는 채워진 부분을 CSS만으로 칠할 수 없어서
-   배경 그라디언트를 직접 갈아 끼운다. */
-function renderRecoKoSlider() {
-  const r = $("#dcRecoKoRange"), label = $("#dcRecoKoLabel");
-  if (!r) return;
+function loadRecoKoPct() {
+  try {
+    localStorage.removeItem("watchlog_reco_ko");     // 옛 키(개수) — 위 주석 참고
+    const n = parseFloat(localStorage.getItem(LS_RECO_KO));
+    return isFinite(n) ? Math.min(100, Math.max(0, n)) : RECO_KO_PCT0;
+  } catch { return RECO_KO_PCT0; }
+}
+
+/* 입력칸 옆에 실제 개수를 적는다 — 퍼센트만 보면 60개 중 몇 개인지 머릿속으로 계산해야 한다.
+   입력 중(포커스)에는 칸의 값을 건드리지 않는다(치는 도중에 숫자가 바뀌면 안 된다). */
+function renderRecoKoInput() {
+  const inp = $("#dcRecoKoInput"), label = $("#dcRecoKoLabel");
+  if (!inp) return;
   const ko = Discover.recoKo;
-  const pct = Math.round(ko / RECO_TARGET * 100);
-  if (document.activeElement !== r) r.value = pct;   // 끌고 있는 중이면 건드리지 않는다
-  r.style.background = `linear-gradient(90deg, #4d7c2a 0 ${pct}%, #e6ecdd ${pct}% 100%)`;
-  r.title = `${RECO_TARGET}개 중 한국 ${ko} · 외국 ${RECO_TARGET - ko}`;
+  if (document.activeElement !== inp) inp.value = Discover.recoKoPct;
   if (label) label.textContent = `한국 ${ko} · 외국 ${RECO_TARGET - ko}`;
 }
 
@@ -718,7 +725,7 @@ function renderDcReco() {
     vb.title = Discover.recoHideVote ? "TMDB 평점 보기" : "TMDB 평점 숨기기";
   }
 
-  renderRecoKoSlider();
+  renderRecoKoInput();
   const data = loadReco();
   const info = $("#dcRecoInfo");
   $("#dcRecoBtn").innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>${data ? "다시 추천받기" : "추천 받기"}`;
@@ -2201,7 +2208,8 @@ window.addFromDiscover = addFromDiscover;
 /* ---------- 초기화 ---------- */
 function initDiscover() {
   if (!$("#tab-discover")) return;
-  Discover.recoKo = loadRecoKo();
+  Discover.recoKoPct = loadRecoKoPct();
+  Discover.recoKo = koPctToCount(Discover.recoKoPct);
   try { Discover.recoHideVote = localStorage.getItem(LS_RECO_HIDE_VOTE) !== "0"; } catch { /* 기본값 유지 */ }
 
   $("#dcSearchBtn").addEventListener("click", runDiscoverSearch);
@@ -2233,17 +2241,27 @@ function initDiscover() {
   /* 이어보기 — 새 시즌·편이 나왔는지 확인 */
   if ($("#dcNewBtn")) $("#dcNewBtn").addEventListener("click", runCheckNew);
 
-  /* 한국 작품 비중 바 — 끄는 동안(`input`) 숫자가 따라오고, 놓을 때(`change`) 저장한다 */
-  const koRange = $("#dcRecoKoRange");
-  if (koRange) {
-    koRange.addEventListener("input", () => {
-      Discover.recoKo = Math.round(parseInt(koRange.value) / 100 * RECO_TARGET);
-      renderRecoKoSlider();
+  /* 한국 작품 비중 입력 — 치는 동안(`input`) 옆의 개수가 따라오고,
+     칸을 벗어나거나 Enter(`change`)에서 0~100으로 맞춰 저장한다.
+     비우거나 이상한 값이면 이전 값으로 되돌린다(빈칸을 0%로 읽으면 한국 작품이 통째로 빠진다). */
+  const koInput = $("#dcRecoKoInput");
+  if (koInput) {
+    koInput.addEventListener("input", () => {
+      const n = koPctToCount(koInput.value);
+      if (n === null) return;
+      Discover.recoKo = n;
+      renderRecoKoInput();
     });
-    koRange.addEventListener("change", () => {
-      try { localStorage.setItem(LS_RECO_KO, String(Discover.recoKo)); }
+    koInput.addEventListener("change", () => {
+      const v = parseFloat(koInput.value);
+      if (isFinite(v)) Discover.recoKoPct = Math.round(Math.min(100, Math.max(0, v)));
+      Discover.recoKo = koPctToCount(Discover.recoKoPct);
+      koInput.value = Discover.recoKoPct;
+      renderRecoKoInput();
+      try { localStorage.setItem(LS_RECO_KO, String(Discover.recoKoPct)); }
       catch { /* 저장 못 해도 이번 판은 적용된다 */ }
     });
+    koInput.addEventListener("keydown", e => { if (e.key === "Enter") koInput.blur(); });
   }
 
   /* 인물 — 배우/감독 전환과 사람 칩 (그릴 때마다 새로 만들어지므로 위임) */

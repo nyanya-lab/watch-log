@@ -639,27 +639,20 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-flag-wish { background: rgba(224,112,15,.9); }
 .dc-flag-next { background: rgba(220,68,68,.9); }
 
-/* ===== 탐색: 한국 작품 비중 슬라이더 =====
-   칩 네 개(위주/반반/조금만/상관없음)로 두었다가 바 형태로 바꿨다(2026-09-10 요청) —
-   단계가 아니라 **비율 그 자체**를 보여주는 쪽이 무엇을 정하는지 한눈에 읽힌다.
-   채워진 부분은 JS가 `background`를 갈아 끼워 칠한다(range는 CSS만으로 칠할 수 없다). */
-.dc-range {
-  -webkit-appearance: none; appearance: none;
-  height: 6px; border-radius: 999px; background: #e6ecdd;
-  /* ⚠ `min-width`를 두면 폰에서 줄이 안 접히고 **가로로 넘친다**(375px에서 확인).
-     0으로 두고 basis로만 희망 폭을 준다. */
-  flex: 1 1 120px; min-width: 0; max-width: 240px; cursor: pointer;
+/* ===== 탐색: 한국 작품 비중 입력 =====
+   칩 네 개 → 끌어서 고르는 바 → **퍼센트를 직접 입력**으로 바꿨다(2026-09-17 요청).
+   바는 원하는 값에 딱 맞추기 어려웠다. 숫자 칸 + `%`를 한 덩어리로 묶는다. */
+.dc-pct {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 36px; padding: 0 10px 0 4px; border-radius: 10px;
+  background: #fff; box-shadow: inset 0 0 0 1px #dfe5d8;
+  font-size: 14px; font-weight: 600; color: #5f6b57; cursor: text;
 }
-.dc-range::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none;
-  width: 18px; height: 18px; border-radius: 50%;
-  background: #4d7c2a; border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,.22); cursor: pointer;
-}
-.dc-range::-moz-range-thumb {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: #4d7c2a; border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,.22); cursor: pointer;
+.dc-pct:focus-within { box-shadow: inset 0 0 0 2px #4d7c2a; }
+.dc-pct input {
+  width: 52px; height: 100%; padding: 0 2px; text-align: right;
+  background: transparent; border: 0; outline: none;
+  font-size: 15px; font-weight: 600; color: #2c3129;
 }
 
 /* ===== 탐색: 시리즈 묶음 (이어보기·관심없음) =====
