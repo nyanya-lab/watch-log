@@ -212,7 +212,7 @@ function initWatchlog() {
     VoteReveal.add(key);
     $$("[data-reveal]").filter(el => el.dataset.reveal === key).forEach(el => {
       el.outerHTML = el.dataset.fmt === "badge"
-        ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${esc(el.dataset.vote)}</span>`
+        ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${esc(el.dataset.label || "")}${esc(el.dataset.vote)}</span>`
         : `<span class="wl-rt wl-rt-tmdb"><i class="fa-solid fa-star"></i>${esc(el.dataset.vote)}</span>`;
     });
   }, true);
@@ -1749,6 +1749,7 @@ function openEdit(id) {
   $("#tmdbResults").innerHTML = "";
   $("#tmdbQuery").value = "";
   $("#selectedInfo").classList.add("hidden");
+  $("#fVoteSlot").innerHTML = "";          // 이전에 연 작품의 TMDB 평점이 남지 않게
   $("#tmdbSearchArea").classList.remove("hidden");
   $("#fTheater").checked = false;
   $("#fOttEtc").checked = false;

@@ -806,15 +806,18 @@ function renderSelected(d) {
   if (d.collectionName) {
     chips.push(`<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>${esc(d.collectionName)}${d.seriesNo ? ` S${d.seriesNo}` : ""}</span>`);
   }
-  /* 등록·수정 창에서도 TMDB 평점을 가린다(2026-09-17 지적) — 바로 아래에서 **내 별점을 넣는 자리**라
-     남의 점수가 가장 크게 끌어당긴다. 별점을 이미 매긴 기록을 고칠 때만 그대로 보인다.
-     누르면 보이는 건 탐색·검색과 같다(`voteAskHtml`, 같은 작품이면 `VoteReveal`로 함께 풀린다) */
-  if (d.voteAverage) {
+  /* TMDB 평점은 정보 카드가 아니라 **내 별점 입력칸 바로 옆**(`#fVoteSlot`)에 둔다(2026-09-17 요청) —
+     점수를 넣다가 궁금하면 그 자리에서 바로 볼 수 있게. 다만 남의 점수가 끌어당기지 않게 **가려두고 누르면 보인다**
+     (`voteAskHtml`, 같은 작품이면 `VoteReveal`로 함께 풀린다). 별점을 이미 매긴 기록을 고칠 때만 그대로 보인다 */
+  const slot = $("#fVoteSlot");
+  if (slot) {
     const editing = State.editingId && State.items.find(x => x.id === State.editingId);
     const key = `${d.mediaType || "movie"}:${d.tmdbId}`;
-    chips.push(!(editing && editing.rating) && !VoteReveal.has(key)
-      ? voteAskHtml(key, d.voteAverage, true)
-      : `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
+    slot.innerHTML = !d.voteAverage ? ""
+      : !(editing && editing.rating) && !VoteReveal.has(key)
+        ? `<button class="badge badge-vote vote-ask" data-reveal="${esc(key)}" data-vote="${d.voteAverage}" data-fmt="badge"
+             data-label="TMDB " title="눌러서 TMDB 평점 보기"><i class="fa-solid fa-star mr-1"></i>TMDB ?</button>`
+        : `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>TMDB ${d.voteAverage}</span>`;
   }
   if (d.cert) chips.push(`<span class="badge badge-cert">${esc(d.cert)}</span>`);
   if (d.otts && d.otts.length) chips.push(`<span class="badge badge-ott">${esc(d.otts.join(", "))}</span>`);
