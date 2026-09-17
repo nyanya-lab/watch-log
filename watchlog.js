@@ -297,7 +297,7 @@ function initWatchlog() {
   $("#qrClose").addEventListener("click", closeQuickRate);
   onBackdropClose("#quickRateModal", closeQuickRate);
 
-  ["#fWatching", "#fReWatching"].forEach(sel => {
+  ["#fWatching", "#fReWatching", "#fNoDate"].forEach(sel => {
     const el = $(sel);
     if (el) el.addEventListener("change", syncWatchingFields);
   });
@@ -648,15 +648,33 @@ function buildSeasonSelect(seasons) {
    `syncOttFields`와 같은 이유다 — **안 보이는(또는 뜻이 없는) 칸의 값이 그대로 저장되면 안 된다.**
    잠그기만 하고 안 비우면 "보는 중"인데 종료일이 남아 있는 어긋난 상태가 만들어진다. */
 function syncWatchingFields() {
+  /* "언제 봤는지 기억 안 남" — 켜면 본 날짜 두 칸과 "아직 보는 중"을 비우고 잠근다.
+     안 보이거나 뜻이 없는 칸의 값이 그대로 저장되면 안 된다(보는 중 체크와 같은 이유) */
+  const nd = $("#fNoDate");
+  const noDate = !!(nd && nd.checked);
+  const st = $("#fStart");
+  if (st) {
+    if (noDate) st.value = "";
+    st.disabled = noDate;
+    st.classList.toggle("opacity-50", noDate);
+  }
+  const w = $("#fWatching");
+  if (w) {
+    if (noDate) w.checked = false;
+    w.disabled = noDate;
+    w.parentElement.classList.toggle("opacity-50", noDate);
+  }
+
   const pairs = [["#fWatching", "#fEnd", "#fEndHint"], ["#fReWatching", "#fLastEnd", null]];
   pairs.forEach(([cb, input, hint]) => {
     const c = $(cb), el = $(input);
     if (!c || !el) return;
-    const on = c.checked;
+    const on = c.checked || (noDate && input === "#fEnd");
     if (on) el.value = "";
     el.disabled = on;
     el.classList.toggle("opacity-50", on);
-    if (hint && $(hint)) $(hint).textContent = on ? "다 보면 체크를 풀고 종료일을 적어주세요" : "하루면 비워두면 시작일과 동일";
+    if (hint && $(hint)) $(hint).textContent = (noDate && input === "#fEnd") ? "날짜 없이 저장해요"
+      : on ? "다 보면 체크를 풀고 종료일을 적어주세요" : "하루면 비워두면 시작일과 동일";
   });
 }
 
@@ -1726,6 +1744,7 @@ function openEdit(id) {
     $("#fEnd").value = i.endDate || "";
     $("#fWatching").checked = isWatching(i);
     $("#fReWatching").checked = isRewatching(i);
+    $("#fNoDate").checked = !i.startDate;   // 날짜 없이 저장된 기록 = 기억 안 남
     syncWatchingFields();
     $("#fReview").value = i.review || "";
     $("#fRating").value = i.rating || "";
@@ -1774,6 +1793,7 @@ function openEdit(id) {
     $("#rewatchFields").classList.add("hidden");
     $("#fWatching").checked = false;
     $("#fReWatching").checked = false;
+    $("#fNoDate").checked = false;
     syncWatchingFields();
     $("#deleteBtn").classList.add("hidden");
   }
@@ -1814,6 +1834,18 @@ function closeEdit() {
 function saveItem() {
   const title = $("#fTitle").value.trim();
   if (!title) { toast("제목을 입력하세요", "error"); return; }
+
+  /* 본 날짜를 비웠는데 "기억 안 남"을 안 켰으면 **깜빡한 건지 한 번 묻는다**(2026-09-17).
+     날짜 없이 저장하는 건 괜찮다 — 가짜 날짜(개봉일 등)를 넣으면 통계가 안 본 해에 잡히니 모르면 비우는 게 맞다.
+     다만 적는 걸 잊은 것과 구분이 안 돼서, 막지는 않고 확인만 받는다. 확인하면 체크를 켜고 그대로 저장한다 */
+  if (!$("#fStart").value && !$("#fNoDate").checked) {
+    if (!confirm("본 날짜가 비어 있어요.\n\n언제 봤는지 기억이 안 나면 [확인] — 날짜 없이 저장해요.\n깜빡했다면 [취소]를 누르고 날짜를 적어주세요.")) {
+      $("#fStart").focus();
+      return;
+    }
+    $("#fNoDate").checked = true;
+    syncWatchingFields();
+  }
 
   const start = $("#fStart").value || null;
   /* 보는 중이면 종료일을 **비운 채로** 저장한다 — 그게 곧 "아직 안 끝났다"는 뜻이다.

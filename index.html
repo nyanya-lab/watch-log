@@ -18,7 +18,7 @@
 </script>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260917v">
+<link rel="stylesheet" href="style.css?v=20260917w">
 </head>
 <body>
 
@@ -653,6 +653,11 @@
         <div>
           <label class="form-label"><i class="fa-solid fa-calendar-day mr-1 text-rose-400"></i>본 날짜 (시작)</label>
           <input type="date" id="fStart" class="form-input">
+          <!-- 날짜를 비우는 것과 구분한다 — 안 켜고 비우면 저장할 때 깜빡한 건지 한 번 묻는다(2026-09-17) -->
+          <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer mt-2">
+            <input type="checkbox" id="fNoDate" class="w-4 h-4 rounded">
+            <i class="fa-solid fa-calendar-xmark text-slate-400"></i>언제 봤는지 기억 안 남
+          </label>
         </div>
         <div>
           <label class="form-label">본 날짜 (종료)</label>
@@ -774,12 +779,12 @@
     }
   })();
 </script>
-<script src="core.js?v=20260917v"></script>
-<script src="tmdb.js?v=20260917v"></script>
-<script src="watchlog.js?v=20260917v"></script>
-<script src="discover.js?v=20260917v"></script>
-<script src="stats.js?v=20260917v"></script>
-<script src="home.js?v=20260917v"></script>
-<script src="search.js?v=20260917v"></script>
+<script src="core.js?v=20260917w"></script>
+<script src="tmdb.js?v=20260917w"></script>
+<script src="watchlog.js?v=20260917w"></script>
+<script src="discover.js?v=20260917w"></script>
+<script src="stats.js?v=20260917w"></script>
+<script src="home.js?v=20260917w"></script>
+<script src="search.js?v=20260917w"></script>
 </body>
 </html>
