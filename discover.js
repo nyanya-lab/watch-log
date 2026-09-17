@@ -75,12 +75,19 @@ function removeWish(tmdbId) {
 /* ---------- 관심없음 ----------
    추천·검색에서 계속 나오는데 볼 생각이 없는 작품을 걸러낸다.
    위시와 같은 이유로 items와 섞지 않는다 (본 게 아니니까). */
-function isHidden(tmdbId) {
-  return State.hides.some(h => h.tmdbId === tmdbId);
+/* ⚠ **영화·TV 구분까지 본다**(2026-09-17). TMDB는 영화와 TV가 다른 번호판이라 `movie/12345`와
+   `tv/12345`는 남남인데, 예전엔 번호만 비교해서 관심없음으로 넘긴 영화와 번호가 같은 드라마까지
+   추천·이어보기에서 빠질 수 있었다. `mediaType`을 모르는 호출(또는 저장값이 없는 옛 항목)은
+   예전처럼 번호만 본다 — 모르는 걸 "다르다"로 치면 넘긴 작품이 다시 나온다. */
+function sameHide(h, tmdbId, mediaType) {
+  return h.tmdbId === tmdbId && (!mediaType || !h.mediaType || h.mediaType === mediaType);
+}
+function isHidden(tmdbId, mediaType) {
+  return State.hides.some(h => sameHide(h, tmdbId, mediaType));
 }
 
 function addHide(h) {
-  if (isHidden(h.tmdbId)) return false;
+  if (isHidden(h.tmdbId, h.mediaType)) return false;
   State.hides.unshift({
     id: uid(),
     tmdbId: h.tmdbId,
@@ -91,8 +98,10 @@ function addHide(h) {
     voteAverage: h.voteAverage ?? null,
     addedAt: new Date().toISOString()
   });
-  // 관심없음으로 옮기면 위시에는 남겨둘 이유가 없다
-  removeWish(h.tmdbId);
+  // 관심없음으로 옮기면 위시에는 남겨둘 이유가 없다 (같은 번호의 다른 타입 위시는 건드리지 않는다)
+  const beforeW = State.wishes.length;
+  State.wishes = State.wishes.filter(w => !sameHide(w, h.tmdbId, h.mediaType));
+  if (State.wishes.length !== beforeW) saveLocal();
   saveLocal();
   return true;
 }
@@ -107,7 +116,7 @@ async function fillHideColl(tmdbId, mediaType) {
   if (collIndex().has(tmdbId)) return;                  // 이미 캐시가 알고 있으면 조회하지 않는다
   try {
     const d = await tmdbDetail(tmdbId, "movie");
-    const h = State.hides.find(x => x.tmdbId === tmdbId);
+    const h = State.hides.find(x => sameHide(x, tmdbId, "movie"));
     if (!d.collectionId) {
       // 시리즈에 속하지 않는 영화. 표시를 남겨야 아래 안내바가 이 작품을 다시 세지 않는다
       if (h) { h.noColl = true; saveLocal(); }
@@ -170,17 +179,17 @@ async function runFillHideColls() {
   renderDiscover();
 }
 
-function removeHide(tmdbId) {
+function removeHide(tmdbId, mediaType) {
   const before = State.hides.length;
-  State.hides = State.hides.filter(h => h.tmdbId !== tmdbId);
+  State.hides = State.hides.filter(h => !sameHide(h, tmdbId, mediaType));
   if (State.hides.length !== before) saveLocal();
 }
 
 /* ---------- 이 작품에 대한 "내 상태" ----------
    봤는지 / 어느 시즌까지 봤는지 / 위시에 담아뒀는지 */
-function myStatus(tmdbId) {
+function myStatus(tmdbId, mediaType) {
   const wished = isWished(tmdbId);
-  const hidden = isHidden(tmdbId);
+  const hidden = isHidden(tmdbId, mediaType);
   const recs = State.items.filter(i => i.tmdbId === tmdbId);
   if (!recs.length) return { watched: false, wished, hidden, recs: [], missing: [] };
 
@@ -331,7 +340,7 @@ async function runReco() {
   const bump = (card, score, reason) => {
     if (!card.tmdbId || !card.poster) return;        // 포스터 없는 건 카드가 허전해서 뺀다
     if (seenIds.has(card.tmdbId)) return;            // 이미 본 작품
-    if (isHidden(card.tmdbId)) return;               // 관심없음으로 넘긴 작품
+    if (isHidden(card.tmdbId, card.mediaType)) return;   // 관심없음으로 넘긴 작품
     if ((card.voteCount || 0) < 50) return;          // 표본이 너무 적은 작품
     const c = cand.get(card.tmdbId) || { card, score: 0, reasons: [] };
     c.score += score;
@@ -772,12 +781,12 @@ function renderDcReco() {
       meta: esc([...[...new Set(genreNamesOf(c.genreIds).flatMap(koGenre))].slice(0, 3), c.year]
         .filter(Boolean).join(" · ")),
       note: (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
-      dim: !!(seenRec(c) || isHidden(c.tmdbId)),
+      dim: !!(seenRec(c) || isHidden(c.tmdbId, c.mediaType)),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
       actions: seenRec(c) ? [
         { act: "open", id: seenRec(c).id, label: "내 기록", icon: "fa-book-open" }
-      ] : isHidden(c.tmdbId) ? [
+      ] : isHidden(c.tmdbId, c.mediaType) ? [
         { act: "unhide", label: "되돌리기", icon: "fa-rotate-left" }
       ] : [
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
@@ -1286,7 +1295,7 @@ function frOrder(parts, f, story) {
 /* e = { tmdbId, mediaType, title, poster, year, meta(이스케이프된 HTML — 있으면 year 대신), voteAverage,
          hideVote, dim, note, flag, actions[] } */
 function dcCardHtml(e) {
-  const st = myStatus(e.tmdbId);
+  const st = myStatus(e.tmdbId, e.mediaType);
 
   let flag = e.flag || "";
   if (!flag) {
@@ -1472,7 +1481,7 @@ function renderDcNext() {
      한 장으로 뭉치면(예전 방식) 다음 편만 보이고 나머지는 묻힌다.
      TV 시즌은 반대로 포스터·제목이 시즌마다 없으므로 한 장에 모아둔다. */
   const movie = movieContinueList().flatMap(c =>
-    c.missing.filter(p => !isHidden(p.tmdbId)).map(p => ({
+    c.missing.filter(p => !isHidden(p.tmdbId, "movie")).map(p => ({
       _sort: c.sortKey + "|" + String(1000 - p.no).padStart(4, "0"),   // 시리즈끼리 붙이고 편 순서대로
       tmdbId: p.tmdbId,
       mediaType: "movie",
@@ -1818,7 +1827,7 @@ function renderDcPerson() {
   const all = Discover.filmo;
   const watched = all.filter(f => State.items.some(i => i.tmdbId === f.tmdbId)).length;
   const list = all
-    .filter(f => !State.items.some(i => i.tmdbId === f.tmdbId) && !isHidden(f.tmdbId))
+    .filter(f => !State.items.some(i => i.tmdbId === f.tmdbId) && !isHidden(f.tmdbId, f.mediaType))
     .map(f => ({
       tmdbId: f.tmdbId, mediaType: f.mediaType, title: f.title, poster: f.poster,
       year: f.year, voteAverage: f.voteAverage,
@@ -1854,7 +1863,7 @@ function renderDcSearch() {
   }
 
   const list = Discover.results.map(r => {
-    const st = myStatus(r.tmdbId);
+    const st = myStatus(r.tmdbId, r.mediaType);
     const acts = [];
     let note = "";
 
@@ -2000,7 +2009,7 @@ async function openDcDetail(tmdbId, mediaType) {
 }
 
 function renderDcDetail(d, mediaType) {
-  const st = myStatus(d.tmdbId);
+  const st = myStatus(d.tmdbId, mediaType);
   const certLabel = (c) => {
     if (!c) return "";
     const s = String(c).trim();
@@ -2124,10 +2133,10 @@ function renderDcDetail(d, mediaType) {
         <i class="fa-solid fa-bookmark mr-1"></i>${wished ? "담아둠" : "보고싶어요"}
       </button>
       <button onclick="dcModalHide(${d.tmdbId},'${mediaType}')"
-        class="px-3 py-2.5 rounded-lg border text-sm font-semibold ${isHidden(d.tmdbId)
+        class="px-3 py-2.5 rounded-lg border text-sm font-semibold ${isHidden(d.tmdbId, mediaType)
           ? "border-slate-400 bg-slate-100 text-slate-600"
           : "btn-ghost"}"
-        title="${isHidden(d.tmdbId) ? "관심없음 해제" : "관심없음 — 추천에서 빼기"}">
+        title="${isHidden(d.tmdbId, mediaType) ? "관심없음 해제" : "관심없음 — 추천에서 빼기"}">
         <i class="fa-solid fa-ban"></i>
       </button>
       <div class="flex-1"></div>
@@ -2166,8 +2175,8 @@ window.dcModalWish = dcModalWish;
 
 function dcModalHide(tmdbId, mediaType) {
   const d = Discover._detail;
-  if (isHidden(+tmdbId)) {
-    removeHide(+tmdbId);
+  if (isHidden(+tmdbId, mediaType)) {
+    removeHide(+tmdbId, mediaType);
     toast("관심없음을 해제했습니다");
   } else {
     addHide({
@@ -2337,7 +2346,7 @@ function initDiscover() {
     if (act === "wish") dcToggleWish(tid);
     else if (act === "unwish") { removeWish(+tid); toast("보고싶어요에서 뺐습니다"); renderDiscover(); }
     else if (act === "hide") dcHide(tid);
-    else if (act === "unhide") { removeHide(+tid); toast("관심없음을 해제했습니다"); renderDiscover(); }
+    else if (act === "unhide") { removeHide(+tid, entry && entry.mediaType); toast("관심없음을 해제했습니다"); renderDiscover(); }
     else if (act === "open") openDetail(btn.dataset.id);
     else if (act === "add") addFromDiscover(tid, entry ? entry.mediaType : "movie", btn.dataset.season);
   });
