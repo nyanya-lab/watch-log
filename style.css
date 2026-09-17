@@ -509,10 +509,12 @@ textarea.form-input { height: auto; }
   margin-bottom: 3px;
 }
 /* 구분(영화·드라마·예능…)은 글자 대신 아이콘 하나로 */
-.wl-type { color: var(--ink-3); font-size: 13px; flex-shrink: 0; margin-top: 2px; }
+/* 아이콘 줄 높이를 제목 첫 줄과 같게(13.5 × 1.35 ≈ 18px) 맞춰 **가운데로** 세운다.
+   예전엔 margin-top 2px로 눈대중했는데 제목 글꼴을 명조로 바꾸면서 어긋났다(2026-09-17 지적) */
+.wl-type { color: var(--ink-3); font-size: 12px; flex-shrink: 0; height: 18.2px; display: flex; align-items: center; }
 .wl-title {
   flex: 1; min-width: 0;
-  font-size: 14.5px; color: var(--ink);
+  font-size: 13.5px; color: var(--ink);   /* 14.5 → 13.5 (2026-09-17 요청). 명조라 13px 아래로는 내리지 말 것 */
   line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden;
@@ -1012,9 +1014,15 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 /* 보는 중 배너 — 사진 위라 어두운 페이드로 글자를 읽히게 한다(상세 모달 백드롭과 같은 목적) */
 .hm-hero { position: relative; border-radius: 20px; overflow: hidden; min-height: 330px; background: #2a221d; color: #fff;
   display: flex; align-items: flex-end; }
-.hm-bd { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .9; }
+/* 뒤 사진(TMDB backdrop)은 16:9인데 배너는 3.4:1쯤이라, 폭에 맞춰 꽉 채우면 **위아래가 잘려 얼굴이 날아갔다**
+   (2026-09-17 사용자 지적). 그래서 넓은 화면에선 **높이에 맞춰 오른쪽에 통째로** 두고, 왼쪽 가장자리는
+   마스크로 어두운 바탕에 녹인다 — 글자 자리는 원래 어둡게 깔던 곳이라 잃는 게 없다.
+   반반(2개)·폰은 칸이 세로로 길어 이 방식이 오히려 작아지므로 꽉 채우되 위쪽을 기준으로 자른다 */
+.hm-bd { position: absolute; top: 0; right: 0; height: 100%; width: auto; max-width: none; aspect-ratio: 16/9;
+  object-fit: cover; object-position: center 25%; opacity: .95;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 38%); mask-image: linear-gradient(90deg, transparent 0, #000 38%); }
 .hm-hero::after { content: ""; position: absolute; inset: 0;
-  background: linear-gradient(90deg, rgba(20,15,12,.92) 0%, rgba(20,15,12,.6) 45%, rgba(20,15,12,.05) 100%); }
+  background: linear-gradient(90deg, rgba(20,15,12,.9) 0%, rgba(20,15,12,.55) 42%, rgba(20,15,12,0) 78%); }
 .hm-hero-in { position: relative; z-index: 1; padding: 30px 32px; display: flex; gap: 24px; align-items: flex-end; max-width: 720px; min-width: 0; }
 .hm-hero-poster { width: 118px; flex-shrink: 0; border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.45); aspect-ratio: 2/3; object-fit: cover; cursor: pointer; }
 /* 보는 중 작품 제목은 **디필레이아로 고정**(사용자 요청) — 제목 글꼴 설정과 무관.
@@ -1033,6 +1041,7 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 /* 보는 중 2개 — 반반 */
 .hm-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .hm-duo .hm-hero { min-height: 300px; }
+.hm-duo .hm-bd { left: 0; width: 100%; aspect-ratio: auto; object-position: center 20%; -webkit-mask-image: none; mask-image: none; }
 .hm-duo .hm-hero::after { background: linear-gradient(0deg, rgba(20,15,12,.94) 15%, rgba(20,15,12,.5) 60%, rgba(20,15,12,.1) 100%); }
 .hm-duo .hm-hero-in { padding: 24px; gap: 18px; }
 .hm-duo .hm-hero-poster { width: 92px; }
@@ -1092,6 +1101,7 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
   .hm-count .n { font-size: 34px; }
   .hm-hero { min-height: 0; border-radius: 16px; }
   .hm-hero::after, .hm-duo .hm-hero::after { background: linear-gradient(0deg, rgba(20,15,12,.95) 20%, rgba(20,15,12,.45) 70%, rgba(20,15,12,.15) 100%); }
+  .hm-bd { left: 0; width: 100%; aspect-ratio: auto; object-position: center 20%; -webkit-mask-image: none; mask-image: none; }
   .hm-hero-in, .hm-duo .hm-hero-in { padding: 120px 18px 20px; gap: 14px; }
   .hm-hero-poster, .hm-duo .hm-hero-poster { width: 78px; }
   .hm-hero h3, .hm-duo .hm-hero h3 { font-size: 27px; }
