@@ -877,6 +877,7 @@ function applyFilters() {
   renderHeaderCount();
   renderCards();
   if (typeof renderHome === "function") renderHome();   // 홈이 보일 때만 실제로 그린다
+  if (typeof renderSearch === "function") renderSearch(); // 검색 결과의 "내 기록" 칸도 (보일 때만)
 }
 
 /* ---------- 헤더 / 카운트 ---------- */

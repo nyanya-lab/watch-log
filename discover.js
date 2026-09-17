@@ -1429,7 +1429,6 @@ function renderDiscover() {
   $("#dcGrid").classList.toggle("dc-reco", Discover.view === "reco");
 
   if (Discover.view === "reco") return renderDcReco();
-  if (Discover.view === "search") return renderDcSearch();
   if (Discover.view === "wish") return renderDcWish();
   if (Discover.view === "hide") return renderDcHide();
   if (Discover.view === "person") return renderDcPerson();
@@ -1453,10 +1452,6 @@ function updateDcNav() {
   // 관심없음 탭은 표시한 게 있을 때만 (0개면 굳이 자리 차지할 필요 없음)
   const hb = $('.dc-nav[data-view="hide"]');
   if (hb) hb.classList.toggle("hidden", hideN === 0 && Discover.view !== "hide");
-
-  // 검색 결과 탭은 검색했을 때만 보인다
-  const sb = $('.dc-nav[data-view="search"]');
-  if (sb) sb.classList.toggle("hidden", !Discover.results.length && Discover.view !== "search");
 }
 
 /* "새로 나옴" 표시. `runCheckNew`가 남긴 자국(`newSeasonAt`/`newPartAt`)이 있을 때만.
@@ -1875,83 +1870,7 @@ function renderDcPerson() {
     <p class="text-sm mt-1">이 사람 것은 다 보셨네요.</p>`);
 }
 
-/* 검색 결과 */
-function renderDcSearch() {
-  const hint = $("#dcHint");
-  if (Discover.wasFallback) {
-    hint.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>"${esc(Discover.query)}" 결과가 없어
-      <b>"${esc(Discover.usedQuery)}"</b>로 검색했습니다`;
-    hint.classList.remove("hidden");
-  } else {
-    hint.classList.add("hidden");
-  }
-
-  const list = Discover.results.map(r => {
-    const st = myStatus(r.tmdbId, r.mediaType);
-    const acts = [];
-    let note = "";
-
-    if (st.watched && st.missing.length) {
-      const miss = st.missing.map(n => `S${n}`).join("·");
-      note = `<span class="badge badge-cert">안 본 시즌 ${esc(miss)}</span>
-              <span class="badge badge-season">본 시즌 ${st.seenSeasons.map(n => "S" + n).join("·")}</span>`;
-      acts.push({ act: "add", season: st.missing[0], label: `S${st.missing[0]} 기록하기`, icon: "fa-plus", cls: "dc-btn-main" });
-      acts.push({ act: "open", id: st.recs[0].id, label: "내 기록", icon: "fa-clock-rotate-left" });
-    } else if (st.watched) {
-      note = `<span class="badge badge-type"><i class="fa-solid fa-check mr-1"></i>${st.recs.length}개 기록 있음</span>`;
-      acts.push({ act: "open", id: st.recs[0].id, label: "내 기록 보기", icon: "fa-clock-rotate-left", cls: "dc-btn-main" });
-      acts.push({ act: "add", label: "또 기록", icon: "fa-plus" });
-    } else if (st.hidden) {
-      // 직접 검색해서 찾아온 거니 숨기지 않고, 되돌릴 버튼을 준다
-      note = `<span class="badge badge-genre"><i class="fa-solid fa-ban mr-1"></i>관심없음으로 표시함</span>`;
-      acts.push({ act: "unhide", label: "다시 관심", icon: "fa-rotate-left", cls: "dc-btn-main" });
-    } else {
-      acts.push({ act: "wish", label: st.wished ? "담아둠" : "보고싶어요", icon: "fa-bookmark", cls: st.wished ? "dc-btn-on" : "" });
-      acts.push({ act: "add", label: "봤어요", icon: "fa-plus", cls: "dc-btn-main" });
-      acts.push({ act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음" });
-    }
-
-    return {
-      tmdbId: r.tmdbId, mediaType: r.mediaType, title: r.title,
-      poster: r.poster, year: r.year, voteAverage: r.voteAverage,
-      note, actions: acts, _raw: r
-    };
-  });
-
-  paintDcCards(list, `
-    <i class="fa-solid fa-face-frown text-4xl mb-3"></i>
-    <p class="font-medium">"${esc(Discover.query)}" 검색 결과가 없습니다</p>
-    <p class="text-sm mt-1">제목을 줄여서 다시 검색해보세요.</p>`);
-}
-
-/* ---------- 검색 실행 ---------- */
-async function runDiscoverSearch() {
-  const q = $("#dcQuery").value.trim();
-  if (!q) return;
-  if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
-  if (Discover.searching) return;
-
-  Discover.searching = true;
-  Discover.query = q;
-  Discover.view = "search";
-  updateDcNav();
-  $("#dcGrid").innerHTML = "";
-  $("#dcEmpty").classList.add("hidden");
-  $("#dcHint").innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-1"></i>"${esc(q)}" 검색 중...`;
-  $("#dcHint").classList.remove("hidden");
-
-  try {
-    const { results, usedQuery, wasFallback } = await tmdbSearchSmart(q);
-    Discover.results = results;
-    Discover.usedQuery = usedQuery;
-    Discover.wasFallback = wasFallback;
-    renderDiscover();
-  } catch (e) {
-    $("#dcHint").innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i>${esc(e.message)}`;
-  } finally {
-    Discover.searching = false;
-  }
-}
+/* 검색은 상단바로 옮겼다(search.js, 2026-09-17) — 예전 `renderDcSearch`/`runDiscoverSearch` 자리 */
 
 /* ---------- 액션 ---------- */
 /* TMDB 작품 → 등록 모달 (정보 자동 채움). season을 주면 그 시즌까지 미리 선택 */
@@ -2229,10 +2148,6 @@ function initDiscover() {
   Discover.recoKo = koPctToCount(Discover.recoKoPct);
   try { Discover.recoHideVote = localStorage.getItem(LS_RECO_HIDE_VOTE) !== "0"; } catch { /* 기본값 유지 */ }
 
-  $("#dcSearchBtn").addEventListener("click", runDiscoverSearch);
-  $("#dcQuery").addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); runDiscoverSearch(); }
-  });
 
   $$(".dc-nav").forEach(btn => {
     btn.addEventListener("click", () => {

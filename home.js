@@ -41,7 +41,8 @@ function heroHtml(w, cls) {
         ? `<button class="btn btn-primary" data-rate="${esc(i.id)}"><i class="fa-solid fa-heart"></i>별점 남기기</button>`
         : "");
   return `<section class="hm-hero ${cls || ""}">
-    ${i.backdrop ? `<img class="hm-bd" src="${esc(bigImg(i.backdrop))}" alt="">` : ""}
+    ${i.backdrop ? `<img class="hm-bd-fill" src="${esc(bigImg(i.backdrop))}" alt="" aria-hidden="true">
+      <img class="hm-bd" src="${esc(bigImg(i.backdrop))}" alt="">` : ""}
     <div class="hm-hero-in">
       ${i.poster ? `<img class="hm-hero-poster" src="${esc(i.poster)}" alt="" data-open="${esc(i.id)}">` : ""}
       <div style="min-width:0">
@@ -104,7 +105,6 @@ function renderHome() {
   if (latest) shown.add(latest);
   const recent = all.filter(i => !shown.has(i)).slice(0, 12);
 
-  const monthRows = (thisMonth.length ? thisMonth : all).slice(0, 5);
   const c = maintCounts();
   const TODO = [
     ["rate", "fa-heart", "별점 채우기", c.noRate, true],
@@ -134,33 +134,48 @@ function renderHome() {
         <h2 class="hm-h2 hd">최근 본 작품</h2>
         <button class="hm-more" data-go="list">전체 기록 <i class="fa-solid fa-arrow-right"></i></button>
       </div>
-      <div class="hm-shelf">${recent.map(recordCardHtml).join("")}</div>
+      <!-- 화살표는 마우스를 올려야 보인다(사용자 요청: "약간 손 가야 보이는"). 터치 화면에선 밀어서 넘긴다 -->
+      <div class="hm-shelf-wrap">
+        <button class="hm-arrow" data-dir="-1" title="이전"><i class="fa-solid fa-chevron-left"></i></button>
+        <div class="hm-shelf">${recent.map(recordCardHtml).join("")}</div>
+        <button class="hm-arrow" data-dir="1" title="다음"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
     </section>` : ""}
 
-    <section class="hm-sec hm-two">
+    <!-- 이번 달 기록 줄은 없앴다 — "최근 본 작품"과 거의 같은 작품이 겹쳐 나왔다(2026-09-17 사용자 지적).
+         숫자만 정리할 것 칸에 타일로 남기고, 정리할 게 없으면 그 안내는 맨 아래 한 줄로 -->
+    <section class="hm-sec">
       <div class="hm-panel">
         <div class="hm-sec-head">
-          <h2 class="hm-h2 hd">이번 달 기록<span class="hm-h2small">${mm}월 · ${thisMonth.length}편</span></h2>
+          <h2 class="hm-h2 hd">정리할 것</h2>
           <button class="hm-more" data-diary>다이어리 <i class="fa-solid fa-arrow-right"></i></button>
         </div>
-        ${thisMonth.length ? "" : `<p class="hm-empty">이번 달 기록이 아직 없어요 — 최근 기록을 보여드려요</p>`}
-        <div class="dy-list">${monthRows.map((i, k) => diaryRowHtml(i, k ? recDate(monthRows[k - 1]) : null)).join("")}</div>
-      </div>
-      <div class="hm-panel">
-        <h2 class="hm-h2 hd" style="margin-bottom:4px">정리할 것</h2>
-        ${TODO.length ? TODO.map(([key, ic, label, n, hot]) => `
-          <button class="hm-todo" data-todo="${key}">
-            <span class="ic ${hot ? "hot" : ""}"><i class="fa-solid ${ic}"></i></span>${label}
-            <span class="n">${n}</span><i class="fa-solid fa-chevron-right go"></i>
-          </button>`).join("")
-          : `<p class="hm-empty"><i class="fa-solid fa-circle-check" style="color:var(--ac)"></i> 정리할 게 없어요</p>`}
         <div class="hm-year">
+          <div><div class="n">${thisMonth.length}<small>편</small></div><div class="l">${mm}월</div></div>
           <div><div class="n">${thisYear.length}<small>편</small></div><div class="l">${y}년</div></div>
           <div><div class="n">${avg ? avg.toFixed(1) : "-"}</div><div class="l">올해 평균 별점</div></div>
           <div><div class="n">${reY}</div><div class="l">올해 다시 본</div></div>
         </div>
+        ${TODO.length ? `<div class="hm-todos">${TODO.map(([key, ic, label, n, hot]) => `
+          <button class="hm-todo" data-todo="${key}">
+            <span class="ic ${hot ? "hot" : ""}"><i class="fa-solid ${ic}"></i></span>${label}
+            <span class="n">${n}</span><i class="fa-solid fa-chevron-right go"></i>
+          </button>`).join("")}</div>`
+          : `<p class="hm-empty hm-done"><i class="fa-solid fa-circle-check" style="color:var(--ac)"></i> 정리할 게 없어요</p>`}
       </div>
     </section>`;
+  syncShelfArrows();
+}
+
+/* 선반 화살표 — 넘칠 때, 갈 수 있는 쪽에만 (탐색 탭 묶음 화살표와 같은 방식) */
+function syncShelfArrows() {
+  const wrap = $("#tab-home .hm-shelf-wrap");
+  if (!wrap) return;
+  const s = wrap.querySelector(".hm-shelf");
+  const [l, r] = wrap.querySelectorAll(".hm-arrow");
+  l.classList.toggle("off", s.scrollLeft <= 4);
+  r.classList.toggle("off", s.scrollLeft + s.clientWidth >= s.scrollWidth - 4);
+  if (!s._bound) { s._bound = true; s.addEventListener("scroll", syncShelfArrows, { passive: true }); }
 }
 
 /* 다 봤어요 — 오늘로 끝내고, 별점이 없으면 바로 묻는다(2026-09-17 사용자 선택).
@@ -187,9 +202,15 @@ function rateOne(id) {
 function initHome() {
   const box = $("#tab-home");
   if (!box) return;
+  window.addEventListener("resize", debounce(syncShelfArrows, 150));
   box.addEventListener("click", e => {
     const t = (sel) => e.target.closest(sel);
     let el;
+    if ((el = t(".hm-arrow"))) {
+      const s = el.parentElement.querySelector(".hm-shelf");
+      s.scrollBy({ left: (+el.dataset.dir) * Math.max(160, s.clientWidth * 0.8), behavior: "smooth" });
+      return;
+    }
     if ((el = t("[data-finish]"))) return finishWatching(el.dataset.finish);
     if ((el = t("[data-rate]"))) return rateOne(el.dataset.rate);
     if ((el = t("[data-todo]"))) {

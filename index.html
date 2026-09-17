@@ -18,7 +18,7 @@
 </script>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260917p">
+<link rel="stylesheet" href="style.css?v=20260917q">
 </head>
 <body>
 
@@ -39,8 +39,15 @@
         <button class="tab-btn" data-tab="discover">탐색</button>
         <button class="tab-btn" data-tab="stats">통계</button>
       </nav>
+      <!-- 검색 — 탭을 따로 두지 않고 상단바에 둔다(2026-09-17). Enter를 누르면 본문 자리에 결과가 뜬다 -->
+      <label class="top-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input id="topSearch" type="search" placeholder="작품 검색 — 안 본 것도" autocomplete="off" spellcheck="false">
+      </label>
       <div class="top-sp"></div>
       <div class="top-acts">
+        <!-- 폰에는 상단바에 검색창 자리가 없어 돋보기만 둔다 → 결과 화면 안의 입력칸을 쓴다 -->
+        <button id="topSearchBtn" class="top-icon" title="검색"><i class="fa-solid fa-magnifying-glass"></i></button>
         <!-- 실시간 동기화가 끊겼을 때(폰 백그라운드 등) 손으로 받아오는 길 -->
         <button id="pullBtn" class="top-icon" title="서버에서 받아오기">
           <i class="fa-solid fa-arrows-rotate"></i>
@@ -163,22 +170,27 @@
       </div>
     </section>
 
+    <!-- ===== 검색 결과 (search.js) — 메뉴에는 없고 상단 검색창으로 들어온다 ===== -->
+    <section id="tab-search" class="hidden">
+      <div class="sr-page-input">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input id="searchPageInput" type="search" placeholder="작품 검색 — 안 본 것도" autocomplete="off" spellcheck="false">
+        <button id="searchClear" title="지우기"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="searchScope" class="type-chips mb-4">
+        <button class="wl-chip on" data-scope="all">전체</button>
+        <button class="wl-chip" data-scope="movie"><i class="fa-solid fa-film"></i>영화</button>
+        <button class="wl-chip" data-scope="tv"><i class="fa-solid fa-tv"></i>TV</button>
+        <button class="wl-chip" data-scope="unseen"><i class="fa-solid fa-eye-slash"></i>안 본 것만</button>
+      </div>
+      <div id="searchBody"></div>
+    </section>
+
     <!-- ===== 탐색 탭 ===== -->
     <section id="tab-discover" class="hidden space-y-4">
-      <div class="flex gap-2">
-        <div class="relative flex-1">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-          <input type="text" id="dcQuery" autocomplete="off" spellcheck="false" placeholder="안 본 작품도 찾아보기 — TMDB 전체 검색"
-            class="inp pl-9">
-        </div>
-        <button id="dcSearchBtn" class="btn btn-primary shrink-0">
-          <i class="fa-solid fa-magnifying-glass mr-1"></i>검색
-        </button>
-      </div>
 
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <div class="flex gap-1.5 flex-wrap">
-          <button class="dc-nav hidden" data-view="search"><i class="fa-solid fa-magnifying-glass mr-1.5"></i>검색 결과</button>
           <button class="dc-nav active" data-view="reco"><i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i>추천</button>
           <button class="dc-nav" data-view="next"><i class="fa-solid fa-forward mr-1.5"></i>이어보기 <span id="dcNextCount" class="dc-num">0</span></button>
           <button class="dc-nav" data-view="fr"><i class="fa-solid fa-layer-group mr-1.5"></i>시리즈</button>
@@ -760,11 +772,12 @@
     }
   })();
 </script>
-<script src="core.js?v=20260917p"></script>
-<script src="tmdb.js?v=20260917p"></script>
-<script src="watchlog.js?v=20260917p"></script>
-<script src="discover.js?v=20260917p"></script>
-<script src="stats.js?v=20260917p"></script>
-<script src="home.js?v=20260917p"></script>
+<script src="core.js?v=20260917q"></script>
+<script src="tmdb.js?v=20260917q"></script>
+<script src="watchlog.js?v=20260917q"></script>
+<script src="discover.js?v=20260917q"></script>
+<script src="stats.js?v=20260917q"></script>
+<script src="home.js?v=20260917q"></script>
+<script src="search.js?v=20260917q"></script>
 </body>
 </html>
