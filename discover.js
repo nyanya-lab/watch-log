@@ -763,9 +763,15 @@ function renderDcReco() {
       tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
       poster: c.poster, year: c.year, voteAverage: c.voteAverage,
       hideVote: Discover.recoHideVote,
-      note: (c.origin ? `<span class="badge badge-country">${esc(c.origin)}</span>` : "")
-        + (c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "")
-        + (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
+      /* 윗줄 = 장르(최대 3개)·연도, 아랫줄 = 볼 수 있는 곳(2026-09-17 요청).
+         제작국·추천 이유 배지는 뺐다 — 카드마다 `한국`·`한국 작품`이 반복돼 정작 고르는 데
+         필요한 장르·OTT가 묻혔다. 제작국은 필터로 거른다. 추천 이유(`c.reason`)는 데이터에 그대로
+         있어서 보고싶어요에 담으면 거기 배지로 남는다(`dcToggleWish`). */
+      /* `visibleGenres`는 안 쓴다 — 그건 구분(드라마 등)과 겹치는 장르를 지우는데, 추천 카드에는
+         구분 글자가 없어서 드라마 한 장르뿐인 작품은 장르 줄이 통째로 비었다(폭싹 속았수다). */
+      meta: esc([...[...new Set(genreNamesOf(c.genreIds).flatMap(koGenre))].slice(0, 3), c.year]
+        .filter(Boolean).join(" · ")),
+      note: (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
       dim: !!(seenRec(c) || isHidden(c.tmdbId)),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
@@ -1277,7 +1283,8 @@ function frOrder(parts, f, story) {
 }
 
 /* ---------- 카드 ---------- */
-/* e = { tmdbId, mediaType, title, poster, year, voteAverage, hideVote, dim, note, flag, actions[] } */
+/* e = { tmdbId, mediaType, title, poster, year, meta(이스케이프된 HTML — 있으면 year 대신), voteAverage,
+         hideVote, dim, note, flag, actions[] } */
 function dcCardHtml(e) {
   const st = myStatus(e.tmdbId);
 
@@ -1304,7 +1311,8 @@ function dcCardHtml(e) {
              title="${e.mediaType === "tv" ? "TV" : "영화"}"></i>
           <span class="wl-title">${esc(e.title)}</span>
         </div>
-        ${e.year ? `<div class="wl-meta">${esc(e.year)}</div>` : ""}
+        ${e.meta ? `<div class="wl-meta">${e.meta}</div>`
+          : e.year ? `<div class="wl-meta">${esc(e.year)}</div>` : ""}
         ${e.note ? `<div class="dc-note">${e.note}</div>` : ""}
         ${actions ? `<div class="dc-actions">${actions}</div>` : ""}
       </div>
@@ -2002,7 +2010,10 @@ function renderDcDetail(d, mediaType) {
   };
 
   const chips = [];
-  if (d.voteAverage) chips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
+  /* 추천 화면에서 평점을 숨겨뒀으면 여기서도 숨긴다 — 카드에서 가려놓고 눌러 들어오자마자
+     점수가 보이면 가린 의미가 없다. 다른 탐색 뷰에서 열었을 때는 평소대로 보인다. */
+  const hideVote = Discover.view === "reco" && Discover.recoHideVote;
+  if (d.voteAverage && !hideVote) chips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
   if (d.runtime) chips.push(`<span class="badge badge-time"><i class="fa-solid fa-clock mr-1"></i>${d.runtime}분</span>`);
   if (d.totalSeasons) chips.push(`<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>총 ${d.totalSeasons}시즌</span>`);
   if (d.totalEpisodes) chips.push(`<span class="badge badge-time"><i class="fa-solid fa-list-ol mr-1"></i>총 ${d.totalEpisodes}화</span>`);
