@@ -1089,7 +1089,7 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 /* ============================================================
    홈 (2026-09-17 개편 3단계) — home.js
    ============================================================ */
-.hm-greet { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 6px 0 20px; }
+.hm-greet { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: -6px 0 14px; }
 .hm-eyebrow { font-size: 12.5px; font-weight: 700; color: var(--ink-3); letter-spacing: .02em; }
 .hm-greet h1 { margin: 6px 0 0; font-size: 30px; line-height: 1.2; color: var(--ink); }
 .hm-greet h1 em { font-style: normal; color: var(--ac); }
@@ -1165,9 +1165,9 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 .hm-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
 .hm-dots i:first-child { width: 18px; border-radius: 3px; background: var(--ac); }
 
-.hm-sec { margin-top: 34px; }
+.hm-sec { margin-top: 24px; }
 /* 선반 바로 아래 칸은 조금 붙인다 — 위치 바가 평소엔 안 보여서 공백만 커 보였다 */
-.hm-sec:has(.hm-pos) + .hm-sec { margin-top: 22px; }
+.hm-sec:has(.hm-pos) + .hm-sec { margin-top: 12px; }
 .hm-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .hm-h2 { font-size: 20px; color: var(--ink); }
 .hm-h2small { font-family: var(--font-body); -webkit-text-stroke: 0; font-size: 13px; font-weight: 600; color: var(--ink-3); margin-left: 8px; }
@@ -1176,7 +1176,7 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 .hm-more i { font-size: 11px; margin-left: 3px; }
 .hm-empty { font-size: 13px; font-weight: 600; color: var(--ink-3); padding: 8px 0; }
 
-.hm-shelf { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px 10px; }
+.hm-shelf { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; padding: 4px 2px 6px; }
 .hm-shelf::-webkit-scrollbar { display: none; }
 .hm-shelf .wl-card { flex: 0 0 148px; min-width: 0; }
 
@@ -1201,6 +1201,7 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
   .hm-two, .hm-multi { grid-template-columns: 1fr; }
 }
 @media (max-width: 639px) {
+  .hm-greet { margin: -8px 0 12px; }
   .hm-greet h1 { font-size: 24px; }
   .hm-counts { gap: 18px; }
   .hm-count .n { font-size: 34px; }
@@ -1245,7 +1246,7 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 .wl-chip b { font-family: var(--font-num); font-weight: 400; font-size: 16px; line-height: 1; margin-left: 6px; padding-top: 2px; }
 
 /* 다이어리 — 달마다 왼쪽에 큰 달 이름, 오른쪽에 하루 한 줄 */
-.dy-month { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 26px; padding: 24px 0; border-top: 2px solid var(--ink); }
+.dy-month { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 26px; padding: 24px 0; border-top: 2px solid var(--ink); }
 .dy-month:first-child { border-top: 0; padding-top: 4px; }
 .dy-mo .big { font-family: var(--font-num); font-size: 60px; line-height: .85; color: var(--ink); }
 .dy-mo .big.none { font-family: var(--font-body); font-size: 22px; font-weight: 800; line-height: 1.2; }
