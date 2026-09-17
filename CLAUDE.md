@@ -751,8 +751,11 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
   - 기기에만 남아야 하는 값(API 키·동기화 비밀번호)은 `prefs`에 넣지 말 것.
 - **글꼴 (2026-09-17 개편)** — 역할마다 다르다.
   - 본문 **SUIT**(굵기 9단계라 강약을 굵기로 만든다). Pretendard도 괜찮다고 했던 대안 — 폴백으로 둔다.
-  - 제목 **조선일보명조**(`--font-head`, 눈누 CDN `@font-face`). 제목 자리: `.hd` `h1` `.wl-title` `.stat-h` `.dt-title`
-    `#selTitle` `#detailContent h4` `.yr-hero` `.modal-head h3` `.panel > h3` `.dc-group-t`.
+  - 제목 **조선일보명조**(`--font-head`, 눈누 CDN `@font-face`). **큰 제목(17px 이상)만**: `.hd` `h1` `.stat-h` `.dt-title`
+    `#detailContent h4` `.yr-hero`.
+    - **작은 제목(16px 이하)은 SUIT 700**: `.wl-title`(카드) `#selTitle` `.modal-head h3` `.panel > h3` `.dc-group-t`
+      (2026-09-17). 외곽선을 건 명조가 이 크기에서 뭉개져 "깨져 보인다"는 말을 들었다.
+      사용자는 명조 자체는 유지하고 싶어 하므로 **시험 적용**이다 — 되돌리라고 하면 이 커밋만 되돌리면 된다.
     - **굵기가 하나뿐**이라 제목에서 얇게 느껴진다 → **같은 색 외곽선 0.45px**(`--head-stroke`)로 굵힌다.
       0.3~0.7을 비교해 사용자가 0.45로 골랐다. 합성 볼드는 받침을 뭉개므로 `font-weight: 400` + `font-synthesis: none`.
     - 제목 속 아이콘에는 외곽선을 끈다(뭉툭해진다).
