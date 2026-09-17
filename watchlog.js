@@ -1320,12 +1320,12 @@ function openDetail(id) {
 
   $("#detailContent").innerHTML = `
     ${header}
-    <div class="p-5 ${i.backdrop ? "-mt-12 relative" : ""}">
+    <div class="p-5 ${i.backdrop ? "dt-over" : ""}">
       <div class="flex gap-4 mb-4">
         ${i.poster
           ? `<img src="${i.poster}" class="w-24 rounded-lg object-cover self-start" alt="">`
           : `<div class="w-24 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
-        <div class="flex-1 min-w-0 ${i.backdrop ? "pt-12" : ""}">
+        <div class="flex-1 min-w-0 ${i.backdrop ? "dt-over-t" : ""}">
           <h4 class="dt-title">
             ${esc(i.title)}
             ${i.cert ? `<span class="badge badge-cert align-middle ml-1">${esc(certLabel(i.cert))}</span>` : ""}

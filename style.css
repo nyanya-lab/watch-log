@@ -406,10 +406,16 @@ textarea.form-input { height: auto; }
 /* ===== 상세 모달 =====
    위계 원칙: **내가 만든 것(별점·본 날짜·한줄평)이 먼저, TMDB 정보는 아래에 조용히.**
    예전엔 둘이 똑같은 label-value 줄로 섞여 있어 뭐가 내 것인지 구분이 안 됐다. */
-/* 위쪽 가로 이미지(TMDB backdrop) — **16:9 원래 비율 그대로**. 예전엔 높이 128px 띠라 절반 넘게 잘렸다(2026-09-17).
-   흰 페이드는 아래쪽만 — 포스터 썸네일이 겹쳐 올라오는 자리만 가린다 */
-.dt-hero { position: relative; aspect-ratio: 16/9; background-size: cover; background-position: center; background-color: var(--sink); }
-.dt-hero-fade { position: absolute; inset: 0; background: linear-gradient(to top, #fff 0%, rgba(255,255,255,.6) 14%, rgba(255,255,255,0) 38%); }
+/* 위쪽 가로 이미지(TMDB backdrop) — **16:9 원래 비율 그대로**(TMDB 가로 이미지는 전부 16:9라 더 넓은 건 없다).
+   예전엔 높이 128px 띠라 절반 넘게 잘렸고, 통째로 두니 이번엔 창이 너무 길어졌다(2026-09-17).
+   → 자르지 않고 **흰색으로 흐려지는 구간을 위로 올리고 내용을 그만큼 끌어올린다**(사용자 제안).
+   이미지 아래쪽 약 40%가 포스터·제목 뒤로 깔린다. `.dt-over`의 margin %는 **폭 기준**이라
+   이미지 높이(폭의 56.25%)와 비례해서 창 폭이 바뀌어도 겹치는 정도가 같다 */
+.dt-hero { position: relative; aspect-ratio: 16/9; background-size: cover; background-position: center 30%; background-color: var(--sink); }
+.dt-hero-fade { position: absolute; inset: 0;
+  background: linear-gradient(to top, #fff 0%, #fff 22%, rgba(255,255,255,.75) 38%, rgba(255,255,255,.2) 58%, rgba(255,255,255,0) 72%); }
+.dt-over { position: relative; margin-top: -24%; }
+.dt-over-t { padding-top: 34px; }
 .dt-title { font-size: 20px; color: var(--ink); line-height: 1.35; }
 .dt-orig { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
 /* 작품 정보는 배지 대신 가운뎃점 한 줄 (카드와 같은 방식) */

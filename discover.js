@@ -2089,12 +2089,12 @@ function renderDcDetail(d, mediaType) {
 
   $("#dcModalContent").innerHTML = `
     ${header}
-    <div class="p-5 ${d.backdrop ? "-mt-12 relative" : ""}">
+    <div class="p-5 ${d.backdrop ? "dt-over" : ""}">
       <div class="flex gap-4 mb-4">
         ${d.poster
           ? `<img src="${d.poster}" class="w-28 rounded-lg object-cover self-start shadow-md" alt="">`
           : `<div class="w-28 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
-        <div class="flex-1 min-w-0 ${d.backdrop ? "pt-12" : ""}">
+        <div class="flex-1 min-w-0 ${d.backdrop ? "dt-over-t" : ""}">
           <h4 class="text-lg font-bold text-slate-800 leading-snug">
             ${esc(d.title)}
             ${d.cert ? `<span class="badge badge-cert align-middle ml-1">${esc(certLabel(d.cert))}</span>` : ""}
