@@ -3,25 +3,48 @@
    ============================================ */
 
 let _charts = [];
+let _yrPick;          // 연간 결산에서 고른 해 (undefined = 아직 안 고름 → 올해, null = 전체)
 
 function destroyCharts() {
   _charts.forEach(c => { try { c.destroy(); } catch {} });
   _charts = [];
 }
 
-const PALETTE = [
-  "#5f9235", "#10b981", "#f59e0b", "#ef4444", "#7bad48",
-  "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6",
-  "#8fbf63", "#0ea5e9", "#eab308", "#f43f5e", "#22c55e"
-];
+/* 차트 색 — **포인트 색에서 출발해 색상만 돌린다**(2026-09-17).
+   예전엔 연두 시절의 무지개 15색(초록·주황·분홍·하늘…)이 박혀 있어 새 색감과 따로 놀았다.
+   그렇다고 회색+포인트 색만 쓰면 장르 도넛처럼 조각이 많은 차트는 구분이 안 된다(사용자 지적).
+   → 첫 색 = 포인트 색, 그다음은 황금각(137.5°)씩 색상을 돌리고 **채도·밝기는 차분하게 고정**해
+     서로 구분되면서도 한 벌로 보이게 한다. 포인트 색을 바꾸면 차트 색도 함께 돈다.
+   "기타"·"미상"·"정보 없음"은 뜻이 없는 칸이라 회색. 내 별점 분홍·TMDB 금색은 따로 고정이다. */
+function hexHue(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0;
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+function chartPalette(n) {
+  const h0 = hexHue(accentColor());
+  return Array.from({ length: n }, (_, k) => k === 0 ? accentColor()
+    : `hsl(${Math.round((h0 + k * 137.508) % 360)} ${k % 2 ? 38 : 46}% ${k % 3 === 1 ? 66 : k % 3 === 2 ? 54 : 60}%)`);
+}
+const CHART_NONE = "#d6d1cb";
+const CHART_HEART = "#e0567f", CHART_GOLD = "#d4a72c";
+function colorsFor(labels) {
+  const pal = chartPalette(labels.length);
+  return labels.map((l, k) => (l === "기타" || l === "미상" || l === "정보 없음") ? CHART_NONE : pal[k]);
+}
 
 /* Chart.js는 캔버스에 글자를 직접 그리므로 CSS font-family를 물려받지 않는다.
    기본값이 Helvetica라 차트 안 글씨만 딴 폰트로 나온다 → 여기서 맞춰준다. */
 function applyChartFont() {
   if (!window.Chart) return;
-  Chart.defaults.font.family = "'Gowun Dodum', 'Pretendard Variable', Pretendard, sans-serif";
+  Chart.defaults.font.family = "SUIT, 'Pretendard Variable', Pretendard, sans-serif";
   Chart.defaults.font.size = 12;
-  Chart.defaults.color = "#6f7468";
+  Chart.defaults.font.weight = 600;
+  Chart.defaults.color = "#9b958f";
+  Chart.defaults.borderColor = "#ebe8e4";
 }
 
 /* 포인트 색 — 캔버스는 CSS 변수를 못 읽으므로 그릴 때 꺼내 쓴다(설정에서 바꾸면 applyPrefs가 다시 그린다) */
@@ -124,16 +147,7 @@ function renderStats() {
     <section class="stat-sec">
       <!-- 박스로 묶는다 — 헤어라인만 두면 "가장 많이 본 배우" 같은 칩이 **그 해 기준**인지
            아래 기간 전체 차트(배우 TOP10 등)와 같은 기준인지 구분이 안 됐다(2026-09-17 사용자 혼동) -->
-      <div class="yr-card">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="stat-h" style="margin-bottom:0"><i class="fa-solid fa-award"></i>연간 결산</h3>
-          <select id="yrYear" class="filter-select">
-            <option value="all">전체</option>
-            ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
-          </select>
-        </div>
-        <div id="yrBody"></div>
-      </div>
+      <div class="yr-card" id="yrBody"></div>
     </section>
 
     <!-- 장르 + 구분 -->
@@ -262,7 +276,7 @@ function renderStats() {
     const gTotal = gTop.values.reduce((a, b) => a + b, 0);
     _charts.push(new Chart($("#chartGenre"), {
       type: "doughnut",
-      data: { labels: gTop.labels, datasets: [{ data: gTop.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: "#fff" }] },
+      data: { labels: gTop.labels, datasets: [{ data: gTop.values, backgroundColor: colorsFor(gTop.labels), borderWidth: 2, borderColor: "#fff" }] },
       options: {
         ...commonOpts,
         onClick: clickToFilter(l => (l === "기타" ? restPatch("genre", gTop) : { genre: l })),
@@ -282,7 +296,7 @@ function renderStats() {
   const tTop = topN(byType, 8);
   _charts.push(new Chart($("#chartType"), {
     type: "doughnut",
-    data: { labels: tTop.labels, datasets: [{ data: tTop.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: "#fff" }] },
+    data: { labels: tTop.labels, datasets: [{ data: tTop.values, backgroundColor: colorsFor(tTop.labels), borderWidth: 2, borderColor: "#fff" }] },
     options: { ...commonOpts, onClick: clickToFilter(l => ({ type: l })), plugins: { legend: { position: "right", labels: { font: { size: 11, weight: 500 }, boxWidth: 12 } } } }
   }));
 
@@ -290,7 +304,7 @@ function renderStats() {
   const cTop = topN(byCountry, 10);
   _charts.push(new Chart($("#chartCountry"), {
     type: "bar",
-    data: { labels: cTop.labels, datasets: [{ data: cTop.values, backgroundColor: "#10b981", borderRadius: 6 }] },
+    data: { labels: cTop.labels, datasets: [{ data: cTop.values, backgroundColor: cTop.labels.map(l => (l === "기타" || l === "미상") ? CHART_NONE : chartPalette(2)[1]), borderRadius: 6 }] },
     options: { ...commonOpts, onClick: clickToFilter(l => l === "미상" ? null : l === "기타" ? restPatch("country", cTop) : { country: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
@@ -298,7 +312,7 @@ function renderStats() {
   const oTop = topN(byOtt, 10);
   _charts.push(new Chart($("#chartOtt"), {
     type: "bar",
-    data: { labels: oTop.labels, datasets: [{ data: oTop.values, backgroundColor: "#f59e0b", borderRadius: 6 }] },
+    data: { labels: oTop.labels, datasets: [{ data: oTop.values, backgroundColor: oTop.labels.map(l => (l === "기타" || l === "정보 없음") ? CHART_NONE : chartPalette(3)[2]), borderRadius: 6 }] },
     /* "정보 없음"은 필터로 걸 값이 없어 눌러도 아무 일 없게 둔다. "기타"는 묶인 OTT들을 그대로 건다 */
     options: { ...commonOpts, onClick: clickToFilter(l => l === "정보 없음" ? null : l === "기타" ? restPatch("ott", oTop) : { ott: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
@@ -313,8 +327,8 @@ function renderStats() {
     data: {
       labels: BUCKETS.map(String),
       datasets: [
-        { label: "♥ 내 별점", data: bucketOf(pairs.map(i => i.rating)), backgroundColor: "#e0567f", borderRadius: 6 },
-        { label: "★ TMDB 평점", data: bucketOf(pairs.map(i => i.voteAverage)), backgroundColor: "#eab308", borderRadius: 6 }
+        { label: "♥ 내 별점", data: bucketOf(pairs.map(i => i.rating)), backgroundColor: CHART_HEART, borderRadius: 6 },
+        { label: "★ TMDB 평점", data: bucketOf(pairs.map(i => i.voteAverage)), backgroundColor: CHART_GOLD, borderRadius: 6 }
       ]
     },
     options: {
@@ -339,9 +353,9 @@ function renderStats() {
     const GAP = 0.5;                       // 이만큼 차이 나야 후하다/박하다고 본다
     const pt = (i) => ({ x: i.voteAverage, y: i.rating, id: i.id, t: i.title });
     const groups = [
-      { label: "내가 더 후함", color: "#e0567f", data: pairs.filter(i => i.rating - i.voteAverage > GAP).map(pt) },
-      { label: "비슷",        color: "#94a3b8", data: pairs.filter(i => Math.abs(i.rating - i.voteAverage) <= GAP).map(pt) },
-      { label: "내가 더 박함", color: "#0ea5e9", data: pairs.filter(i => i.rating - i.voteAverage < -GAP).map(pt) }
+      { label: "내가 더 후함", color: CHART_HEART, data: pairs.filter(i => i.rating - i.voteAverage > GAP).map(pt) },
+      { label: "비슷",        color: "#a8a29c", data: pairs.filter(i => Math.abs(i.rating - i.voteAverage) <= GAP).map(pt) },
+      { label: "내가 더 박함", color: CHART_GOLD, data: pairs.filter(i => i.rating - i.voteAverage < -GAP).map(pt) }
     ];
     /* 두 축의 눈금이 같아야 대각선이 기준선 노릇을 한다 → 아래끝을 함께 맞춘다 */
     const lo = Math.max(0, Math.floor(Math.min(...pairs.map(i => Math.min(i.rating, i.voteAverage)))) - 0.5);
@@ -401,7 +415,7 @@ function renderStats() {
     const aValues = aLabels.map(l => byActor[l]);
     _charts.push(new Chart($("#chartActor"), {
       type: "bar",
-      data: { labels: aLabels, datasets: [{ data: aValues, backgroundColor: "#ec4899", borderRadius: 6 }] },
+      data: { labels: aLabels, datasets: [{ data: aValues, backgroundColor: chartPalette(4)[3], borderRadius: 6 }] },
       options: { ...commonOpts, onClick: clickToFilter(l => ({ person: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     }));
   }
@@ -413,22 +427,26 @@ function renderStats() {
     const dValues = dLabels.map(l => byDirector[l]);
     _charts.push(new Chart($("#chartDirector"), {
       type: "bar",
-      data: { labels: dLabels, datasets: [{ data: dValues, backgroundColor: "#64748b", borderRadius: 6 }] },
+      data: { labels: dLabels, datasets: [{ data: dValues, backgroundColor: chartPalette(5)[4], borderRadius: 6 }] },
       options: { ...commonOpts, onClick: clickToFilter(l => ({ person: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     }));
   }
 
   /* 연간 결산 — 차트가 아니라 다시 그리기만 하면 되므로 destroyCharts와 무관하다.
      칩·포스터 클릭은 위임으로 받는다(연도를 바꿀 때마다 새로 그려지기 때문). */
-  const yrSel = $("#yrYear");
-  if (yrSel) {
-    // "전체"는 연도 대신 null로 넘긴다 — 모든 해를 합친 총결산
-    const drawYr = () => renderYearReview(yrSel.value === "all" ? null : parseInt(yrSel.value));
-    yrSel.addEventListener("change", drawYr);
-    drawYr();
-    const body = $("#yrBody");
-    if (body && !body._bound) {
+  /* 연도 고르기는 결산 머리 띠 안에 있어 다시 그릴 때마다 새로 생긴다 → change도 위임으로.
+     고른 해는 `_yrPick`에 남겨 통계를 다시 그려도(색 바꾸기 등) 유지한다. "전체"는 null */
+  const body = $("#yrBody");
+  if (body) {
+    if (_yrPick === undefined) _yrPick = currentYear;
+    renderYearReview(_yrPick);
+    if (!body._bound) {
       body._bound = true;
+      body.addEventListener("change", e => {
+        if (e.target.id !== "yrYear") return;
+        _yrPick = e.target.value === "all" ? null : parseInt(e.target.value);
+        renderYearReview(_yrPick);
+      });
       body.addEventListener("click", e => {
         const jump = e.target.closest("[data-jump]");
         if (jump && typeof jumpToList === "function") {
@@ -472,8 +490,19 @@ function renderYearReview(year) {
   const list = all ? State.items.slice() : State.items.filter(i => inY(i.startDate));
   const rewatch = State.items.filter(i => inY(i.lastWatchStart));
 
+  /* 연도 고르기는 머리 띠 안에 있다 — 다시 그릴 때마다 새로 만들어지므로 change는 renderStats가 위임으로 받는다 */
+  const years = [...new Set(State.items.map(i => (i.startDate || "").slice(0, 4)).filter(Boolean))].sort().reverse();
+  const select = `<select id="yrYear" class="yr-select" aria-label="결산 연도">
+      <option value="all" ${all ? "selected" : ""}>전체</option>
+      ${years.map(y => `<option value="${y}" ${y === Y ? "selected" : ""}>${y}년</option>`).join("")}
+    </select>`;
+
   if (!list.length && !rewatch.length) {
-    box.innerHTML = `<p class="stat-note text-center" style="margin:0">${all ? "아직 남긴 기록이 없습니다" : Y + "년에 남긴 기록이 없습니다"}</p>`;
+    box.innerHTML = `<div class="yr-band"><div class="yr-band-in">
+        <div class="yr-band-top"><span class="yr-kicker">YEAR IN REVIEW</span>${select}</div>
+        <div class="yr-year">${all ? "ALL TIME" : Y}</div>
+        <p class="yr-hero">${all ? "아직 남긴 기록이 없어요" : Y + "년에 남긴 기록이 없어요"}</p>
+      </div></div>`;
     return;
   }
 
@@ -498,71 +527,100 @@ function renderYearReview(year) {
   list.forEach(i => ottList(i).forEach(o => { ottCount[o] = (ottCount[o] || 0) + 1; }));
   const topOtt = first(ottCount);
 
-  const byMonth = {};
-  // 전체일 땐 "2024년 3월"처럼 해까지 붙여 센다 — 여러 해의 3월을 합치면 뜻이 없다
-  list.forEach(i => {
-    const d = i.startDate || "";
-    const m = +d.slice(5, 7);
-    if (!m) return;
-    const k = all ? `${d.slice(0, 4)}년 ${m}` : m;
-    byMonth[k] = (byMonth[k] || 0) + 1;
-  });
-  const hotMonth = first(byMonth);
+  /* 흐름 막대 — 그 해면 1~12월, 전체면 해마다. 가장 많은 칸만 포인트 색 */
+  const flow = all
+    ? years.slice().reverse().map(y => ({ k: y, label: `'${y.slice(2)}`, n: list.filter(i => (i.startDate || "").startsWith(y)).length, jump: { year: y } }))
+    : Array.from({ length: 12 }, (_, m) => ({
+        k: m + 1, label: String(m + 1),
+        n: list.filter(i => +(i.startDate || "").slice(5, 7) === m + 1).length
+      }));
+  const flowMax = Math.max(1, ...flow.map(f => f.n));
+  const hot = flow.reduce((a, b) => (b.n > a.n ? b : a), flow[0]);
 
   const best = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating).slice(0, 5);
   const sorted = list.filter(i => i.startDate).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   const firstWork = sorted[0], lastWork = sorted[sorted.length - 1];
 
+  /* 머리 띠 배경 — 가장 좋았던 작품(없으면 가장 최근 작품)의 가로 이미지에서 **색만** 따온다.
+     홈 배너의 빈자리 채우기와 같은 방법(왼쪽 끝 한 줄을 늘려 흐리기)이라 사람 형체가 안 보인다 */
+  const tone = (best[0] && best[0].backdrop) ? best[0] : sorted.slice().reverse().find(i => i.backdrop);
+
   /* 칩을 누르면 그 조건으로 목록을 조회한다 — 연도를 함께 걸어야 결산에 적힌 개수와 맞는다.
      전체일 땐 Y가 빈 문자열이라 위임 핸들러가 year를 지운다(연도 없이 조회) */
-  const chip = (icon, label, v, patch) => v
-    ? `<button class="yr-chip" data-jump='${esc(JSON.stringify(patch))}'>
-         <i class="fa-solid ${icon}"></i>
-         <span class="yr-chip-l">${label}</span>
-         <b>${esc(v.name)}</b><span class="yr-chip-n">${v.n}편</span>
+  const pick = (icon, label, v, patch) => v
+    ? `<button class="yr-pick" data-jump='${esc(JSON.stringify(patch))}'>
+         <span class="ic"><i class="fa-solid ${icon}"></i></span>
+         <span class="tx"><span class="l">${label}</span><b>${esc(v.name)}</b></span>
+         <span class="n">${v.n}<small>편</small></span>
        </button>` : "";
 
-  const poster = (i) => `
-    <button class="yr-poster" data-open="${esc(i.id)}" title="${esc(i.title)}">
+  const poster = (i, k) => `
+    <button class="yr-poster ${k === 0 ? "top" : ""}" data-open="${esc(i.id)}" title="${esc(i.title)}">
+      <span class="yr-rank">${k + 1}</span>
       ${i.poster ? `<img src="${i.poster}" alt="" loading="lazy">`
                  : `<div class="yr-poster-none"><i class="fa-solid fa-film"></i></div>`}
       <span class="yr-poster-r"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>
       <span class="yr-poster-t">${esc(i.title)}</span>
     </button>`;
 
-  const work = (label, i) => i
-    ? `<div class="yr-edge"><span class="yr-chip-l">${label}</span>
-         <button class="yr-link" data-open="${esc(i.id)}">${esc(i.title)}</button>
-         <span class="wl-meta">${esc(i.startDate || "")}</span></div>` : "";
+  const edge = (label, i) => i
+    ? `<button class="yr-edge" data-open="${esc(i.id)}">
+         ${i.poster ? `<img src="${i.poster}" alt="" loading="lazy">` : `<span class="ph"><i class="fa-solid fa-film"></i></span>`}
+         <span class="tx"><span class="l">${label}</span><b>${esc(i.title)}</b><span class="d">${esc((i.startDate || "").replaceAll("-", "."))}</span></span>
+       </button>` : "";
+
+  const tile = (icon, label, n, unit) => `<div class="yr-tile">
+      <div class="l"><i class="fa-solid ${icon}"></i>${label}</div>
+      <div class="n">${n}${unit ? `<small>${unit}</small>` : ""}</div>
+    </div>`;
 
   box.innerHTML = `
-    <p class="yr-hero">${all ? "지금까지" : Y + "년에"} <b>${list.length}편</b>을 ${all ? "" : "처음 "}봤어요${
-      prev ? ` <span class="yr-diff ${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "▲" : "▼"} 작년보다 ${Math.abs(diff)}편</span>` : ""}</p>
-
-    <div class="yr-tiles">
-      <div class="stat-box"><div class="stat-label">${all ? "본 작품" : "처음 본 작품"}</div><div class="stat-value">${list.length}</div></div>
-      <div class="stat-box"><div class="stat-label">본 날</div><div class="stat-value">${days}<span class="text-sm font-semibold text-slate-400">일</span></div></div>
-      <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${Math.round(min / 60).toLocaleString()}<span class="text-sm font-semibold text-slate-400">시간</span></div></div>
-      <div class="stat-box"><div class="stat-label">다시 본 작품</div><div class="stat-value">${rewatch.length}</div></div>
+    <div class="yr-band">
+      ${tone ? `<div class="yr-band-fill" style="background-image:url('${esc(tone.backdrop)}')"></div>` : ""}
+      <div class="yr-band-in">
+        <div class="yr-band-top"><span class="yr-kicker">${all ? "ALL TIME REVIEW" : "YEAR IN REVIEW"}</span>${select}</div>
+        <div class="yr-year">${all ? "ALL TIME" : Y}</div>
+        <p class="yr-hero">${all ? "지금까지" : Y + "년에"} <b>${list.length}편</b>을 ${all ? "" : "처음 "}봤어요${
+          prev ? ` <span class="yr-diff ${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "▲" : "▼"} 작년보다 ${Math.abs(diff)}편</span>` : ""}</p>
+      </div>
     </div>
 
-    ${best.length ? `
-      <div class="yr-h"><i class="fa-solid fa-heart" style="color:#e0567f"></i>가장 좋았던 작품</div>
-      <div class="yr-posters">${best.map(poster).join("")}</div>` : ""}
+    <div class="yr-in">
+      <div class="yr-tiles">
+        ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편")}
+        ${tile("fa-calendar-check", "본 날", days, "일")}
+        ${tile("fa-hourglass-half", "예상 시청시간", Math.round(min / 60).toLocaleString(), "시간")}
+        ${tile("fa-rotate", "다시 본 작품", rewatch.length, "편")}
+      </div>
 
-    ${(topGenre || topActor || topDir || topOtt) ? `
-      <div class="yr-h"><i class="fa-solid fa-ranking-star"></i>가장 많이 본</div>
-      <div class="yr-chips">
-        ${chip("fa-masks-theater", "장르", topGenre, { year: Y, genre: topGenre && topGenre.name })}
-        ${chip("fa-user", "배우", topActor, { year: Y, person: topActor && topActor.name })}
-        ${chip("fa-clapperboard", "감독", topDir, { year: Y, person: topDir && topDir.name })}
-        ${chip("fa-tv", "OTT", topOtt, { year: Y, ott: topOtt && topOtt.name })}
-      </div>` : ""}
+      ${best.length ? `
+        <div class="yr-h"><i class="fa-solid fa-heart" style="color:var(--heart-ic)"></i>가장 좋았던 작품</div>
+        <div class="yr-posters">${best.map(poster).join("")}</div>` : ""}
 
-    ${hotMonth ? `<p class="stat-note" style="margin:16px 0 0">
-      가장 몰아본 달은 <b>${hotMonth.name}월</b>이었어요 — ${hotMonth.n}편</p>` : ""}
-    ${work("첫 작품", firstWork)}
-    ${firstWork !== lastWork ? work("마지막 작품", lastWork) : ""}`;
+      <div class="yr-cols">
+        ${(topGenre || topActor || topDir || topOtt) ? `<div>
+          <div class="yr-h"><i class="fa-solid fa-ranking-star"></i>가장 많이 본</div>
+          <div class="yr-picks">
+            ${pick("fa-masks-theater", "장르", topGenre, { year: Y, genre: topGenre && topGenre.name })}
+            ${pick("fa-user", "배우", topActor, { year: Y, person: topActor && topActor.name })}
+            ${pick("fa-clapperboard", "감독", topDir, { year: Y, person: topDir && topDir.name })}
+            ${pick("fa-tv", "OTT", topOtt, { year: Y, ott: topOtt && topOtt.name })}
+          </div>
+        </div>` : ""}
+        <div>
+          <div class="yr-h"><i class="fa-solid fa-chart-column"></i>${all ? "해마다" : "달마다"}${
+            hot && hot.n ? `<span class="yr-h-sub">${all ? `${hot.k}년` : `${hot.k}월`}에 가장 많이 — ${hot.n}편</span>` : ""}</div>
+          <div class="yr-flow ${all ? "years" : ""}">
+            ${flow.map(f => `<${f.jump ? `button data-jump='${esc(JSON.stringify(f.jump))}'` : "div"} class="yr-bar ${f === hot && f.n ? "hot" : ""}" title="${f.label}${all ? "" : "월"} · ${f.n}편">
+              <span class="c">${f.n || ""}</span>
+              <span class="b" style="height:${Math.round(f.n / flowMax * 100)}%"></span>
+              <span class="x">${f.label}</span>
+            </${f.jump ? "button" : "div"}>`).join("")}
+          </div>
+          ${firstWork ? `<div class="yr-edges">${edge("첫 작품", firstWork)}${firstWork !== lastWork ? edge("마지막 작품", lastWork) : ""}</div>` : ""}
+        </div>
+      </div>
+    </div>`;
 }
 
 /* ---------- 집계 헬퍼 ---------- */

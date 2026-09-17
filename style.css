@@ -594,68 +594,107 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 }
 #dcPersonChips .dc-num { margin-left: 5px; }
 
-/* ===== 연간 결산 =====
-   그 해를 한 장으로 훑는 자리라 차트를 안 쓴다 — 큰 문장 · 숫자 · 포스터 · 칩. */
-/* 결산 전체를 한 면으로 묶는다. 안의 숫자 타일·칩이 흰색이라 면은 **옅은 연두**로 둔다
-   (흰 면이면 타일이 사라진다). 통계 탭은 원래 박스를 안 쓰지만, 여기는 "그 해만의 이야기"라
-   기간 전체 차트들과 기준이 달라서 경계가 보여야 한다. */
-.yr-card {
-  background: var(--sink); border: 1px solid var(--line);
-  border-radius: 16px; padding: 20px 22px 22px;
-}
-@media (max-width: 639px) { .yr-card { padding: 16px 14px 18px; } }
-.yr-card .yr-poster img, .yr-card .yr-poster-none { background: var(--sink-2); }
-.yr-hero { font-size: 19px; color: var(--ink); margin-bottom: 14px; }
-.yr-hero b { color: var(--ac); }
-.yr-diff { font-size: 13px; margin-left: 6px; -webkit-text-stroke: 0; }
-.yr-diff.up { color: var(--ac); }
-.yr-diff.down { color: #94a3b8; }
+/* ===== 연간 결산 (2026-09-17 다듬기) =====
+   그 해를 한 장으로 훑는 자리라 차트를 안 쓴다. 한 장짜리 카드:
+   ① 머리 띠 — 큰 연도(Bebas) + 문장. 배경은 그 해 가장 좋았던 작품의 가로 이미지에서 **색만** 따온다
+      (홈 배너 빈자리와 같은 방법 — 사람 형체가 안 보인다). 연도 고르기도 띠 안에 둔다.
+   ② 숫자 타일 4개 ③ 가장 좋았던 작품(순위 번호) ④ 가장 많이 본 · 달마다 막대 · 첫/마지막 작품.
+   카드로 묶는 이유는 그대로다 — "가장 많이 본 배우"가 **그 해 기준**인지 아래 전체 기간 차트와 헷갈렸다. */
+.yr-card { border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: #fff; }
+.yr-band { position: relative; overflow: hidden; background: linear-gradient(135deg, #2a221d, var(--ac-d)); color: #fff; }
+.yr-band-fill { position: absolute; inset: -40px; background-size: 6000% 110%; background-position: 0% 30%;
+  filter: blur(36px) brightness(.62) saturate(1.2); }
+.yr-band::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20,15,12,.55), rgba(20,15,12,.15)); }
+.yr-band-in { position: relative; z-index: 1; padding: 22px 26px 24px; }
+.yr-band-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.yr-kicker { font-family: var(--font-num); font-size: 16px; letter-spacing: .14em; color: rgba(255,255,255,.72); }
+.yr-select { appearance: none; -webkit-appearance: none; background: rgba(255,255,255,.14) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='white' stroke-width='1.6' fill='none'/%3E%3C/svg%3E") no-repeat right 11px center;
+  color: #fff; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; padding: 6px 30px 6px 14px;
+  font-size: 13px; font-weight: 700; cursor: pointer; }
+.yr-select:hover { background-color: rgba(255,255,255,.22); }
+.yr-select option { color: var(--ink); }
+.yr-year { font-family: var(--font-num); font-size: 76px; line-height: .9; letter-spacing: .02em; margin-top: 8px; }
+.yr-card .yr-hero { font-size: 20px; color: #fff; margin: 8px 0 0; -webkit-text-stroke: var(--head-stroke) currentColor; }
+.yr-card .yr-hero b { color: #fff; font-weight: 400; box-shadow: inset 0 -.38em 0 color-mix(in srgb, var(--ac) 70%, transparent); }
+.yr-diff { display: inline-block; font-family: var(--font-body); font-size: 12px; font-weight: 700; margin-left: 8px; padding: 3px 9px;
+  border-radius: 999px; background: rgba(255,255,255,.16); vertical-align: 3px; -webkit-text-stroke: 0; }
+.yr-diff.up, .yr-diff.down { color: #fff; }
 
-.yr-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.yr-in { padding: 20px 24px 24px; }
+.yr-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 @media (min-width: 640px) { .yr-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.yr-tile { background: var(--sink); border-radius: 14px; padding: 13px 15px 12px; }
+.yr-tile .l { font-size: 12px; font-weight: 700; color: var(--ink-3); }
+.yr-tile .l i { color: var(--ac); margin-right: 6px; font-size: 11px; }
+.yr-tile .n { font-family: var(--font-num); font-size: 38px; line-height: 1; margin-top: 6px; color: var(--ink); }
+.yr-tile .n small { font-family: var(--font-body); font-size: 12px; font-weight: 700; color: var(--ink-3); margin-left: 3px; }
 
-.yr-h { font-size: 14px; color: var(--ink); margin: 22px 0 10px; }
-.yr-h i { color: var(--ac); margin-right: 7px; }
+.yr-h { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 800; color: var(--ink); margin: 24px 0 10px; }
+.yr-h i { color: var(--ac); font-size: 13px; }
+.yr-h-sub { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 
-/* 5장이라 줄바꿈보다 한 줄로 흐르는 편이 읽기 낫다 (폰에서는 밀어서 본다) */
-.yr-posters { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+/* 가장 좋았던 작품 — 순위 번호를 포스터 왼쪽 아래에 크게. 5장이라 한 줄로 흐른다 */
+.yr-posters { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
 .yr-posters::-webkit-scrollbar { display: none; }
-/* ⚠ `min-width: 0`이 없으면 **제목이 긴 작품만 포스터가 커진다.**
-   flex 항목의 기본값 `min-width: auto`가 flex-basis보다 우선하는데, 제목이 `nowrap`이라
-   그 항목의 최소 폭이 제목 전체 길이가 되기 때문이다(overflow:hidden은 최소 폭을 줄여주지 않는다).
-   포스터는 `aspect-ratio`라 폭을 따라 높이까지 커진다. */
-.yr-poster { flex: 0 0 104px; min-width: 0; text-align: left; position: relative; }
-.yr-poster img, .yr-poster-none {
-  width: 100%; aspect-ratio: 2/3; object-fit: cover;
-  border-radius: 8px; display: block; background: var(--sink);
-}
-.yr-poster-none { display: flex; align-items: center; justify-content: center; color: var(--ac); font-size: 22px; }
-.yr-poster:hover img { filter: brightness(1.05); }
-.yr-poster-r {
-  position: absolute; top: 6px; right: 6px;
-  background: rgba(29,26,24,.74); color: #fff;
-  font-size: 11px; padding: 2px 6px; border-radius: 999px;
-}
+/* ⚠ `min-width: 0`이 없으면 **제목이 긴 작품만 포스터가 커진다**(flex 항목 기본 min-width: auto + nowrap 제목) */
+.yr-poster { flex: 0 0 118px; min-width: 0; text-align: left; position: relative; }
+.yr-poster img, .yr-poster-none { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 10px; display: block;
+  background: var(--sink); box-shadow: 0 6px 16px -8px rgba(0,0,0,.35); transition: transform .15s; }
+.yr-poster:hover img { transform: translateY(-3px); }
+.yr-poster-none { display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 22px; }
+.yr-rank { position: absolute; left: 7px; top: calc(118px * 1.5 - 44px); z-index: 1; font-family: var(--font-num); font-size: 40px;
+  line-height: 1; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.55); }
+.yr-poster.top .yr-rank { color: color-mix(in srgb, var(--ac) 35%, #fff); }
+.yr-poster-r { position: absolute; top: 7px; right: 7px; background: rgba(29,26,24,.74); color: #fff;
+  font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
 .yr-poster-r i { color: #ffb0c6; margin-right: 3px; }
-.yr-poster-t {
-  display: block; margin-top: 6px; font-size: 12.5px; color: var(--ink);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
+.yr-poster-t { display: block; margin-top: 7px; font-size: 12.5px; font-weight: 700; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.yr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.yr-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 12px; border-radius: 999px;
-  background: #fff; border: 1px solid var(--line); font-size: 13px; color: var(--ink);
-}
-.yr-chip:hover { border-color: var(--line-2); background: var(--sink); }
-.yr-chip i { color: var(--ac); }
-.yr-chip-l { color: var(--ink-3); }
-.yr-chip-n { color: #94a3b8; font-size: 12px; }
+.yr-cols { display: grid; grid-template-columns: 1fr; gap: 0 28px; }
+@media (min-width: 900px) { .yr-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); } }
+.yr-picks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.yr-pick { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line);
+  background: #fff; text-align: left; min-width: 0; }
+.yr-pick:hover { border-color: var(--ac-line); }
+.yr-pick .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--ac-soft); color: var(--ac-d);
+  display: grid; place-items: center; font-size: 13px; flex-shrink: 0; }
+.yr-pick .tx { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.yr-pick .l { font-size: 11px; font-weight: 700; color: var(--ink-3); }
+.yr-pick b { font-size: 14px; font-weight: 800; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yr-pick .n { font-family: var(--font-num); font-size: 22px; line-height: 1; color: var(--ink-2); flex-shrink: 0; }
+.yr-pick .n small { font-family: var(--font-body); font-size: 11px; font-weight: 700; color: var(--ink-3); margin-left: 1px; }
 
-.yr-edge { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-top: 8px; }
-.yr-link { color: var(--ac); font-weight: 700; }
-.yr-link:hover { text-decoration: underline; }
+/* 달마다 막대 — CSS만으로. 가장 많은 칸만 포인트 색, 나머지는 옅은 포인트 색 */
+.yr-flow { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 5px; align-items: end; height: 118px; }
+.yr-flow.years { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.yr-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.yr-bar .c { font-size: 10.5px; font-weight: 700; color: var(--ink-3); height: 15px; }
+.yr-bar .b { width: 100%; max-width: 26px; min-height: 3px; border-radius: 5px 5px 2px 2px; background: color-mix(in srgb, var(--ac) 28%, #fff); }
+.yr-bar.hot .b { background: var(--ac); }
+.yr-bar.hot .c { color: var(--ac-d); }
+.yr-bar .x { font-size: 11px; font-weight: 700; color: var(--ink-3); margin-top: 5px; }
+button.yr-bar:hover .b { background: var(--ac-d); }
+
+.yr-edges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.yr-edge { display: flex; align-items: center; gap: 10px; padding: 7px; border-radius: 12px; background: var(--sink); text-align: left; min-width: 0; }
+.yr-edge:hover { background: var(--sink-2); }
+.yr-edge img, .yr-edge .ph { width: 32px; height: 48px; object-fit: cover; border-radius: 5px; flex-shrink: 0;
+  background: var(--sink-2); display: grid; place-items: center; color: var(--ink-3); font-size: 12px; }
+.yr-edge .tx { display: flex; flex-direction: column; min-width: 0; }
+.yr-edge .l { font-size: 11px; font-weight: 700; color: var(--ink-3); }
+.yr-edge b { font-size: 13px; font-weight: 800; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yr-edge .d { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+
+@media (max-width: 639px) {
+  .yr-band-in { padding: 18px 18px 20px; }
+  .yr-year { font-size: 58px; }
+  .yr-card .yr-hero { font-size: 17px; }
+  .yr-in { padding: 16px 14px 18px; }
+  .yr-poster { flex-basis: 100px; }
+  .yr-rank { top: calc(100px * 1.5 - 40px); font-size: 34px; }
+  .yr-picks, .yr-edges { grid-template-columns: 1fr; }
+}
 
 .stat-sec { padding: 26px 0; border-top: 1px solid var(--line); }
 .stat-sec:first-child { border-top: 0; padding-top: 8px; }
