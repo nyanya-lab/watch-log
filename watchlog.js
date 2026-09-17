@@ -188,6 +188,19 @@ function initWatchlog() {
   $("#filterBtn").addEventListener("click", openFilterModal);
   $("#clearFilterBtn").addEventListener("click", () => { clearAllFilters(); toast("필터를 해제했습니다"); });
 
+  /* 작품 모아보기 팝업 */
+  $("#worksClose").addEventListener("click", closeWorksPopup);
+  onBackdropClose("#worksModal", closeWorksPopup);
+  $("#worksGrid").addEventListener("click", e => {
+    const c = e.target.closest(".wl-card[data-id]");
+    if (c) openDetail(c.dataset.id);
+  });
+  $("#worksJump").addEventListener("click", () => {
+    if (!_worksPatch) return;
+    closeWorksPopup();
+    jumpToList(_worksPatch);
+  });
+
   /* 가려둔 TMDB 평점 누르기 — 어디에 있든(탐색 카드·검색 카드·미리보기 창) 한 곳에서 받는다.
      캡처 단계에서 멈춰야 카드 자체의 클릭(미리보기 열기)이 같이 안 일어난다 */
   document.addEventListener("click", e => {
@@ -1066,6 +1079,23 @@ function renderHeaderCount() {
   $("#resultCount").textContent =
     State.filtered.length === total ? "" : `${State.filtered.length}개 표시`;
 }
+
+/* ---------- 작품 모아보기 팝업 (2026-09-17) ----------
+   통계·홈에서 "이 조건의 작품들"을 볼 때 **탭을 옮기지 않고** 포스터로 띄운다 — 기록을 보다가
+   목록 탭으로 넘어갔다 돌아오는 게 번거롭다는 요청. 카드를 누르면 상세가 **이 팝업 위에** 뜬다
+   (`#worksModal`이 `#detailModal`보다 DOM 앞에 있어서). `patch`를 주면 [기록 탭에서 보기]로 목록 필터도 걸 수 있다. */
+let _worksPatch = null;
+function showWorksPopup(title, sub, list, patch) {
+  _worksPatch = patch || null;
+  $("#worksTitle").textContent = title;
+  $("#worksSub").textContent = `${sub ? sub + " · " : ""}${list.length}편`;
+  $("#worksGrid").innerHTML = list.length ? list.map(recordCardHtml).join("")
+    : `<p class="col-span-full text-center py-10 text-slate-400 font-medium">작품이 없어요</p>`;
+  $("#worksJump").classList.toggle("hidden", !_worksPatch);
+  $("#worksModal").classList.remove("hidden");
+  $("#worksModal .modal-card").scrollTop = 0;
+}
+function closeWorksPopup() { $("#worksModal").classList.add("hidden"); }
 
 /* ---------- 카드 렌더 ---------- */
 /* 기록 카드 한 장 — 목록 포스터 보기와 홈의 "최근 본 작품" 선반이 같이 쓴다 */

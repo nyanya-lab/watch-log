@@ -817,6 +817,7 @@ function initEscapeKey() {
     { sel: "#quickRateModal", close: () => closeQuickRate() },
     { sel: "#dcModal" },
     { sel: "#detailModal" },
+    { sel: "#worksModal" },
     { sel: "#restoreModal" },
     // Escape로 닫아도 조회 결과를 버려야 한다 — 남겨두면 다음에 [적용]이 옛 계획을 쓴다
     { sel: "#refreshPreviewModal", close: () => {

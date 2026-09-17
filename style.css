@@ -1160,6 +1160,8 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 .hm-dots i:first-child { width: 18px; border-radius: 3px; background: var(--ac); }
 
 .hm-sec { margin-top: 34px; }
+/* 선반 바로 아래 칸은 조금 붙인다 — 위치 바가 평소엔 안 보여서 공백만 커 보였다 */
+.hm-sec:has(.hm-pos) + .hm-sec { margin-top: 22px; }
 .hm-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .hm-h2 { font-size: 20px; color: var(--ink); }
 .hm-h2small { font-family: var(--font-body); -webkit-text-stroke: 0; font-size: 13px; font-weight: 600; color: var(--ink-3); margin-left: 8px; }
@@ -1292,7 +1294,10 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 .hm-arrow:hover, .hm-arrow:active { background: var(--ac); }
 .hm-arrow.off { opacity: .35; pointer-events: none; }
 /* 지금 어디쯤인지 — 얇은 긴 바. 넘길 게 없으면 숨는다 */
-.hm-pos { position: relative; height: 3px; border-radius: 3px; background: var(--line); margin: 8px 2px 0; overflow: hidden; }
+/* 넘기고 있을 때만 잠깐 보인다(.on) — 자리는 얇게만 차지한다 */
+.hm-pos { position: relative; height: 3px; border-radius: 3px; background: var(--line); margin: 2px 2px 0; overflow: hidden;
+  opacity: 0; transition: opacity .3s; }
+.hm-pos.on { opacity: 1; }
 .hm-pos i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; background: var(--ink-3); transition: left .12s; }
 @media (max-width: 639px) {
   .hm-arrow { top: calc((118px * 1.5) / 2 + 4px); width: 32px; height: 32px; font-size: 12px; }
@@ -1377,3 +1382,24 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 .sr-person .tx { display: flex; flex-direction: column; min-width: 0; }
 .sr-person b { font-size: 14px; font-weight: 800; color: var(--ink); }
 .sr-person .tx > span { font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+
+/* 추천 탭 윗줄 — 제목 없이 뷰 전환 + 오른쪽 개수 */
+.dc-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dc-top .dc-tabs { min-width: 0; }
+@media (max-width: 639px) { .dc-top .dc-count { display: none; } }
+
+/* 홈 기간 칸 — 타일 한 줄(본 작품 · 시청시간 · 평균 별점 · 가장 좋았던). 누를 수 있는 타일은 살짝 떠오른다 */
+.hm-year-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hm-year > button { text-align: left; background: var(--sink); border-radius: 12px; padding: 12px 12px 10px; transition: background .12s; min-width: 0; }
+.hm-year > button:not(:disabled):hover { background: var(--sink-2); }
+.hm-year > button:disabled { cursor: default; }
+.hm-year > button:not(:disabled) .l::after { content: " ›"; color: var(--ink-3); }
+.hm-best { display: flex; align-items: center; gap: 10px; padding: 8px 10px !important; }
+.hm-best img { width: 34px; height: 51px; object-fit: cover; border-radius: 5px; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.hm-best .tx { display: flex; flex-direction: column; min-width: 0; }
+.hm-best b { font-size: 13.5px; font-weight: 800; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-best .wl-hearts { font-size: 13px; }
+.hm-best .l { margin-top: 1px; }
+@media (max-width: 639px) {
+  .hm-year-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

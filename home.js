@@ -170,52 +170,44 @@ function renderHome() {
   syncShelfArrows();
 }
 
-/* 기간 한 칸 — 본 작품 · 본 날 · 평균 별점 · 다시 본 + 가장 좋았던 작품 · 많이 본 장르.
-   "본 작품"은 다이어리와 같은 `recDate` 기준, "본 날"은 시작~종료를 날짜로 펼쳐 기간 안만 센다 */
+/* 기간 한 칸 — **딱 한 줄**(2026-09-17 요청): 본 작품 · 시청시간 · 평균 별점 · 가장 좋았던 작품.
+   예전엔 본 날 · 다시 본 타일 + 아래에 가장 좋았던/많이 본 장르 알약 줄이 따로 있었다.
+   "본 작품"은 다이어리와 같은 `recDate` 기준. 타일을 누르면 **탭을 옮기지 않고 팝업**으로 그 작품들을 포스터로 본다
+   (`showWorksPopup` — 본 작품 = 전부 최근 본 순, 평균 별점 = 별점 매긴 것 높은 순, 가장 좋았던 = 그 기록 상세) */
 function periodHtml({ big, sub, from, to, diary }) {
   const inR = (d) => !!d && d >= from && d <= to;
   const list = State.items.filter(i => inR(recDate(i)));
-  const re = State.items.filter(i => inR(i.lastWatchStart)).length;
   const rated = list.filter(i => i.rating);
   const avg = rated.length ? rated.reduce((s, i) => s + +i.rating, 0) / rated.length : 0;
-  const days = new Set();
-  State.items.forEach(i => [[i.startDate, i.endDate], [i.lastWatchStart, i.lastWatchEnd]].forEach(([s, e]) => {
-    if (!s) return;
-    const end = e || s;
-    if (end < from || s > to) return;
-    const cur = new Date(s + "T00:00:00"), last = new Date(end + "T00:00:00");
-    for (let g = 0; cur <= last && g < 400; g++, cur.setDate(cur.getDate() + 1)) {
-      const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
-      if (k >= from && k <= to) days.add(k);
-    }
-  }));
+  /* 시청시간 — 통계 탭과 같은 계산(영화 = 상영시간, TV = 회당 × 화수) */
+  const min = list.reduce((s, i) => {
+    const rt = i.runtime || 0;
+    return s + (rt ? (i.type === "영화" ? rt : rt * (i.totalEpisodes || 1)) : 0);
+  }, 0);
   const best = rated.slice().sort((a, b) => b.rating - a.rating)[0];
-  const gc = {};
-  list.forEach(i => visibleGenres(i.genres).forEach(g => { gc[g] = (gc[g] || 0) + 1; }));
-  const topG = Object.entries(gc).sort((a, b) => b[1] - a[1])[0];
+  const pop = (mode) => `data-pop='${esc(JSON.stringify({ from, to, mode, label: big, sub }))}'`;
 
   return `<div class="hm-period">
     <div class="hm-period-head">
       <div><div class="big">${big}</div><div class="sub">${esc(sub)}</div></div>
       ${diary ? `<button class="hm-more" data-go="stats">통계 <i class="fa-solid fa-arrow-right"></i></button>` : ""}
     </div>
-    <div class="hm-year">
-      <div><div class="n">${list.length}<small>편</small></div><div class="l">본 작품</div></div>
-      <div><div class="n">${days.size}<small>일</small></div><div class="l">본 날</div></div>
-      <div><div class="n">${avg ? avg.toFixed(1) : "-"}</div><div class="l">평균 별점</div></div>
-      <div><div class="n">${re}<small>편</small></div><div class="l">다시 본</div></div>
+    <div class="hm-year hm-year-4">
+      <button ${list.length ? pop("all") : "disabled"}><div class="n">${list.length}<small>편</small></div><div class="l">본 작품</div></button>
+      <div><div class="n">${Math.round(min / 60).toLocaleString()}<small>시간</small></div><div class="l">시청시간</div></div>
+      <button ${rated.length ? pop("rated") : "disabled"}><div class="n">${avg ? avg.toFixed(1) : "-"}</div><div class="l">평균 별점</div></button>
+      ${best ? `<button class="hm-best" data-open="${esc(best.id)}">
+          ${best.poster ? `<img src="${esc(best.poster)}" alt="">` : ""}
+          <span class="tx"><b>${esc(best.title)}</b>${hearts(best.rating)}<span class="l">가장 좋았던</span></span>
+        </button>` : `<div><div class="n">-</div><div class="l">가장 좋았던</div></div>`}
     </div>
-    ${best || topG ? `<div class="hm-period-picks">
-      ${best ? `<button class="hm-pick" data-open="${esc(best.id)}">
-        ${best.poster ? `<img src="${esc(best.poster)}" alt="">` : ""}
-        <span class="l">가장 좋았던</span><b>${esc(best.title)}</b>${hearts(best.rating)}</button>` : ""}
-      ${topG ? `<span class="hm-pick"><span class="l">많이 본 장르</span><b>${esc(topG[0])}</b><span class="c">${topG[1]}편</span></span>` : ""}
-    </div>` : ""}
   </div>`;
 }
 
-/* 선반 화살표·위치 바 — 화살표는 늘 보이고, 끝에 닿은 쪽만 흐려진다 */
-function syncShelfArrows() {
+/* 선반 화살표·위치 바 — 화살표는 늘 보이고, 끝에 닿은 쪽만 흐려진다.
+   위치 바는 **넘기고 있을 때만** 잠깐 보인다(2026-09-17 요청 — 가만히 있을 땐 안 보이는 게 예쁘다) */
+let _shelfBarTimer = null;
+function syncShelfArrows(scrolling) {
   const wrap = $("#tab-home .hm-shelf-wrap");
   if (!wrap) return;
   const s = wrap.querySelector(".hm-shelf");
@@ -226,12 +218,16 @@ function syncShelfArrows() {
   const bar = wrap.parentElement.querySelector(".hm-pos");
   if (bar) {
     const w = s.scrollWidth ? s.clientWidth / s.scrollWidth : 1;
-    bar.classList.toggle("hidden", w >= 0.99);
     const thumb = bar.firstElementChild;
     thumb.style.width = (w * 100).toFixed(2) + "%";
     thumb.style.left = (max > 0 ? (s.scrollLeft / max) * (1 - w) * 100 : 0).toFixed(2) + "%";
+    if (scrolling === true && w < 0.99) {
+      bar.classList.add("on");
+      clearTimeout(_shelfBarTimer);
+      _shelfBarTimer = setTimeout(() => bar.classList.remove("on"), 900);
+    }
   }
-  if (!s._bound) { s._bound = true; s.addEventListener("scroll", syncShelfArrows, { passive: true }); }
+  if (!s._bound) { s._bound = true; s.addEventListener("scroll", () => syncShelfArrows(true), { passive: true }); }
 }
 
 /* 다 봤어요 — 오늘로 끝내고, 별점이 없으면 바로 묻는다(2026-09-17 사용자 선택).
@@ -266,6 +262,14 @@ function initHome() {
       const s = el.parentElement.querySelector(".hm-shelf");
       s.scrollBy({ left: (+el.dataset.dir) * Math.max(160, s.clientWidth * 0.8), behavior: "smooth" });
       return;
+    }
+    if ((el = t("[data-pop]"))) {
+      const p = JSON.parse(el.dataset.pop);
+      const inR = (d) => !!d && d >= p.from && d <= p.to;
+      let list = State.items.filter(i => inR(recDate(i)));
+      if (p.mode === "rated") list = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating);
+      else list.sort((a, b) => recDate(b).localeCompare(recDate(a)));
+      return showWorksPopup(`${p.label} · ${p.mode === "rated" ? "별점 높은 순" : "본 작품"}`, p.sub, list);
     }
     if ((el = t("[data-finish]"))) return finishWatching(el.dataset.finish);
     if ((el = t("[data-rate]"))) return rateOne(el.dataset.rate);

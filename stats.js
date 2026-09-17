@@ -448,11 +448,20 @@ function renderStats() {
         renderYearReview(_yrPick);
       });
       body.addEventListener("click", e => {
+        /* 가장 많이 본(장르·배우·감독·OTT)·해마다 막대 → **탭을 옮기지 않고 팝업**으로 포스터를 띄운다(2026-09-17 요청).
+           목록 필터와 같은 조건으로 거르고(연도 = startDate), 팝업의 [기록 탭에서 보기]로 같은 patch를 넘긴다 */
         const jump = e.target.closest("[data-jump]");
-        if (jump && typeof jumpToList === "function") {
+        if (jump && typeof showWorksPopup === "function") {
           const patch = JSON.parse(jump.dataset.jump);
           Object.keys(patch).forEach(k => { if (!patch[k]) delete patch[k]; });
-          jumpToList(patch);
+          const list = State.items.filter(i =>
+            (!patch.year || (i.startDate || "").slice(0, 4) === String(patch.year)) &&
+            (!patch.genre || visibleGenres(i.genres).includes(patch.genre)) &&
+            (!patch.ott || ottList(i).includes(patch.ott)) &&
+            (!patch.person || i.director === patch.person || (i.cast || []).some(c => c.name === patch.person))
+          ).sort((a, b) => recDate(b).localeCompare(recDate(a)));
+          const what = patch.genre || patch.person || patch.ott || "";
+          showWorksPopup(what ? `${what}` : `${patch.year}년`, patch.year ? `${patch.year}년` : "전체 기간", list, patch);
           return;
         }
         const open = e.target.closest("[data-open]");
