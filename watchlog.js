@@ -44,6 +44,9 @@ function watchingNow(i) { return isWatching(i) || isRewatching(i); }
    (보는 중에 TMDB 평점을 가리는 것과 같은 이유). 다 보고 체크를 풀면 다시 들어온다. */
 function needsRating(i) { return !i.rating && !watchingNow(i); }
 
+/* 기록의 "본 날" — 다시 봤으면 그 날짜. 다이어리·홈이 같은 기준을 쓴다 */
+function recDate(i) { return i.lastWatchStart || i.startDate || ""; }
+
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
 function needsSeason(i) {
   return !i.season && (i.totalSeasons || 0) > 1;
@@ -113,6 +116,38 @@ function autoFixTargets() {
   }).filter(Boolean);
 }
 
+/* ---------- 기록 화면 보기: 다이어리 / 포스터 / 시리즈 (2026-09-17 개편 4단계) ----------
+   **이 기기에서 마지막에 고른 보기**로 열린다(사용자 선택). 처음엔 다이어리.
+   시리즈는 예전 `#seriesBtn` 토글(`Filters.seriesView`)을 그대로 쓴다 — 시리즈 카드를 누르면
+   `filterBySeries`가 시리즈 보기를 끄고 그 시리즈 기록만 보여주는데, 그때는 **직전의 다이어리/포스터**로
+   보여야 해서 둘을 따로 기억한다(`view` + `series`). */
+const LS_LIST_VIEW = "watchlog_list_view";
+function loadListView() {
+  let v = {};
+  try { v = JSON.parse(localStorage.getItem(LS_LIST_VIEW) || "{}") || {}; } catch {}
+  State.listView = v.view === "poster" ? "poster" : "diary";
+  Filters.seriesView = !!v.series;
+}
+function setListView(v) {
+  if (v === "series") { Filters.seriesView = true; Filters.group = ""; }
+  else { State.listView = v; Filters.seriesView = false; }
+  State.page = 1;
+  applyFilters();
+}
+
+/* 정리할 것 개수 — 기록 화면 칩과 홈의 "정리할 것"이 같은 숫자를 쓴다 */
+function maintCounts() {
+  const dupIds = State._dupIds || dupTmdbIdSet();
+  return {
+    pending: State.items.filter(i => !i.tmdbId).length,
+    noSeason: State.items.filter(needsSeason).length,
+    dup: State.items.filter(i => seriesNoMismatch(i) || (i.tmdbId && dupIds.has(i.tmdbId))).length,
+    engName: State.items.filter(needsKoName).length,
+    noRate: State.items.filter(needsRating).length,
+    watching: State.items.filter(watchingNow).length
+  };
+}
+
 /* 헤더 로고 = **강력 새로고침**.
    배포 직후 새 버전을 받으려면 `Ctrl+Shift+R`이 필요한데 **폰에는 그 조합이 없고**,
    홈 화면에 추가해 쓰면 주소창조차 없다(그래서 `#pullBtn`도 있는 것이다).
@@ -153,8 +188,26 @@ function initWatchlog() {
   $("#filterBtn").addEventListener("click", openFilterModal);
   $("#clearFilterBtn").addEventListener("click", () => { clearAllFilters(); toast("필터를 해제했습니다"); });
 
-  /* 시리즈 보기 토글 */
-  $("#seriesBtn").addEventListener("click", toggleSeriesView);
+  /* 보기 전환 — 다이어리 / 포스터 / 시리즈 */
+  loadListView();
+  $$("#viewSeg [data-view]").forEach(b => b.addEventListener("click", () => setListView(b.dataset.view)));
+
+  /* 구분 칩 — 전체 / 영화 / 드라마 … (그리기는 renderHeaderCount, 누르기는 위임) */
+  $("#typeChips").addEventListener("click", e => {
+    const c = e.target.closest("[data-type]");
+    if (!c) return;
+    const t = c.dataset.type;
+    Filters.type = (!t || (Filters.type.length === 1 && Filters.type[0] === t)) ? [] : [t];
+    applyFilters();
+  });
+
+  /* 다이어리 줄 — 누르면 상세, [별점 남기기]는 그 기록 한 장만 별점 창 */
+  $("#diaryList").addEventListener("click", e => {
+    const r = e.target.closest("[data-rate]");
+    if (r) { const it = State.items.find(x => x.id === r.dataset.rate); if (it) openQuickRate([it]); return; }
+    const o = e.target.closest("[data-open]");
+    if (o) openDetail(o.dataset.open);
+  });
 
   /* 매칭 확인 목록의 자동 재매칭 */
   $("#autoFixBtn").addEventListener("click", runAutoRematch);
@@ -248,7 +301,9 @@ function initWatchlog() {
   if (moreWrap) {
     let busy = false;
     const loadMore = () => {
-      if (busy || moreWrap.classList.contains("hidden")) return;
+      /* 기록 탭이 숨어 있으면(홈·통계 등) 위치가 0으로 잡혀 스크롤할 때마다 다음 장을 붙였다 —
+         홈이 첫 화면이 되면서 드러났다. 안 보이는 목록은 건드리지 않는다 */
+      if (busy || moreWrap.classList.contains("hidden") || !moreWrap.offsetParent) return;
       const r = moreWrap.getBoundingClientRect();
       if (r.top > window.innerHeight + 300) return;      // 바닥에 닿기 전 300px부터 미리 붙인다
       busy = true;
@@ -821,6 +876,7 @@ function applyFilters() {
   State.page = 1;
   renderHeaderCount();
   renderCards();
+  if (typeof renderHome === "function") renderHome();   // 홈이 보일 때만 실제로 그린다
 }
 
 /* ---------- 헤더 / 카운트 ---------- */
@@ -833,17 +889,26 @@ function renderHeaderCount() {
   $("#totalBadge").title = `시청 기록 ${total}개 · 시리즈로 묶으면 ${totalWorks}개 작품`;
   $("#totalBadge").classList.remove("hidden");
 
-  /* 구분별 개수 — 기록에 실제로 있는 구분만, 많은 순.
-     지금은 영화·드라마 둘뿐이지만 예능·애니가 생기면 자동으로 늘어난다. */
-  const tc = $("#typeCounts");
-  if (tc) {
+  /* 구분 칩 — [전체] + 기록에 실제로 있는 구분만, 많은 순(예능·애니가 생기면 자동으로 늘어난다).
+     누르면 그 구분만, 다시 누르면 전체. 필터 팝업에서 구분을 여러 개 골랐으면 [전체]도 안 켜진다 */
+  const vc = $("#typeChips");
+  if (vc) {
     const byType = {};
     State.items.forEach(i => { const t = i.type || "기타"; byType[t] = (byType[t] || 0) + 1; });
-    tc.innerHTML = Object.entries(byType)
-      .sort((a, b) => b[1] - a[1])
-      .map(([t, n]) => `<span class="hd-chip" title="${esc(t)} ${n}개"><i class="fa-solid ${typeIcon(t)}"></i>${n}</span>`)
-      .join("");
+    const cur = Filters.type;
+    vc.innerHTML = `<button class="wl-chip ${cur.length ? "" : "on"}" data-type="">전체<b>${total}</b></button>` +
+      Object.entries(byType)
+        .sort((a, b) => b[1] - a[1])
+        .map(([t, n]) => `<button class="wl-chip ${cur.length === 1 && cur[0] === t ? "on" : ""}" data-type="${esc(t)}"><i class="fa-solid ${typeIcon(t)}"></i>${esc(t)}<b>${n}</b></button>`)
+        .join("");
   }
+
+  /* 보기 전환 버튼 상태 */
+  const curView = Filters.seriesView ? "series" : State.listView;
+  /* 저장은 그릴 때 한다 — 시리즈 카드를 누르거나(`filterBySeries`) 통계에서 넘어오면(`jumpToList`)
+     버튼을 안 거치고 시리즈 보기가 꺼지는데, 그걸 기억하지 않으면 다음에 시리즈 보기로 열린다 */
+  try { localStorage.setItem(LS_LIST_VIEW, JSON.stringify({ view: State.listView, series: Filters.seriesView })); } catch {}
+  $$("#viewSeg [data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === curView));
 
   const pb = $("#pendingBtn");
   if (Filters.pendingOnly) {
@@ -949,13 +1014,6 @@ function renderHeaderCount() {
     }
   }
 
-  // 시리즈 보기 버튼 활성 표시
-  const sb = $("#seriesBtn");
-  if (sb) {
-    sb.className = Filters.seriesView ? "btn-icon on" : "btn-icon";
-    sb.title = Filters.seriesView ? "전체 목록으로 돌아가기" : "시리즈만 모아보기";
-  }
-
   const active = hasActiveFilter();
   $("#filterDot").classList.toggle("hidden", !active);
   $("#clearFilterBtn").classList.toggle("hidden", !active);   // 필터 걸렸을 때만 초기화 버튼 노출
@@ -964,17 +1022,9 @@ function renderHeaderCount() {
 }
 
 /* ---------- 카드 렌더 ---------- */
-function renderCards() {
-  if (Filters.seriesView) return renderSeriesCards();
-  $("#seriesHint").classList.add("hidden");
-
-  const grid = $("#cardGrid");
-  const list = State.filtered;                        // 기록 하나 = 카드 하나 (묶지 않음)
-  const show = list.slice(0, State.page * State.perPage);
-
-  $("#emptyState").classList.toggle("hidden", list.length > 0);
-
-  grid.innerHTML = show.map(i => `
+/* 기록 카드 한 장 — 목록 포스터 보기와 홈의 "최근 본 작품" 선반이 같이 쓴다 */
+function recordCardHtml(i) {
+  return `
     <div class="wl-card ${!i.tmdbId ? "wl-pending" : ""}" data-id="${i.id}">
       ${posterBlock(i.poster, ratingChip(i, watchingNow(i)) +
         (seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : "") +
@@ -987,11 +1037,108 @@ function renderCards() {
         </div>
         <div class="wl-meta">${metaLine(i)}</div>
       </div>
-    </div>`).join("");
+    </div>`;
+}
+
+function renderCards() {
+  const grid = $("#cardGrid"), diary = $("#diaryList");
+  const isDiary = !Filters.seriesView && State.listView === "diary";
+  grid.classList.toggle("hidden", isDiary);
+  diary.classList.toggle("hidden", !isDiary);
+  if (Filters.seriesView) return renderSeriesCards();
+  $("#seriesHint").classList.add("hidden");
+  if (isDiary) return renderDiary();
+  diary.innerHTML = "";
+
+  const list = State.filtered;                        // 기록 하나 = 카드 하나 (묶지 않음)
+  const show = list.slice(0, State.page * State.perPage);
+
+  $("#emptyState").classList.toggle("hidden", list.length > 0);
+
+  grid.innerHTML = show.map(recordCardHtml).join("");
 
   grid.querySelectorAll(".wl-card").forEach(el => {
     el.addEventListener("click", () => openDetail(el.dataset.id));
   });
+
+  const remain = list.length - show.length;
+  $("#loadMoreWrap").classList.toggle("hidden", remain <= 0);
+  $("#loadMoreCount").textContent = remain > 0 ? `(${remain}개 남음)` : "";
+}
+
+/* ---------- 다이어리 보기 (2026-09-17) ----------
+   달마다 묶고, 한 줄 = 기록 하나(날짜 · 포스터 · 제목 · 내 별점/TMDB · 볼 수 있는 곳).
+   ⚠ **항상 본 날짜 순**이다 — 달로 묶는 보기라 가나다·별점 순으로는 뜻이 없다.
+   방향(최근부터/오래된 것부터)만 날짜 정렬일 때 따른다. 날짜 없는 기록은 맨 끝 `날짜 없음`.
+   같은 날 여러 편이면 두 번째부터 날짜 칸을 비운다(일기장처럼).
+   보는 중이면 TMDB 평점을 가린다(카드와 같은 규칙). */
+const MON_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const WD_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+function diaryRowHtml(i, prevDay) {
+  const d = recDate(i);
+  const same = !!d && prevDay === d;
+  const dt = d ? new Date(d + "T00:00:00") : null;
+  const ott = ottList(i)[0] || "";
+  const meta = [i.type, ...visibleGenres(i.genres).slice(0, 2), i.releaseYear].filter(Boolean).join(" · ");
+  const right = watchingNow(i)
+    ? `<span class="dy-live"><i class="fa-solid fa-circle-play"></i>${isWatching(i) ? "보는 중" : "다시 보는 중"}</span>`
+    : `<div class="dy-scores">${i.rating ? hearts(i.rating)
+        : `<button class="dy-rate" data-rate="${esc(i.id)}">별점 남기기</button>`}${
+        i.voteAverage ? `<span class="dy-vote"><i class="fa-solid fa-star"></i>${i.voteAverage}</span>` : ""}</div>`;
+  return `<div class="dy-row" data-open="${esc(i.id)}">
+    <div class="dy-day">${dt && !same ? `<div class="d">${dt.getDate()}</div><div class="w">${WD_KO[dt.getDay()]}</div>` : ""}</div>
+    ${i.poster ? `<img class="dy-thumb" src="${esc(i.poster)}" alt="" loading="lazy">`
+               : `<div class="dy-thumb"><i class="fa-solid fa-film"></i></div>`}
+    <div class="dy-txt">
+      <div class="dy-t"><span class="dy-name">${esc(i.title)}</span>${seriesLabel(i) ? ` <span class="dy-sub">${esc(seriesLabel(i))}</span>` : ""}${
+        i.lastWatchStart ? `<i class="fa-solid fa-rotate dy-re" title="다시 봄"></i>` : ""}</div>
+      <div class="dy-s">${esc(meta)}</div>
+    </div>
+    <div class="dy-r">${right}${ott ? `<span class="dy-ott">${esc(ott)}</span>` : ""}</div>
+  </div>`;
+}
+
+function renderDiary() {
+  const box = $("#diaryList");
+  const asc = Filters.sort === "date" && Filters.sortDir === "asc";
+  const dated = State.filtered.filter(recDate)
+    .sort((a, b) => (asc ? 1 : -1) * recDate(a).localeCompare(recDate(b)));
+  const list = dated.concat(State.filtered.filter(i => !recDate(i)));
+  /* 한 줄이 카드보다 낮아서 한 번에 두 배를 담는다 */
+  const show = list.slice(0, State.page * State.perPage * 2);
+
+  $("#emptyState").classList.toggle("hidden", list.length > 0);
+
+  // 달 요약은 **보이는 줄만이 아니라 그 달 전체**로 센다 — 더 불러올 때마다 숫자가 바뀌면 이상하다
+  const monthOf = (i) => recDate(i).slice(0, 7) || "none";
+  const all = {};
+  list.forEach(i => { (all[monthOf(i)] = all[monthOf(i)] || []).push(i); });
+
+  const blocks = [];
+  show.forEach(i => {
+    const k = monthOf(i);
+    if (!blocks.length || blocks[blocks.length - 1].k !== k) blocks.push({ k, rows: [] });
+    blocks[blocks.length - 1].rows.push(i);
+  });
+
+  box.innerHTML = blocks.map(b => {
+    const arr = all[b.k];
+    const rated = arr.filter(i => i.rating);
+    const best = rated.slice().sort((a, c) => c.rating - a.rating)[0];
+    const none = b.k === "none";
+    const head = none
+      ? `<div class="big none">날짜 없음</div>`
+      : `<div class="big">${MON_EN[+b.k.slice(5, 7) - 1]}</div><div class="yr">${b.k.slice(0, 4)}</div>`;
+    return `<section class="dy-month">
+      <div class="dy-mo">${head}
+        <div class="sum">${none ? "" : `${+b.k.slice(5, 7)}월 · `}${arr.length}편${
+          rated.length ? `<br>평균 ${hearts((rated.reduce((s, i) => s + +i.rating, 0) / rated.length).toFixed(1))}` : ""}${
+          best ? `<br>최고 「${esc(best.title)}」` : ""}</div>
+      </div>
+      <div class="dy-list">${b.rows.map((i, n) => diaryRowHtml(i, n ? recDate(b.rows[n - 1]) : null)).join("")}</div>
+    </section>`;
+  }).join("");
 
   const remain = list.length - show.length;
   $("#loadMoreWrap").classList.toggle("hidden", remain <= 0);
@@ -1369,8 +1516,11 @@ function quickRateTargets() {
   return State.items.filter(needsRating).sort((a, b) => dkey(b).localeCompare(dkey(a)));
 }
 
-function openQuickRate() {
-  QuickRate.queue = quickRateTargets();
+/* `list`를 주면 그 기록들만 묻는다 — 홈의 [다 봤어요]·다이어리의 [별점 남기기].
+   이때는 다 넘기면 완료 화면 없이 바로 닫는다(한 장짜리에 "1개 넣었어요" 화면은 군더더기다) */
+function openQuickRate(list) {
+  QuickRate.single = Array.isArray(list);
+  QuickRate.queue = QuickRate.single ? list.slice() : quickRateTargets();
   QuickRate.idx = 0;
   QuickRate.done = 0;
   if (!QuickRate.queue.length) { toast("별점 없는 기록이 없습니다", "success"); return; }
@@ -1392,6 +1542,7 @@ function renderQuickRate() {
   const total = q.length;
 
   // 다 넘겼을 때
+  if (QuickRate.idx >= total && QuickRate.single) return closeQuickRate();
   if (QuickRate.idx >= total) {
     $("#qrProgress").textContent = "";
     $("#qrBar").style.width = "100%";

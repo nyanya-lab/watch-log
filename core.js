@@ -842,9 +842,9 @@ function initEscapeKey() {
 /* ---------- 탭 ---------- */
 function initTabs() {
   // 탭마다 스크롤 위치를 기억해서, 돌아오면 보던 자리 그대로 (통계 ↔ 목록)
-  const scrollPos = { list: 0, discover: 0, stats: 0, settings: 0 };
-  let curTab = "list";
-  let backTab = "list";   // 설정을 닫으면 돌아갈 탭
+  const scrollPos = { home: 0, list: 0, discover: 0, stats: 0, settings: 0 };
+  let curTab = "home";    // 앱은 홈으로 열린다 (2026-09-17)
+  let backTab = "home";   // 설정을 닫으면 돌아갈 탭
 
   const show = (tab) => {
     if (tab === curTab) return;
@@ -853,9 +853,10 @@ function initTabs() {
 
     // 같은 탭 버튼이 상단 메뉴와 폰 탭바에 하나씩 있다 — 둘 다 맞춰 켠다
     $$(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-    ["list", "discover", "stats", "settings"].forEach(t => {
+    ["home", "list", "discover", "stats", "settings"].forEach(t => {
       $("#tab-" + t).classList.toggle("hidden", t !== tab);
     });
+    if (tab === "home") renderHome();
     if (tab === "stats") renderStats();
     if (tab === "discover") renderDiscover();
     curTab = tab;
@@ -900,6 +901,7 @@ function bootApp() {
   initTmdb();
   initDiscover();
   initSettings();
+  initHome();
   applyFilters();
 
   // 서버 확인 후, 양쪽 다 비어있을 때만 노션 시드 사용
