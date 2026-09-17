@@ -176,8 +176,7 @@ function renderHome() {
           <button class="hm-todo" data-todo="${key}">
             <span class="ic ${hot ? "hot" : ""}"><i class="fa-solid ${ic}"></i></span>${label}
             <span class="n">${n}</span><i class="fa-solid fa-chevron-right go"></i>
-          </button>`).join("")}</div>`
-          : `<p class="hm-empty hm-done"><i class="fa-solid fa-circle-check" style="color:var(--ac)"></i> 정리할 게 없어요</p>`}
+          </button>`).join("")}</div>` : ""}
       </div>
     </section>`;
   syncShelfArrows();
