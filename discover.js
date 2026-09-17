@@ -1894,13 +1894,18 @@ function renderDcPerson() {
   const tile = ({ f, st }) => {
     const seen = st.watched;
     const key = `${f.mediaType}:${f.tmdbId}`;
-    const vote = seen ? "" : ratingChip({ voteAverage: f.voteAverage }, key);
+    /* 점수 띠는 다른 카드와 같은 `ratingChip` — 본 작품은 내 별점 ♥ + TMDB ★를 흰 알약 없이 그대로 얹는다
+       (2026-09-17 요청: 포스터가 이미 흐려서 따로 흰 바탕을 깔지 않아도 읽힌다). 보는 중이면 TMDB는 가린다.
+       안 본 작품은 TMDB만, 눌러야 보인다(`★ ?`) */
+    const vote = seen
+      ? ratingChip({ rating: st.rating, voteAverage: f.voteAverage }, st.recs.some(watchingNow))
+      : ratingChip({ voteAverage: f.voteAverage }, key);
     /* 버튼이 아니라 div — 안에 가린 평점 버튼(`★ ?`)이 들어가는데 버튼 안에 버튼은 HTML이 깨진다 */
     return `<div role="button" tabindex="0" class="dc-tl-tile ${seen ? "seen" : ""}" ${seen
         ? `data-act="open" data-id="${esc(st.recs[0].id)}"` : `data-act="detail"`} data-tid="${f.tmdbId}" title="${esc(f.title)}">
       <span class="dc-tl-img">
         <img src="${esc(f.poster)}" alt="" loading="lazy">
-        ${seen ? `<span class="dc-tl-mine">${st.rating ? `<i class="fa-solid fa-heart"></i>${fmtRating(st.rating)}` : `<i class="fa-solid fa-check"></i>봤어요`}</span>` : vote}
+        ${vote}
       </span>
       <span class="dc-tl-t">${esc(f.title)}</span>
       <span class="dc-tl-y">${esc(f.year)}${f.mediaType === "tv" ? " · TV" : ""}</span>
