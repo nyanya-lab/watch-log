@@ -639,6 +639,11 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .dc-flag-wish { background: rgba(224,112,15,.9); }
 .dc-flag-next { background: rgba(220,68,68,.9); }
 
+/* 추천 바 첫 줄의 기준 정보 — 폰에서는 한 줄을 통째로 쓰고 버튼은 그 아래로 내린다.
+   안 그러면 버튼 옆 90px 남짓에 끼어 글자가 다섯 줄로 늘어났다(375px에서 확인). */
+#dcRecoInfo { flex-basis: 100%; }
+@media (min-width: 640px) { #dcRecoInfo { flex-basis: 0%; } }
+
 /* ===== 탐색: 한국 작품 비중 입력 =====
    칩 네 개 → 끌어서 고르는 바 → **퍼센트를 직접 입력**으로 바꿨다(2026-09-17 요청).
    바는 원하는 값에 딱 맞추기 어려웠다. 숫자 칸 + `%`를 한 덩어리로 묶는다. */

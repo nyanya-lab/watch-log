@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260917f">
+<link rel="stylesheet" href="style.css?v=20260917g">
 </head>
 <body>
 
@@ -181,8 +181,10 @@
             </button>
           </div>
         </div>
-        <!-- 뽑을 때 쓰는 값이라 필터(보는 조건)와 나란히 두지 않고 [다시 추천받기] 아래에 둔다 -->
-        <div class="flex items-center gap-3 flex-wrap mt-3">
+        <!-- 뽑을 때 쓰는 값이라 필터(보는 조건)와 나란히 두지 않고 [다시 추천받기] 아래에 둔다.
+             바는 **두 줄**로 둔다(2026-09-17 요청) — 예전엔 아래에 설명 문단이 한 줄 더 있어 세 줄이었다.
+             설명은 이 줄 오른쪽으로 올렸고, 좁은 화면에서는 숨긴다(폰은 어차피 줄이 접힌다). -->
+        <div class="flex items-center gap-3 flex-wrap mt-2">
           <span class="text-xs font-semibold text-slate-500 shrink-0">한국 작품 비중</span>
           <label class="dc-pct">
             <input type="number" id="dcRecoKoInput" inputmode="numeric" min="0" max="100" step="5" value="70">
@@ -194,18 +196,18 @@
             <button type="button" data-kostep="5" title="5% 올리기"><i class="fa-solid fa-chevron-up"></i></button>
           </div>
           <span id="dcRecoKoLabel" class="text-xs font-semibold text-slate-600 shrink-0"></span>
+          <p class="hidden lg:block flex-1 min-w-0 truncate text-right text-xs font-medium text-slate-400"
+             title="내가 별점을 높게 준 작품·재시청한 작품과 비슷한 작품, 그리고 내 취향 장르에서 함께 골라옵니다. 이미 기록한 작품은 빠집니다.">
+            별점 높게 준·다시 본 작품과 <b>비슷한 작품</b> + <b>내 취향 장르</b>에서 골라옵니다
+          </p>
         </div>
 
-        <div id="dcRecoProgress" class="hidden mt-3">
+        <div id="dcRecoProgress" class="hidden mt-2">
           <div id="dcRecoStatus" class="text-xs font-medium text-slate-500 mb-1.5"></div>
           <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
             <div id="dcRecoBarFill" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
           </div>
         </div>
-        <p class="text-xs text-slate-400 mt-3 leading-relaxed">
-          내가 별점을 높게 준 작품·재시청한 작품과 <b>비슷한 작품</b>, 그리고 <b>내 취향 장르</b>에서 함께 골라옵니다.
-          이미 기록한 작품은 빠집니다.
-        </p>
       </div>
 
       <!-- 시리즈(프랜차이즈) 뷰 전용 바 — 어느 시리즈를 볼지 + 순서 전환 -->
@@ -720,10 +722,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260917f"></script>
-<script src="tmdb.js?v=20260917f"></script>
-<script src="watchlog.js?v=20260917f"></script>
-<script src="discover.js?v=20260917f"></script>
-<script src="stats.js?v=20260917f"></script>
+<script src="core.js?v=20260917g"></script>
+<script src="tmdb.js?v=20260917g"></script>
+<script src="watchlog.js?v=20260917g"></script>
+<script src="discover.js?v=20260917g"></script>
+<script src="stats.js?v=20260917g"></script>
 </body>
 </html>
