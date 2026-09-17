@@ -816,8 +816,8 @@ function renderSelected(d) {
     slot.innerHTML = !d.voteAverage ? ""
       : !(editing && editing.rating) && !VoteReveal.has(key)
         ? `<button class="badge badge-vote vote-ask" data-reveal="${esc(key)}" data-vote="${d.voteAverage}" data-fmt="badge"
-             data-label="TMDB " title="눌러서 TMDB 평점 보기"><i class="fa-solid fa-star mr-1"></i>TMDB ?</button>`
-        : `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>TMDB ${d.voteAverage}</span>`;
+             data-label="TMDB " data-fillable="1" title="눌러서 TMDB 평점 보기"><i class="fa-solid fa-star mr-1"></i>TMDB ?</button>`
+        : `<button type="button" class="badge badge-vote vote-fill" data-fill="${d.voteAverage}" title="눌러서 내 별점 칸에 넣기"><i class="fa-solid fa-star mr-1"></i>TMDB ${d.voteAverage}</button>`;
   }
   if (d.cert) chips.push(`<span class="badge badge-cert">${esc(d.cert)}</span>`);
   if (d.otts && d.otts.length) chips.push(`<span class="badge badge-ott">${esc(d.otts.join(", "))}</span>`);

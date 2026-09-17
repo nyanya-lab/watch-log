@@ -211,11 +211,24 @@ function initWatchlog() {
     const key = b.dataset.reveal;
     VoteReveal.add(key);
     $$("[data-reveal]").filter(el => el.dataset.reveal === key).forEach(el => {
-      el.outerHTML = el.dataset.fmt === "badge"
+      el.outerHTML = el.dataset.fillable
+        ? `<button type="button" class="badge badge-vote vote-fill" data-fill="${esc(el.dataset.vote)}" title="눌러서 내 별점 칸에 넣기"><i class="fa-solid fa-star mr-1"></i>${esc(el.dataset.label || "")}${esc(el.dataset.vote)}</button>`
+        : el.dataset.fmt === "badge"
         ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${esc(el.dataset.label || "")}${esc(el.dataset.vote)}</span>`
         : `<span class="wl-rt wl-rt-tmdb"><i class="fa-solid fa-star"></i>${esc(el.dataset.vote)}</span>`;
     });
   }, true);
+
+  /* 등록·수정 창 — **보이는 TMDB 평점을 한 번 더 누르면 내 별점 칸에 그 값을 넣는다**(2026-09-17 요청).
+     별점 몰아넣기의 [기억이 안 나요 — TMDB 평점 가져오기]와 같은 생각: 바로 저장하지 않고 칸에만 넣어 조정하게 둔다 */
+  $("#fVoteSlot").addEventListener("click", e => {
+    const f = e.target.closest("[data-fill]");
+    if (!f) return;
+    const inp = $("#fRating");
+    inp.value = f.dataset.fill;
+    inp.focus();
+    inp.select();
+  });
 
   /* 보기 전환 — 다이어리 / 포스터 / 시리즈 */
   loadListView();
