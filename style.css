@@ -116,6 +116,16 @@ body {
 .btn-icon:hover { background: #f2f5ee; color: #3b6d11; }
 .btn-icon.on { background: #4d7c2a; color: #fff; box-shadow: none; }
 .btn-icon.on:hover { background: #3b6d11; color: #fff; }
+/* TMDB 평점 켜고 끄기 — 꺼져 있으면 별에 사선을 긋는다 (FontAwesome 무료판엔 star-slash가 없다) */
+.vote-toggle { position: relative; }
+.vote-toggle.on { background: #fff8e1; color: #d99a00; box-shadow: inset 0 0 0 1px #f3d98b; }
+.vote-toggle.on:hover { background: #fff1c4; color: #b98200; }
+.vote-toggle:not(.on)::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 22px; height: 2px; border-radius: 2px;
+  background: currentColor; box-shadow: 0 0 0 1.5px #fff;
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
 
 /* 입력 */
 .inp {
@@ -658,6 +668,8 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
    예전엔 머리글이 `grid-column:1/-1`로 한 줄을 통째로 먹어 카드 1장짜리 시리즈도
    한 줄을 차지했고, 시리즈가 열몇 개면 목록이 하염없이 아래로 늘어졌다.
    묶음 칸은 넓어야 하므로 열을 줄인다 (카드 4열 → 묶음 3열). */
+/* 추천 뷰만 넓은 화면에서 5열 — 다른 뷰는 카드 버튼이 많아 4열로 둔다 */
+@media (min-width: 1024px) { #dcGrid.dc-reco { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 #dcGrid.dc-grouped { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 @media (min-width: 640px)  { #dcGrid.dc-grouped { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { #dcGrid.dc-grouped { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

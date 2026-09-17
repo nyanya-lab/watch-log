@@ -16,10 +16,13 @@ const Discover = {
   /* 60개 중 한국 작품 몫. **뽑을 때** 쓰는 값이라 위 필터(보는 조건)와 성격이 다르다.
      `null`이면 몫을 나누지 않고 예전처럼 점수순으로만 채운다. */
   recoKo: 30,
-  recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순
+  recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순 | title=가나다순
   /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
      그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
   recoDir: "desc",
+  /* 추천 카드의 TMDB 평점을 숨길지. **기본은 숨김**(2026-09-17 요청) — 이 기기에 남긴다.
+     정렬을 `★ TMDB 평점`으로 두면 순서로는 드러나지만, 점수 자체가 눈에 걸리는 것과는 다르다. */
+  recoHideVote: true,
   reco: null,        // 캐시된 추천 결과
   personKind: "actor",   // 인물 뷰: actor=배우 | director=감독
   personName: "",        // 고른 사람 (빈 값이면 아직 안 골랐다)
@@ -561,6 +564,7 @@ function renderRecoFilters(all) {
       <div class="fchips">
         <button class="fchip ${Discover.recoSort === "score" ? "on" : ""}" data-rsort="score">추천순${arrow("score")}</button>
         <button class="fchip ${Discover.recoSort === "vote" ? "on" : ""}" data-rsort="vote">★ TMDB 평점${arrow("vote")}</button>
+        <button class="fchip ${Discover.recoSort === "title" ? "on" : ""}" data-rsort="title">가나다${arrow("title")}</button>
       </div>
     </div>`;
 
@@ -580,6 +584,98 @@ function renderRecoFilters(all) {
    저장은 **개수**로 한다(0~60). 쿼터 로직이 개수로 돌고, 화면에만 %로 보여준다. */
 const LS_RECO_KO = "watchlog_reco_ko";
 const RECO_TARGET = 60;
+const LS_RECO_HIDE_VOTE = "watchlog_reco_hide_vote";   // "0"이면 보이기, 없거나 "1"이면 숨김
+
+/* 가나다 정렬 키 — 제목 속 **영어를 소리 나는 대로 한글로** 바꿔서 센다(2026-09-17 요청).
+   그대로 `localeCompare`하면 영어가 한글 앞에 몰려서 "가나다로 한 줄씩 훑기"가 안 된다.
+   ⚠ 사전 없이 규칙으로만 옮기므로 **대략적인 발음**이다. 정렬에는 첫 소리가 거의 전부라
+   그 정도면 충분하다. 화면에는 원래 제목을 그대로 보여준다. */
+const _sortKeyCache = new Map();
+function titleSortKey(title) {
+  const t = String(title || "");
+  if (!_sortKeyCache.has(t))
+    _sortKeyCache.set(t, t.replace(/[A-Za-z]+/g, w => engToHangul(w)).replace(/^[^0-9가-힣]+/, ""));
+  return _sortKeyCache.get(t);
+}
+
+const ENG_WORDS = { the: "더", a: "어", an: "언", of: "오브", and: "앤드", to: "투", in: "인", vs: "브이에스" };
+/* 글자 이름으로 읽는 경우 — 한 글자(F1의 "에프")와 네 글자 이하 대문자 약어(NCIS·MCU) */
+const ENG_LETTERS = { a: "에이", b: "비", c: "씨", d: "디", e: "이", f: "에프", g: "지", h: "에이치",
+  i: "아이", j: "제이", k: "케이", l: "엘", m: "엠", n: "엔", o: "오", p: "피", q: "큐", r: "알",
+  s: "에스", t: "티", u: "유", v: "브이", w: "더블유", x: "엑스", y: "와이", z: "제트" };
+function engToHangul(word) {
+  const w = word.toLowerCase();
+  if (ENG_WORDS[w]) return ENG_WORDS[w];
+  if (w.length === 1 || (word.length <= 4 && word === word.toUpperCase()))
+    return [...w].map(c => ENG_LETTERS[c]).join("");
+
+  // 초성: ㄱ0 ㄴ2 ㄷ3 ㄹ5 ㅁ6 ㅂ7 ㅅ9 ㅇ11 ㅈ12 ㅊ14 ㅋ15 ㅌ16 ㅍ17 ㅎ18
+  // 중성: ㅏ0 ㅐ1 ㅓ4 ㅔ5 ㅗ8 ㅜ13 ㅠ17 ㅡ18 ㅣ20   받침: ㄱ1 ㄴ4 ㄹ8 ㅁ16 ㅂ17 ㅅ19 ㅇ21
+  const syl = (cho, jung, jong = 0) => String.fromCharCode(0xAC00 + (cho * 21 + jung) * 28 + jong);
+  const CHO = { b: 7, c: 15, d: 3, f: 17, g: 0, h: 18, j: 12, k: 15, l: 5, m: 6, n: 2, p: 17,
+    q: 15, r: 5, s: 9, t: 16, v: 7, w: 11, x: 12, y: 11, z: 12, C: 14 };
+  const JONG = { n: 4, m: 16, l: 8, k: 1, c: 1, g: 1, p: 17, b: 17, t: 19, d: 19 };
+
+  // 겹자음을 한 글자로 (C = ch)
+  const t = w.replace(/^wh/, "w").replace(/^kn/, "n").replace(/^wr/, "r").replace(/^ps/, "s")
+    .replace(/th/g, "d").replace(/sh/g, "s").replace(/ch/g, "C").replace(/ph/g, "f")
+    .replace(/ck/g, "k").replace(/qu/g, "kw").replace(/gh/g, "")
+    .replace(/c(?=[eiy])/g, "s").replace(/([^aeiou])\1/g, "$1");   // 겹친 자음은 한 번만 (ll·tt)
+
+  // 모음 덩어리 / 자음 덩어리로 자른다. y는 첫 글자면 자음, 아니면 모음
+  const isV = (ch, i) => "aeiou".includes(ch) || (ch === "y" && i > 0);
+  const parts = [];
+  for (let i = 0; i < t.length; i++) {
+    const v = isV(t[i], i);
+    const last = parts[parts.length - 1];
+    if (last && last.v === v) last.s += t[i];
+    else parts.push({ v, s: t[i] });
+  }
+  // 끝의 묵음 e (make, pirate) — 소리는 없고 앞 모음을 길게 만든다
+  let magicE = false;
+  if (parts.length >= 3 && parts[parts.length - 1].s === "e" && !parts[parts.length - 2].v
+      && parts[parts.length - 2].s.length === 1) {
+    parts.pop(); magicE = true;
+  }
+  const lastV = parts.map(p => p.v).lastIndexOf(true);
+
+  const vowel = (v, long) => {
+    if (/^(ee|ea|ie|y)$/.test(v)) return 20;
+    if (/^(oo|ou|ew|ue)$/.test(v)) return 13;
+    if (v === "u") return long ? 17 : 4;
+    if (/^(ai|ay|ei|ey)$/.test(v)) return 5;
+    if (/^(oa|ow|oe|o)$/.test(v)) return 8;
+    if (v[0] === "a") return long ? 5 : 0;
+    if (v[0] === "e") return 5;
+    if (v[0] === "i") return long ? 0 : 20;
+    return 18;
+  };
+
+  let out = "", onset = "";
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p.v) { onset = p.s; continue; }
+    // 초성 앞의 남는 자음은 '으'를 붙여 한 소리씩 (st → 스트)
+    for (const c of onset.slice(0, -1)) out += syl(CHO[c] ?? 11, 18);
+    const c0 = onset.slice(-1);
+    onset = "";
+
+    const next = parts[i + 1] ? parts[i + 1].s : "";
+    const isLast = i === lastV;
+    let jung = vowel(p.s, isLast && magicE);
+    if (p.s === "a" && (next.length >= 2 || (isLast && next.length === 1 && !magicE))) jung = 1;  // bat·black → ㅐ
+
+    let jong = 0, rest = next;
+    if (next.startsWith("ng")) { jong = 21; rest = next.slice(2); }
+    else if (next[0] === "r" && (next.length >= 2 || isLast)) rest = next.slice(1);   // star → 스타
+    else if ((next.length >= 2 || isLast) && JONG[next[0]] !== undefined) { jong = JONG[next[0]]; rest = next.slice(1); }
+    if (parts[i + 1]) parts[i + 1].s = rest;
+
+    out += syl(c0 ? (CHO[c0] ?? 11) : 11, jung, jong);
+  }
+  for (const c of onset) out += syl(CHO[c] ?? 11, 18);   // 끝에 남은 자음
+  return out || word;
+}
 
 function loadRecoKo() {
   try {
@@ -606,6 +702,12 @@ function renderRecoKoSlider() {
 function renderDcReco() {
   $("#dcHint").classList.add("hidden");
   $("#dcRecoBar").classList.remove("hidden");
+
+  const vb = $("#dcRecoVoteBtn");
+  if (vb) {
+    vb.classList.toggle("on", !Discover.recoHideVote);
+    vb.title = Discover.recoHideVote ? "TMDB 평점 보기" : "TMDB 평점 숨기기";
+  }
 
   renderRecoKoSlider();
   const data = loadReco();
@@ -649,6 +751,8 @@ function renderDcReco() {
       || Discover.recoOrigin.includes(c.origin === "한국" ? "한국" : "외국"))
     .sort((a, b) => {
       const sgn = Discover.recoDir === "asc" ? 1 : -1;
+      if (Discover.recoSort === "title")
+        return sgn * titleSortKey(a.title).localeCompare(titleSortKey(b.title), "ko");
       return Discover.recoSort === "vote"
         ? sgn * ((a.voteAverage || 0) - (b.voteAverage || 0))
         : sgn * ((a.score || 0) - (b.score || 0));
@@ -656,6 +760,7 @@ function renderDcReco() {
     .map(c => ({
       tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
       poster: c.poster, year: c.year, voteAverage: c.voteAverage,
+      hideVote: Discover.recoHideVote,
       note: (c.origin ? `<span class="badge badge-country">${esc(c.origin)}</span>` : "")
         + (c.reason ? `<span class="badge badge-genre">${esc(c.reason)}</span>` : "")
         + (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
@@ -1160,7 +1265,7 @@ function frOrder(parts, f, story) {
 }
 
 /* ---------- 카드 ---------- */
-/* e = { tmdbId, mediaType, title, poster, year, voteAverage, note, flag, actions[] } */
+/* e = { tmdbId, mediaType, title, poster, year, voteAverage, hideVote, note, flag, actions[] } */
 function dcCardHtml(e) {
   const st = myStatus(e.tmdbId);
 
@@ -1180,7 +1285,7 @@ function dcCardHtml(e) {
 
   return `
     <div class="wl-card dc-card" data-act="detail" data-tid="${e.tmdbId}">
-      ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }) + flag)}
+      ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }, e.hideVote) + flag)}
       <div class="wl-body">
         <div class="wl-title-row">
           <i class="fa-solid ${e.mediaType === "tv" ? "fa-tv" : "fa-film"} wl-type"
@@ -1268,6 +1373,7 @@ function renderDiscover() {
   if (Discover.view !== "hide" && $("#dcHideBar")) $("#dcHideBar").classList.add("hidden");
   if (Discover.view !== "person" && $("#dcPersonBar")) $("#dcPersonBar").classList.add("hidden");
   if (Discover.view !== "next" && $("#dcNewBar")) $("#dcNewBar").classList.add("hidden");
+  $("#dcGrid").classList.toggle("dc-reco", Discover.view === "reco");
 
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "search") return renderDcSearch();
@@ -2064,6 +2170,7 @@ window.addFromDiscover = addFromDiscover;
 function initDiscover() {
   if (!$("#tab-discover")) return;
   Discover.recoKo = loadRecoKo();
+  try { Discover.recoHideVote = localStorage.getItem(LS_RECO_HIDE_VOTE) !== "0"; } catch { /* 기본값 유지 */ }
 
   $("#dcSearchBtn").addEventListener("click", runDiscoverSearch);
   $("#dcQuery").addEventListener("keydown", e => {
@@ -2080,6 +2187,12 @@ function initDiscover() {
 
   /* 추천 */
   $("#dcRecoBtn").addEventListener("click", runReco);
+  $("#dcRecoVoteBtn").addEventListener("click", () => {
+    Discover.recoHideVote = !Discover.recoHideVote;
+    try { localStorage.setItem(LS_RECO_HIDE_VOTE, Discover.recoHideVote ? "1" : "0"); }
+    catch { /* 저장 못 해도 이번 판은 적용된다 */ }
+    renderDiscover();
+  });
   /* 아직 안 가져온 게 있으면 가져오기, 실패만 남았으면 연결 고치기 */
   $("#dcPartsBtn").addEventListener("click", (e) =>
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
@@ -2152,7 +2265,8 @@ function initDiscover() {
       const v = chip.dataset.rsort;
       // 같은 칩을 다시 누르면 방향만 뒤집는다 (목록 탭 정렬과 같은 규칙)
       if (Discover.recoSort === v) Discover.recoDir = Discover.recoDir === "asc" ? "desc" : "asc";
-      else { Discover.recoSort = v; Discover.recoDir = "desc"; }
+      // 가나다는 ㄱ부터, 점수는 높은 것부터가 자연스러운 첫 방향이다
+      else { Discover.recoSort = v; Discover.recoDir = v === "title" ? "asc" : "desc"; }
     }
     renderDiscover();
   });

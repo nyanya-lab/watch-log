@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260915a">
+<link rel="stylesheet" href="style.css?v=20260917a">
 </head>
 <body>
 
@@ -168,6 +168,10 @@
           <div id="dcRecoInfo" class="text-xs font-semibold text-slate-600 flex-1 min-w-0"></div>
           <div class="flex items-center gap-2 shrink-0">
             <!-- 구분·OTT·정렬은 이 버튼 안으로 접어둔다 (다 펼치면 바가 너무 길어진다) -->
+            <!-- 카드의 TMDB 평점 켜고 끄기 (기본 숨김). 필터와 달리 **보는 방식**이라 팝업에 안 넣는다 -->
+            <button id="dcRecoVoteBtn" class="btn-icon vote-toggle" title="TMDB 평점 보기">
+              <i class="fa-solid fa-star"></i>
+            </button>
             <button id="dcRecoFilterBtn" class="btn-icon relative" title="필터 · 정렬">
               <i class="fa-solid fa-sliders"></i>
               <span id="dcRecoDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500"></span>
@@ -708,10 +712,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260915a"></script>
-<script src="tmdb.js?v=20260915a"></script>
-<script src="watchlog.js?v=20260915a"></script>
-<script src="discover.js?v=20260915a"></script>
-<script src="stats.js?v=20260915a"></script>
+<script src="core.js?v=20260917a"></script>
+<script src="tmdb.js?v=20260917a"></script>
+<script src="watchlog.js?v=20260917a"></script>
+<script src="discover.js?v=20260917a"></script>
+<script src="stats.js?v=20260917a"></script>
 </body>
 </html>
