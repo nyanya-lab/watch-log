@@ -2058,8 +2058,8 @@ function renderDcDetail(d, mediaType) {
       <button class="badge badge-season badge-link" onclick="dcOpenMyRecord('${r.id}')">
         ${seriesLabel(r) || "기록"}${r.startDate ? ` <span class="opacity-70 ml-1">${fmtDate(r.startDate)}</span>` : ""}
       </button>`).join("");
-    mine = `<div class="rounded-xl border border-lime-200 bg-lime-50 p-3.5 mb-4">
-      <div class="text-xs font-semibold text-lime-800 mb-2">
+    mine = `<div class="rounded-xl border line-border ac-bg-soft p-3.5 mb-4">
+      <div class="text-xs font-semibold ac-text-d mb-2">
         <i class="fa-solid fa-check mr-1"></i>이미 본 작품이에요 — 내 기록 ${st.recs.length}개
         ${st.rating ? `<span class="ml-2">${hearts(st.rating)}</span>` : ""}
       </div>

@@ -24,6 +24,14 @@ function applyChartFont() {
   Chart.defaults.color = "#6f7468";
 }
 
+/* 포인트 색 — 캔버스는 CSS 변수를 못 읽으므로 그릴 때 꺼내 쓴다(설정에서 바꾸면 applyPrefs가 다시 그린다) */
+function accentColor(alpha) {
+  const hex = getComputedStyle(document.documentElement).getPropertyValue("--ac").trim() || "#e5533d";
+  if (alpha === undefined) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
 function renderStats() {
   applyChartFont();
   destroyCharts();
@@ -240,7 +248,7 @@ function renderStats() {
     type: "bar",
     data: {
       labels: years.map(y => y + "년"),
-      datasets: [{ label: "작품 수", data: years.map(y => byYear[y]), backgroundColor: "#5f9235", borderRadius: 6 }]
+      datasets: [{ label: "작품 수", data: years.map(y => byYear[y]), backgroundColor: accentColor(), borderRadius: 6 }]
     },
     options: { ...commonOpts, onClick: clickToFilter(l => ({ year: String(l).replace("년", "") })), plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
@@ -379,7 +387,7 @@ function renderStats() {
     type: "bar",
     data: {
       labels: monthLabelsShort,
-      datasets: [{ data: monthLabelsShort.map((_, idx) => byMonth[idx + 1] || 0), backgroundColor: "#7bad48", borderRadius: 6 }]
+      datasets: [{ data: monthLabelsShort.map((_, idx) => byMonth[idx + 1] || 0), backgroundColor: accentColor(.7), borderRadius: 6 }]
     },
     options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));

@@ -30,7 +30,7 @@ dev-local.js            로컬 테스트 전용 (.gitignore, 배포에 없음)
 로드 순서 고정 (index.html 하단): `core → tmdb → watchlog → discover → stats`
 (discover.js는 watchlog.js의 `visibleGenres`·`hearts`·`openEdit` 등을 쓰므로 그 뒤여야 함)
 
-의존성: Tailwind CDN, FontAwesome 6.5.1, Chart.js 4.4.1, Pretendard
+의존성: Tailwind CDN, FontAwesome 6.5.1, Chart.js 4.4.1, 글꼴(SUIT · Bebas Neue · Diphylleia · 조선일보명조 · Pretendard 폴백)
 **Firebase SDK는 안 싣는다.** 동기화는 Realtime Database REST(fetch)로만 한다 —
 예전엔 쓰지도 않는 `firebase-app-compat`+`firebase-firestore-compat`를 매 로드마다 받고 있었다.
 
@@ -186,6 +186,7 @@ TMDB가 준 `media_type`을 그대로 저장하므로 짐작이 아니고, 국�
 - `watchlog_items_backup` — 저장 직전 상태 1개
 - `watchlog_wishes` — 보고싶어요 목록 (`State.wishes`)
 - `watchlog_hides` — 관심없음 목록 (`State.hides`)
+- `watchlog_prefs` — 화면 설정 `{ accent }` (`State.prefs`). **동기화된다** — 아래 "화면 설정" 참고
 - `watchlog_reco` — 추천 결과 캐시 `{generatedAt, basis:[장르], list:[...]}`
 - `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
   영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
@@ -213,7 +214,8 @@ TMDB가 준 `media_type`을 그대로 저장하므로 짐작이 아니고, 국�
 ### 서버 (Realtime Database REST, SDK 안 씀)
 
 - `PUT/GET {DB_URL}/watchlog/{동기화 비밀번호}.json` (경로는 `getDataUrl()`이 생성)
-- 저장 형태: `{ items: [...], wishes: [...], hides: [...], cache: {...}, updatedAt: ISO, count: n }`
+- 저장 형태: `{ items: [...], wishes: [...], hides: [...], prefs: {...}, cache: {...}, updatedAt: ISO, count: n }`
+- `prefs`(화면 설정)도 `adoptLists`가 **있을 때만** 반영한다 — 설정이 생기기 전 저장본이 이 기기의 색을 지우지 않게.
 - **`cache`는 TMDB에서 받아온 참고 정보**(배우 한글 이름·컬렉션 편 목록·프랜차이즈·추천 결과·
   갱신 시각). 2026-08-07부터 기록과 함께 올린다 — 예전엔 "TMDB로 다시 만들 수 있으니 기기에만
   두자"고 했는데, 그러면 **기기를 옮길 때마다 같은 작업을 처음부터 다시** 돌려야 했다
@@ -451,14 +453,20 @@ TMDB가 준 `media_type`을 그대로 저장하므로 짐작이 아니고, 국�
 
 ## UI 특징
 
-- 헤더: 총 개수 배지(단색) + **구분별 개수 칩**(`#typeCounts`, `.hd-chip`) + 동기화 아이콘.
-  - **로고(🎬)를 누르면 강력 새로고침**(`#hardReloadBtn` → `hardReload`, 2026-09-10).
+- **상단바**(`.app-top`, 2026-09-17 개편): 로고(`WATCH.LOG`) · 메뉴(`기록·탐색·통계`) · 받아오기 · 동기화 · 설정(톱니) · [기록하기].
+  - 폰(640px 미만)에서는 메뉴·설정·기록하기가 **아래 탭바(`.tabbar`)와 떠 있는 버튼(`#fabAddBtn`)**으로 내려간다.
+  - 같은 `data-tab` 버튼이 상단 메뉴와 탭바에 하나씩 있다 — `initTabs`가 **같은 탭 버튼을 전부** 켠다.
+  - ⚠ 폰에서 상단 [기록하기]를 숨기는 규칙은 `.top-acts .top-cta`로 한 단계 구체적이어야 한다 —
+    `.btn`이 CSS 아래쪽에서 `display`를 다시 줘서 `.top-cta`만으로는 안 숨었다.
+  - 예전 헤더의 총 개수·구분 칩은 **기록 탭 머리**(`.page-head` — "내 기록 317 · 🎞186 …")로 옮겼다.
+  - 홈·검색 메뉴는 3·5단계에서 붙는다(개편 순서는 메모 참고).
+  - **로고를 누르면 강력 새로고침**(`#hardReloadBtn` → `hardReload`, 2026-09-10).
     배포 직후 새 버전을 받으려면 `Ctrl+Shift+R`이 필요한데 **폰에는 그 조합이 없고**, 홈 화면에
     추가해 쓰면 주소창조차 없다(`#pullBtn`을 둔 것과 같은 이유). `location.reload(true)`는 이제
     무시되므로 ① `fetch(cache:"reload")`로 index.html을 HTTP 캐시를 건너뛰고 다시 받아 캐시를
     갱신하고 ② 그다음 평범하게 `reload()`한다. 새 index.html의 `?v=`가 바뀌어 있으면 js·css도
     따라 새로 받는다. 저장 대기 중이던 변경은 이미 localStorage에 있고 다음 부팅의 `syncOnBoot`이 올린다.
-  탭은 알약 세그먼트(`.tab-seg`). 구분 칩은 **기록에 실제로 있는 구분만** 많은 순으로 그린다
+  구분 칩은 **기록에 실제로 있는 구분만** 많은 순으로 그린다
   (지금은 영화·드라마 둘. 예능·애니가 생기면 자동으로 늘어남).
 - 검색바: `[검색] [필터] [등록+]` 한 줄. 필터 적용 시 아이콘에 빨간 점
 - 필터: 모달 팝업 (구분/국가/OTT/장르/내 별점/연도/정렬). 선택 즉시 결과 수 미리보기
@@ -720,25 +728,35 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
      영화는 애초에 액션·모험을 따로 주므로 합치는 쪽이 맞다. 예: "액션" 조회 = 영화 70 + 드라마 21)
   - 그래서 `koGenre()`는 **항상 배열**을 반환하고 `visibleGenres()`는 `flatMap`을 쓴다.
 - 검색(`matchesQuery`): 제목 + 원제(originalTitle) + 배우(cast) + 감독(director).
-- 테마: **연두·세이지**(2026-07-27 보라에서 변경). 액센트는 단색 `#4d7c2a` 하나.
-  배지 색상: 구분=연두, 국가=파랑, OTT=초록, 장르=회색, 시즌=주황, 출연진=핑크, 평점=노랑, 등급=빨강, 시간=청록
-  - 이 색상 클래스(`.badge-type` 등)는 **style.css**에 파스텔로 정의됨 (예전엔 정의 누락→검정 텍스트였음).
-  - **카드에는 배지를 안 쓴다**(위 리디자인 참고). 배지는 상세·필터·탐색 등 정보가 촘촘한 곳에만.
-- 폰트 **고운돋움**(Google Fonts). 2026-07-31 Pretendard → 마루부리(명조) → 고운돋움 순으로 정착.
-  - Pretendard는 "너무 고딕(밋밋)", 마루부리를 비롯한 명조는 **작은 글씨에서 획이 부서져** 탈락.
-    (명조는 가로획이 얇아 11px쯤에서 먼저 사라진다. 나눔명조·본명조는 인쇄용이라 더 심하다.)
-  - **⚠ 굵기가 400 하나뿐이다.** 그래서 이 폰트를 쓰는 동안 **`font-weight`는 화면에 영향이 없다.**
-    `font-weight:700`을 주면 브라우저 합성 볼드가 되는데 한글에서는 가로로 번져 받침이 뭉갠다.
-  - **굵게 하려면 `-webkit-text-stroke`(같은 색 외곽선)를 쓴다.** 획이 고르게 굵어져 합성 볼드보다 깨끗하다.
-    유틸 `.tk`(0.3px) / `.tk-lg`(0.5px)가 있고, `h1`·`.wl-title`·`.stat-h`·`.stat-value` 등
-    굵어야 할 선택자에는 style.css에서 직접 걸어뒀다.
-    → **13px 미만에는 외곽선을 걸지 말 것.** 획이 서로 붙어 뭉갠다.
-  - 위계는 **크기 + 색 + 외곽선** 셋으로 만든다 (굵기를 못 쓰므로).
-  - Pretendard는 폴백으로 남겨둠(index.html 링크 유지).
-  - 명조 시절에 키워둔 작은 글씨 크기는 그대로 유지한다: `.wl-meta` 12.5px, `.badge` 12px,
-    `.stat-label`/`.stat-note` 13px, 포스터 위 칩 11px, 카드 제목 14px.
-- 배경은 평평한 `#f8faf5`. 정적 파일 링크에 `?v=YYYYMMDD` 캐시버스팅.
-- 탭은 좁은 화면에서 글자가 쪼개지지 않게 `white-space:nowrap`, 넘치면 세그먼트가 가로로 밀린다.
+- **테마 (2026-09-17 전면 개편)** — 흰 바탕 · 잉크 글자 · **포인트 색 하나**. 전부 `style.css` 맨 위 토큰이다.
+  - **색을 새로 쓸 때 hex를 직접 적지 말고 토큰**(`--ac` `--ac-d` `--ac-soft` `--ink*` `--line*` `--sink*`)을 쓸 것.
+    예전엔 연두 hex가 70곳에 박혀 있어서 색 하나 바꾸는 데 파일 네 개를 뒤졌다.
+    Tailwind `lime-*` 자리는 `.ac-text` `.ac-text-d` `.ac-bg` `.ac-bg-soft` `.line-border`로 바꿨다.
+    `emerald-*`는 "성공" 뜻으로만 남겼다(토스트·완료 문구).
+  - 배지 색 규칙(구분=연두·국가=파랑…)은 **포인트 색과 별개로 그대로** 둔다 — 종류를 가르는 색이다.
+  - **⚠ 내 별점 하트(`--heart`)는 포인트 색과 무관하게 고정**(사용자 요청). TMDB 평점은 `--gold`.
+  - 캔버스 차트는 CSS 변수를 못 읽는다 → `accentColor()`(stats.js)로 그릴 때 꺼내 쓰고,
+    색을 바꾸면 `applyPrefs`가 통계를 다시 그린다. 히트맵 칸은 `color-mix`로 포인트 색 농도를 낸다.
+- **화면 설정 — 포인트 색**(설정 탭 맨 위 `#accentSwatches`, 2026-09-17): 12색 중 고른다.
+  **기본 코랄**, 목록 `ACCENTS`(core.js), 값 세트는 `html[data-accent]`(style.css).
+  - **동기화된 모든 기기에 같이 적용**돼야 한다(사용자 요청) — 그래서 기기별 localStorage만이 아니라
+    `State.prefs`를 **서버 문서에 같이 올린다**. `setAccent`가 `saveLocal()`을 불러 수정 시각을 바꾸므로
+    실시간 구독 중인 다른 기기가 받아가 `adoptLists` → `applyPrefs`로 바로 칠한다.
+  - index.html `<head>`의 짧은 스크립트가 **그리기 전에** `data-accent`를 먼저 입힌다 — 안 그러면 새로고침마다
+    코랄로 번쩍였다가 바뀐다.
+  - 기기에만 남아야 하는 값(API 키·동기화 비밀번호)은 `prefs`에 넣지 말 것.
+- **글꼴 (2026-09-17 개편)** — 역할마다 다르다.
+  - 본문 **SUIT**(굵기 9단계라 강약을 굵기로 만든다). Pretendard도 괜찮다고 했던 대안 — 폴백으로 둔다.
+  - 제목 **조선일보명조**(`--font-head`, 눈누 CDN `@font-face`). 제목 자리: `.hd` `h1` `.wl-title` `.stat-h` `.dt-title`
+    `#selTitle` `#detailContent h4` `.yr-hero` `.modal-head h3` `.panel > h3` `.dc-group-t`.
+    - **굵기가 하나뿐**이라 제목에서 얇게 느껴진다 → **같은 색 외곽선 0.45px**(`--head-stroke`)로 굵힌다.
+      0.3~0.7을 비교해 사용자가 0.45로 골랐다. 합성 볼드는 받침을 뭉개므로 `font-weight: 400` + `font-synthesis: none`.
+    - 제목 속 아이콘에는 외곽선을 끈다(뭉툭해진다).
+  - 큰 숫자 **Bebas Neue**(`--font-num`) — 통계 타일·기록 개수. 한글이 섞이면 SUIT로 떨어진다.
+  - 보는 중 작품 제목 **Diphylleia**(`--font-watch`) — 홈 배너용(3단계에서 쓴다). 제목 글꼴 설정과 무관하게 고정.
+  - 예전 고운돋움용 굵기 유틸 `.tk` / `.tk-lg`는 이제 `font-weight` 700/800이다.
+  - (지난 결정) 명조는 **작은 글씨에서 획이 부서져** 본문 글꼴로는 탈락했다 — 조선일보명조도 13px 미만 제목엔 쓰지 말 것.
+- 정적 파일 링크에 `?v=YYYYMMDD` 캐시버스팅.
 - **Escape로 모달 닫기**(`initEscapeKey` in core.js): 모달 8개 전부. 겹쳐 있으면 위에 뜬 것부터
   **한 겹씩** 닫는다(한 번에 다 닫으면 뒤에 있던 것까지 사라진다). 등록/수정은 State 정리가 필요해 `closeEdit()`.
 - **바깥을 눌러 모달 닫기**(`onBackdropClose` in core.js, 2026-08-07): 모달 9개가 이 함수 하나를 쓴다.

@@ -17,6 +17,9 @@ const AUTO_SYNC_DELAY = 2500;       // 자동 저장 대기시간(ms)
 const LS_KEY = "watchlog_items";
 const LS_WISH = "watchlog_wishes";  // 보고싶어요 목록. 시청 기록과 섞지 않고 따로 둔다(통계 오염 방지)
 const LS_HIDE = "watchlog_hides";   // 관심없음 목록. 추천·검색에서 걸러낼 작품
+/* 화면 설정 (포인트 색 등). **기록과 같은 서버 문서에 같이 올린다** — 폰에서 바꾼 색이 PC에도 똑같이
+   보여야 한다(2026-09-17 요청). 기기별로 남아야 하는 값(API 키·비밀번호)은 여기 넣지 말 것. */
+const LS_PREFS = "watchlog_prefs";
 const LS_TMDB = "watchlog_tmdb_key";
 const LS_SYNC_PW = "watchlog_sync_password";   // 동기화 비밀번호 = 서버 데이터 경로 (이 기기에만 저장, 깃에는 없음)
 const LS_MODIFIED = "watchlog_modified";
@@ -52,6 +55,7 @@ const State = {
   items: [],
   wishes: [],        // 보고싶어요 (아직 안 본 작품) — items와 별도
   hides: [],         // 관심없음 — 추천·검색에서 제외할 작품
+  prefs: {},         // 화면 설정 { accent } — 동기화된다
   filtered: [],
   page: 1,
   perPage: 24,
@@ -121,7 +125,7 @@ function setSyncIcon(state) {
   };
   const [icon, color, title] = map[state] || map.idle;
   btn.innerHTML = `<i class="fa-solid ${icon}"></i>`;
-  btn.className = `btn-icon ${color}`;
+  btn.className = `top-icon ${color}`;
   btn.title = title;
 }
 
@@ -143,6 +147,7 @@ function saveLocal(skipCloud) {
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
     localStorage.setItem(LS_HIDE, JSON.stringify(State.hides));
+    localStorage.setItem(LS_PREFS, JSON.stringify(State.prefs || {}));
     localStorage.setItem(LS_MODIFIED, new Date().toISOString());
     // 사용자가 실제로 저장한 순간부터는 더 이상 "시드"가 아니다
     markSeed(false);
@@ -171,6 +176,38 @@ function loadLocal() {
   try {
     State.hides = JSON.parse(localStorage.getItem(LS_HIDE) || "[]");
   } catch { State.hides = []; }
+  try {
+    State.prefs = JSON.parse(localStorage.getItem(LS_PREFS) || "{}") || {};
+  } catch { State.prefs = {}; }
+  applyPrefs();
+}
+
+/* ---------- 화면 설정: 포인트 색 ----------
+   색 값 자체는 style.css의 `html[data-accent]` 세트에 있다. 여기는 이름만 고른다.
+   기본값은 코랄(`data-accent` 없음). 목록에 없는 값이 서버에서 오면 코랄로 둔다. */
+const ACCENTS = [
+  ["coral", "코랄", "#e5533d"], ["teal", "틸", "#0e9384"], ["plum", "플럼", "#9d3b77"], ["burgundy", "버건디", "#8e3346"],
+  ["sage", "세이지", "#5f8a6e"], ["rose", "로즈", "#cf5f7d"], ["terra", "테라코타", "#b95a3c"], ["olive", "올리브", "#7a8a36"],
+  ["petrol", "페트롤", "#1f6470"], ["navy", "네이비", "#2b4a7e"], ["orchid", "오키드", "#ad569f"], ["sky", "스카이", "#3a97cf"]
+];
+function currentAccent() {
+  const a = State.prefs && State.prefs.accent;
+  return ACCENTS.some(x => x[0] === a) ? a : "coral";
+}
+function applyPrefs() {
+  const a = currentAccent();
+  if (a === "coral") delete document.documentElement.dataset.accent;
+  else document.documentElement.dataset.accent = a;
+  // 차트는 캔버스라 CSS 변수를 못 따라온다 — 보고 있으면 다시 그린다
+  const st = document.getElementById("tab-stats");
+  if (st && !st.classList.contains("hidden") && typeof renderStats === "function") renderStats();
+  if (typeof renderAccentPicker === "function") renderAccentPicker();
+}
+function setAccent(key) {
+  if (!ACCENTS.some(x => x[0] === key) || key === currentAccent()) return;
+  State.prefs = { ...State.prefs, accent: key };
+  applyPrefs();
+  saveLocal();   // 수정 시각이 바뀌어야 다른 기기가 알아채고 받아간다
 }
 
 /* ---------- 서버 백업 (2026-08-07) ----------
@@ -274,6 +311,7 @@ async function autoPush() {
         items: State.items,
         wishes: State.wishes,
         hides: State.hides,
+        prefs: State.prefs || {},
         updatedAt: localStorage.getItem(LS_MODIFIED) || new Date().toISOString(),
         count: State.items.length,
         cache: collectCache()
@@ -314,6 +352,7 @@ async function pushToServer() {
         items: State.items,
         wishes: State.wishes,
         hides: State.hides,
+        prefs: State.prefs || {},
         updatedAt: stamp,
         count: State.items.length,
         cache: collectCache()
@@ -355,6 +394,12 @@ function adoptLists(d) {
   if (Array.isArray(d.hides)) {
     State.hides = d.hides;
     localStorage.setItem(LS_HIDE, JSON.stringify(State.hides));
+  }
+  /* 화면 설정도 **있을 때만** — 설정이 생기기 전 저장본이 이 기기의 색을 지우지 않게 */
+  if (d.prefs && typeof d.prefs === "object" && !Array.isArray(d.prefs)) {
+    State.prefs = d.prefs;
+    localStorage.setItem(LS_PREFS, JSON.stringify(State.prefs));
+    applyPrefs();
   }
   adoptCache(d.cache);
 }
@@ -803,9 +848,9 @@ function initTabs() {
     btn.addEventListener("click", () => {
       scrollPos[curTab] = window.scrollY;      // 떠나는 탭 위치 저장
 
-      $$(".tab-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
       const tab = btn.dataset.tab;
+      // 같은 탭 버튼이 상단 메뉴와 폰 탭바에 하나씩 있다 — 둘 다 맞춰 켠다
+      $$(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
       ["list", "discover", "stats", "settings"].forEach(t => {
         $("#tab-" + t).classList.toggle("hidden", t !== tab);
       });

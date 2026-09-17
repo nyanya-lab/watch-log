@@ -135,6 +135,7 @@ async function hardReload() {
 
 function initWatchlog() {
   $("#addBtn").addEventListener("click", () => openEdit(null));
+  $("#fabAddBtn").addEventListener("click", () => openEdit(null));   // 폰 — 떠 있는 기록하기 버튼
   $("#closeModal").addEventListener("click", closeEdit);
   $("#cancelBtn").addEventListener("click", closeEdit);
   $("#saveBtn").addEventListener("click", saveItem);
@@ -1751,7 +1752,25 @@ function deleteItem() {
 }
 
 /* ---------- 설정 탭 ---------- */
+/* 설정 — 포인트 색 고르기. 누르면 바로 바뀌고 동기화된다(core.js `setAccent`) */
+function renderAccentPicker() {
+  const box = $("#accentSwatches");
+  if (!box) return;
+  const cur = currentAccent();
+  box.innerHTML = ACCENTS.map(([k, label, hex]) => `
+    <button class="swatch ${k === cur ? "on" : ""}" data-accent="${k}" title="${label}">
+      <span class="dot" style="background:${hex}">${k === cur ? `<i class="fa-solid fa-check"></i>` : ""}</span>${label}
+    </button>`).join("");
+}
+
 function initSettings() {
+  renderAccentPicker();
+  $("#accentSwatches").addEventListener("click", e => {
+    const b = e.target.closest("[data-accent]");
+    if (!b) return;
+    setAccent(b.dataset.accent);
+    toast("포인트 색을 바꿨어요 — 동기화된 기기에도 같이 적용돼요", "success");
+  });
   $("#tmdbKeyInput").value = getTmdbKey();
   updateKeyStatus();
 
@@ -1800,6 +1819,7 @@ function initSettings() {
       items: State.items,
       wishes: State.wishes,
       hides: State.hides,
+      prefs: State.prefs || {},
       cache: collectCache()
     };
     const blob = new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" });
