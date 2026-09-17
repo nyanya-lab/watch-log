@@ -41,7 +41,7 @@ function heroHtml(w, cls) {
         ? `<button class="btn btn-primary" data-rate="${esc(i.id)}"><i class="fa-solid fa-heart"></i>별점 남기기</button>`
         : "");
   return `<section class="hm-hero ${cls || ""}">
-    ${i.backdrop ? `<img class="hm-bd-fill" src="${esc(bigImg(i.backdrop))}" alt="" aria-hidden="true">
+    ${i.backdrop ? `<div class="hm-bd-fill" style="background-image:url('${esc(i.backdrop)}')" aria-hidden="true"></div>
       <img class="hm-bd" src="${esc(bigImg(i.backdrop))}" alt="">` : ""}
     <div class="hm-hero-in">
       ${i.poster ? `<img class="hm-hero-poster" src="${esc(i.poster)}" alt="" data-open="${esc(i.id)}">` : ""}
@@ -95,15 +95,25 @@ function renderHome() {
   const y = today.slice(0, 4), ym = today.slice(0, 7);
   const thisYear = State.items.filter(i => (i.startDate || "").startsWith(y));
   const thisMonth = all.filter(i => recDate(i).startsWith(ym));
-  const rated = thisYear.filter(i => i.rating);
-  const avg = rated.length ? rated.reduce((s, i) => s + +i.rating, 0) / rated.length : 0;
-  const reY = State.items.filter(i => (i.lastWatchStart || "").startsWith(y)).length;
 
   const ws = watchingItems();
   const latest = ws.length ? null : all[0];
   const shown = new Set(ws.map(w => w.i));
   if (latest) shown.add(latest);
-  const recent = all.filter(i => !shown.has(i)).slice(0, 12);
+  /* 화면 폭으로 3페이지쯤 넘길 분량(사용자 요청) — PC 한 폭에 7장 안팎이라 21장 */
+  const recent = all.filter(i => !shown.has(i)).slice(0, 21);
+
+  /* 기간 칸 두 개 — 이번 달 / 최근 6개월(이번 달 포함, 6개월 전 1일부터). 칩이 아니라 위아래로 둔다(사용자 요청) */
+  const [ty, tm] = [+today.slice(0, 4), +today.slice(5, 7)];
+  const back = new Date(ty, tm - 1 - 5, 1);
+  const from6 = `${back.getFullYear()}-${String(back.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthBlock = periodHtml({
+    big: `${MON_EN[tm - 1]} ${ty}`, sub: "이번 달", from: `${ym}-01`, to: today, diary: true
+  });
+  const halfBlock = periodHtml({
+    big: `${MON_EN[back.getMonth()]} — ${MON_EN[tm - 1]}`, sub: `최근 6개월 · ${from6.slice(0, 7).replace("-", ".")} ~ ${ym.replace("-", ".")}`,
+    from: from6, to: today
+  });
 
   const c = maintCounts();
   const TODO = [
@@ -134,29 +144,22 @@ function renderHome() {
         <h2 class="hm-h2 hd">최근 본 작품</h2>
         <button class="hm-more" data-go="list">전체 기록 <i class="fa-solid fa-arrow-right"></i></button>
       </div>
-      <!-- 화살표는 마우스를 올려야 보인다(사용자 요청: "약간 손 가야 보이는"). 터치 화면에선 밀어서 넘긴다 -->
+      <!-- 화살표는 늘 보인다(옅은 검정 원 + 흰 화살표, 누르면 포인트 색). 아래 얇은 바가 지금 어디쯤인지 알려준다 -->
       <div class="hm-shelf-wrap">
         <button class="hm-arrow" data-dir="-1" title="이전"><i class="fa-solid fa-chevron-left"></i></button>
         <div class="hm-shelf">${recent.map(recordCardHtml).join("")}</div>
         <button class="hm-arrow" data-dir="1" title="다음"><i class="fa-solid fa-chevron-right"></i></button>
       </div>
+      <div class="hm-pos"><i></i></div>
     </section>` : ""}
 
-    <!-- 이번 달 기록 줄은 없앴다 — "최근 본 작품"과 거의 같은 작품이 겹쳐 나왔다(2026-09-17 사용자 지적).
-         숫자만 정리할 것 칸에 타일로 남기고, 정리할 게 없으면 그 안내는 맨 아래 한 줄로 -->
+    <!-- 기간 기록 — 이번 달 / 최근 6개월을 위아래로, 맨 아래에 정리할 것.
+         예전 "이번 달 기록" 줄 목록은 최근 본 작품과 겹쳐서 없앴다(2026-09-17) -->
     <section class="hm-sec">
-      <div class="hm-panel">
-        <div class="hm-sec-head">
-          <h2 class="hm-h2 hd">정리할 것</h2>
-          <button class="hm-more" data-diary>다이어리 <i class="fa-solid fa-arrow-right"></i></button>
-        </div>
-        <div class="hm-year">
-          <div><div class="n">${thisMonth.length}<small>편</small></div><div class="l">${mm}월</div></div>
-          <div><div class="n">${thisYear.length}<small>편</small></div><div class="l">${y}년</div></div>
-          <div><div class="n">${avg ? avg.toFixed(1) : "-"}</div><div class="l">올해 평균 별점</div></div>
-          <div><div class="n">${reY}</div><div class="l">올해 다시 본</div></div>
-        </div>
-        ${TODO.length ? `<div class="hm-todos">${TODO.map(([key, ic, label, n, hot]) => `
+      <div class="hm-panel hm-periods">
+        ${monthBlock}
+        ${halfBlock}
+        ${TODO.length ? `<div class="hm-todo-h">정리할 것</div><div class="hm-todos">${TODO.map(([key, ic, label, n, hot]) => `
           <button class="hm-todo" data-todo="${key}">
             <span class="ic ${hot ? "hot" : ""}"><i class="fa-solid ${ic}"></i></span>${label}
             <span class="n">${n}</span><i class="fa-solid fa-chevron-right go"></i>
@@ -167,14 +170,67 @@ function renderHome() {
   syncShelfArrows();
 }
 
-/* 선반 화살표 — 넘칠 때, 갈 수 있는 쪽에만 (탐색 탭 묶음 화살표와 같은 방식) */
+/* 기간 한 칸 — 본 작품 · 본 날 · 평균 별점 · 다시 본 + 가장 좋았던 작품 · 많이 본 장르.
+   "본 작품"은 다이어리와 같은 `recDate` 기준, "본 날"은 시작~종료를 날짜로 펼쳐 기간 안만 센다 */
+function periodHtml({ big, sub, from, to, diary }) {
+  const inR = (d) => !!d && d >= from && d <= to;
+  const list = State.items.filter(i => inR(recDate(i)));
+  const re = State.items.filter(i => inR(i.lastWatchStart)).length;
+  const rated = list.filter(i => i.rating);
+  const avg = rated.length ? rated.reduce((s, i) => s + +i.rating, 0) / rated.length : 0;
+  const days = new Set();
+  State.items.forEach(i => [[i.startDate, i.endDate], [i.lastWatchStart, i.lastWatchEnd]].forEach(([s, e]) => {
+    if (!s) return;
+    const end = e || s;
+    if (end < from || s > to) return;
+    const cur = new Date(s + "T00:00:00"), last = new Date(end + "T00:00:00");
+    for (let g = 0; cur <= last && g < 400; g++, cur.setDate(cur.getDate() + 1)) {
+      const k = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+      if (k >= from && k <= to) days.add(k);
+    }
+  }));
+  const best = rated.slice().sort((a, b) => b.rating - a.rating)[0];
+  const gc = {};
+  list.forEach(i => visibleGenres(i.genres).forEach(g => { gc[g] = (gc[g] || 0) + 1; }));
+  const topG = Object.entries(gc).sort((a, b) => b[1] - a[1])[0];
+
+  return `<div class="hm-period">
+    <div class="hm-period-head">
+      <div><div class="big">${big}</div><div class="sub">${esc(sub)}</div></div>
+      ${diary ? `<button class="hm-more" data-diary>다이어리 <i class="fa-solid fa-arrow-right"></i></button>` : ""}
+    </div>
+    <div class="hm-year">
+      <div><div class="n">${list.length}<small>편</small></div><div class="l">본 작품</div></div>
+      <div><div class="n">${days.size}<small>일</small></div><div class="l">본 날</div></div>
+      <div><div class="n">${avg ? avg.toFixed(1) : "-"}</div><div class="l">평균 별점</div></div>
+      <div><div class="n">${re}<small>편</small></div><div class="l">다시 본</div></div>
+    </div>
+    ${best || topG ? `<div class="hm-period-picks">
+      ${best ? `<button class="hm-pick" data-open="${esc(best.id)}">
+        ${best.poster ? `<img src="${esc(best.poster)}" alt="">` : ""}
+        <span class="l">가장 좋았던</span><b>${esc(best.title)}</b>${hearts(best.rating)}</button>` : ""}
+      ${topG ? `<span class="hm-pick"><span class="l">많이 본 장르</span><b>${esc(topG[0])}</b><span class="c">${topG[1]}편</span></span>` : ""}
+    </div>` : ""}
+  </div>`;
+}
+
+/* 선반 화살표·위치 바 — 화살표는 늘 보이고, 끝에 닿은 쪽만 흐려진다 */
 function syncShelfArrows() {
   const wrap = $("#tab-home .hm-shelf-wrap");
   if (!wrap) return;
   const s = wrap.querySelector(".hm-shelf");
   const [l, r] = wrap.querySelectorAll(".hm-arrow");
+  const max = s.scrollWidth - s.clientWidth;
   l.classList.toggle("off", s.scrollLeft <= 4);
-  r.classList.toggle("off", s.scrollLeft + s.clientWidth >= s.scrollWidth - 4);
+  r.classList.toggle("off", s.scrollLeft >= max - 4);
+  const bar = wrap.parentElement.querySelector(".hm-pos");
+  if (bar) {
+    const w = s.scrollWidth ? s.clientWidth / s.scrollWidth : 1;
+    bar.classList.toggle("hidden", w >= 0.99);
+    const thumb = bar.firstElementChild;
+    thumb.style.width = (w * 100).toFixed(2) + "%";
+    thumb.style.left = (max > 0 ? (s.scrollLeft / max) * (1 - w) * 100 : 0).toFixed(2) + "%";
+  }
   if (!s._bound) { s._bound = true; s.addEventListener("scroll", syncShelfArrows, { passive: true }); }
 }
 

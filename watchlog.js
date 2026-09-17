@@ -1229,9 +1229,11 @@ function openDetail(id) {
        </div>`
     : (i.director ? `<div class="dt-sec">${directorHtml}</div>` : "");
 
+  /* 위쪽 가로 사진은 **원래 비율(16:9) 그대로** 보여준다(`.dt-hero`). 예전엔 높이 128px 띠라
+     가로 사진의 절반 넘게 잘렸다(2026-09-17 지적). 탐색 미리보기(`renderDcDetail`)도 같다 */
   const header = i.backdrop
-    ? `<div class="relative h-32 bg-cover bg-center" style="background-image:url('${i.backdrop}')">
-         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(255,255,255,1),rgba(255,255,255,0.1))"></div>
+    ? `<div class="dt-hero" style="background-image:url('${i.backdrop.replace("/w500/", "/w780/")}')">
+         <div class="dt-hero-fade"></div>
          <button onclick="document.getElementById('detailModal').classList.add('hidden')"
            class="modal-x absolute top-3 right-3" style="background:rgba(255,255,255,.85)"><i class="fa-solid fa-xmark"></i></button>
        </div>`

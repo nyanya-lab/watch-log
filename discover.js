@@ -2017,9 +2017,10 @@ function renderDcDetail(d, mediaType) {
        </div>`
     : "";
 
+  // 가로 사진은 원래 비율 그대로 — 내 기록 상세와 같은 `.dt-hero`
   const header = d.backdrop
-    ? `<div class="relative h-32 bg-cover bg-center" style="background-image:url('${d.backdrop}')">
-         <div class="absolute inset-0" style="background:linear-gradient(to top,rgba(255,255,255,1),rgba(255,255,255,0.1))"></div>
+    ? `<div class="dt-hero" style="background-image:url('${d.backdrop.replace("/w500/", "/w780/")}')">
+         <div class="dt-hero-fade"></div>
          <button onclick="document.getElementById('dcModal').classList.add('hidden')"
            class="modal-x absolute top-3 right-3" style="background:rgba(255,255,255,.85)"><i class="fa-solid fa-xmark"></i></button>
        </div>`
