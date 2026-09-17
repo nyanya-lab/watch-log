@@ -51,8 +51,9 @@ html[data-accent="sky"]      { --ac: #3a97cf; --ac-d: #2d80b3; --ac-soft: #e0f0f
 .tk    { font-weight: 700; }
 .tk-lg { font-weight: 800; }
 
-/* 큰 제목 자리(17px 이상) — 조선일보명조 + 외곽선. 굵기 값은 합성되지 않게 400으로 둔다 */
-.hd, h1, .stat-h, .dt-title, #detailContent h4, .yr-hero {
+/* 제목 자리 — 조선일보명조 + 외곽선. 굵기 값은 합성되지 않게 400으로 둔다 */
+.hd, h1, .wl-title, .stat-h, .dt-title, #selTitle, #detailContent h4, .yr-hero,
+.modal-head h3, .panel > h3, .dc-group-t {
   font-family: var(--font-head);
   font-weight: 400;
   font-synthesis: none;
@@ -60,16 +61,8 @@ html[data-accent="sky"]      { --ac: #3a97cf; --ac-d: #2d80b3; --ac-soft: #e0f0f
   letter-spacing: -.2px;
 }
 
-/* 작은 제목 자리(16px 이하) — SUIT 굵게. 명조에 외곽선을 걸면 이 크기에서 획이 뭉개져
-   "깨져 보인다"는 말을 들었다(2026-09-17). 카드 제목처럼 수십 개가 깔리는 자리일수록 티가 난다 */
-.wl-title, #selTitle, .modal-head h3, .panel > h3, .dc-group-t {
-  font-family: var(--font-body);
-  font-weight: 700;
-  letter-spacing: -.2px;
-}
-
 /* 제목 속 아이콘까지 외곽선이 걸리면 뭉툭해진다 */
-.hd i, h1 i, .stat-h i { -webkit-text-stroke: 0; }
+.hd i, h1 i, .stat-h i, .modal-head h3 i, .panel > h3 i { -webkit-text-stroke: 0; }
 
 /* 포인트 색 유틸 — 예전 Tailwind lime-* 자리 */
 .ac-text { color: var(--ac); }
