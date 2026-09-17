@@ -601,10 +601,10 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
    ② 숫자 타일 4개 ③ 가장 좋았던 작품(순위 번호) ④ 가장 많이 본 · 달마다 막대 · 첫/마지막 작품.
    카드로 묶는 이유는 그대로다 — "가장 많이 본 배우"가 **그 해 기준**인지 아래 전체 기간 차트와 헷갈렸다. */
 .yr-card { border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: #fff; }
-.yr-band { position: relative; overflow: hidden; background: linear-gradient(135deg, #2a221d, var(--ac-d)); color: #fff; }
-.yr-band-fill { position: absolute; inset: -40px; background-size: 6000% 110%; background-position: 0% 30%;
-  filter: blur(36px) brightness(.62) saturate(1.2); }
-.yr-band::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(20,15,12,.55), rgba(20,15,12,.15)); }
+/* 머리 띠는 **포인트 색**(2026-09-17 요청). 처음엔 가장 좋았던 작품의 사진 색을 어둡게 깔았는데 검게 보였다.
+   한 색 면이 밋밋하지 않게 오른쪽 위로 살짝 밝아지는 빛만 얹는다 */
+.yr-band { position: relative; overflow: hidden; color: #fff;
+  background: radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--ac) 70%, #fff) 0%, var(--ac) 45%, var(--ac-d) 100%); }
 .yr-band-in { position: relative; z-index: 1; padding: 22px 26px 24px; }
 .yr-band-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .yr-kicker { font-family: var(--font-num); font-size: 16px; letter-spacing: .14em; color: rgba(255,255,255,.72); }
@@ -615,7 +615,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .yr-select option { color: var(--ink); }
 .yr-year { font-family: var(--font-num); font-size: 76px; line-height: .9; letter-spacing: .02em; margin-top: 8px; }
 .yr-card .yr-hero { font-size: 20px; color: #fff; margin: 8px 0 0; -webkit-text-stroke: var(--head-stroke) currentColor; }
-.yr-card .yr-hero b { color: #fff; font-weight: 400; box-shadow: inset 0 -.38em 0 color-mix(in srgb, var(--ac) 70%, transparent); }
+.yr-card .yr-hero b { color: #fff; font-weight: 400; box-shadow: inset 0 -.36em 0 rgba(255,255,255,.28); }
 .yr-diff { display: inline-block; font-family: var(--font-body); font-size: 12px; font-weight: 700; margin-left: 8px; padding: 3px 9px;
   border-radius: 999px; background: rgba(255,255,255,.16); vertical-align: 3px; -webkit-text-stroke: 0; }
 .yr-diff.up, .yr-diff.down { color: #fff; }
@@ -633,16 +633,17 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .yr-h i { color: var(--ac); font-size: 13px; }
 .yr-h-sub { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 
-/* 가장 좋았던 작품 — 순위 번호를 포스터 왼쪽 아래에 크게. 5장이라 한 줄로 흐른다 */
-.yr-posters { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
-.yr-posters::-webkit-scrollbar { display: none; }
-/* ⚠ `min-width: 0`이 없으면 **제목이 긴 작품만 포스터가 커진다**(flex 항목 기본 min-width: auto + nowrap 제목) */
-.yr-poster { flex: 0 0 118px; min-width: 0; text-align: left; position: relative; }
-.yr-poster img, .yr-poster-none { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 10px; display: block;
-  background: var(--sink); box-shadow: 0 6px 16px -8px rgba(0,0,0,.35); transition: transform .15s; }
-.yr-poster:hover img { transform: translateY(-3px); }
+/* 가장 좋았던 작품 — 7장이 **카드 폭을 꽉 채우게** 7칸 격자(2026-09-17 요청. 예전엔 118px 고정 5장이라 오른쪽이 비었다).
+   폰은 7칸이면 너무 작아 옆으로 흐르게 둔다. 순위 번호·별점은 포스터 틀(`.yr-pimg`) 기준이라 폭이 바뀌어도 자리가 맞는다 */
+.yr-posters { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; padding: 2px 0 4px; }
+/* ⚠ `min-width: 0`이 없으면 **제목이 긴 작품만 포스터가 커진다**(항목 기본 min-width: auto + nowrap 제목) */
+.yr-poster { min-width: 0; text-align: left; }
+.yr-pimg { position: relative; display: block; border-radius: 10px; transition: transform .15s; }
+.yr-pimg img, .yr-poster-none { width: 100%; aspect-ratio: 2/3; object-fit: cover; border-radius: 10px; display: block;
+  background: var(--sink); box-shadow: 0 6px 16px -8px rgba(0,0,0,.35); }
+.yr-poster:hover .yr-pimg { transform: translateY(-3px); }
 .yr-poster-none { display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 22px; }
-.yr-rank { position: absolute; left: 7px; top: calc(118px * 1.5 - 44px); z-index: 1; font-family: var(--font-num); font-size: 40px;
+.yr-rank { position: absolute; left: 8px; bottom: 4px; z-index: 1; font-family: var(--font-num); font-size: 42px;
   line-height: 1; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.55); }
 .yr-poster.top .yr-rank { color: color-mix(in srgb, var(--ac) 35%, #fff); }
 .yr-poster-r { position: absolute; top: 7px; right: 7px; background: rgba(29,26,24,.74); color: #fff;
@@ -691,8 +692,10 @@ button.yr-bar:hover .b { background: var(--ac-d); }
   .yr-year { font-size: 58px; }
   .yr-card .yr-hero { font-size: 17px; }
   .yr-in { padding: 16px 14px 18px; }
-  .yr-poster { flex-basis: 100px; }
-  .yr-rank { top: calc(100px * 1.5 - 40px); font-size: 34px; }
+  .yr-posters { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .yr-posters::-webkit-scrollbar { display: none; }
+  .yr-poster { flex: 0 0 100px; }
+  .yr-rank { font-size: 34px; }
   .yr-picks, .yr-edges { grid-template-columns: 1fr; }
 }
 

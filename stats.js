@@ -537,13 +537,9 @@ function renderYearReview(year) {
   const flowMax = Math.max(1, ...flow.map(f => f.n));
   const hot = flow.reduce((a, b) => (b.n > a.n ? b : a), flow[0]);
 
-  const best = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating).slice(0, 5);
+  const best = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating).slice(0, 7);   // 7장 — 한 줄을 꽉 채운다(2026-09-17)
   const sorted = list.filter(i => i.startDate).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   const firstWork = sorted[0], lastWork = sorted[sorted.length - 1];
-
-  /* 머리 띠 배경 — 가장 좋았던 작품(없으면 가장 최근 작품)의 가로 이미지에서 **색만** 따온다.
-     홈 배너의 빈자리 채우기와 같은 방법(왼쪽 끝 한 줄을 늘려 흐리기)이라 사람 형체가 안 보인다 */
-  const tone = (best[0] && best[0].backdrop) ? best[0] : sorted.slice().reverse().find(i => i.backdrop);
 
   /* 칩을 누르면 그 조건으로 목록을 조회한다 — 연도를 함께 걸어야 결산에 적힌 개수와 맞는다.
      전체일 땐 Y가 빈 문자열이라 위임 핸들러가 year를 지운다(연도 없이 조회) */
@@ -556,10 +552,12 @@ function renderYearReview(year) {
 
   const poster = (i, k) => `
     <button class="yr-poster ${k === 0 ? "top" : ""}" data-open="${esc(i.id)}" title="${esc(i.title)}">
-      <span class="yr-rank">${k + 1}</span>
-      ${i.poster ? `<img src="${i.poster}" alt="" loading="lazy">`
-                 : `<div class="yr-poster-none"><i class="fa-solid fa-film"></i></div>`}
-      <span class="yr-poster-r"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>
+      <span class="yr-pimg">
+        ${i.poster ? `<img src="${i.poster}" alt="" loading="lazy">`
+                   : `<span class="yr-poster-none"><i class="fa-solid fa-film"></i></span>`}
+        <span class="yr-rank">${k + 1}</span>
+        <span class="yr-poster-r"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>
+      </span>
       <span class="yr-poster-t">${esc(i.title)}</span>
     </button>`;
 
@@ -576,7 +574,6 @@ function renderYearReview(year) {
 
   box.innerHTML = `
     <div class="yr-band">
-      ${tone ? `<div class="yr-band-fill" style="background-image:url('${esc(tone.backdrop)}')"></div>` : ""}
       <div class="yr-band-in">
         <div class="yr-band-top"><span class="yr-kicker">${all ? "ALL TIME REVIEW" : "YEAR IN REVIEW"}</span>${select}</div>
         <div class="yr-year">${all ? "ALL TIME" : Y}</div>

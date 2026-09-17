@@ -114,8 +114,10 @@ function renderSearch() {
 
   /* ① 내 기록 — 최근 본 순. "안 본 것만"이면 통째로 뺀다 */
   const lq = q.toLowerCase();
+  // 내 기록도 최신순 — 작품이 나온 해가 늦은 것부터, 같으면 최근에 본 것부터
+  const relY = (i) => i.releaseDate || (i.releaseYear ? i.releaseYear + "-00-00" : "0");
   const mineAll = S === "unseen" ? [] : State.items.filter(i => matchesQuery(i, lq) && typeOk(mediaTypeOf(i)))
-    .sort((a, b) => recDate(b).localeCompare(recDate(a)));
+    .sort((a, b) => relY(b).localeCompare(relY(a)) || recDate(b).localeCompare(recDate(a)));
   const mine = mineAll.slice(0, SEARCH_MINE_MAX);
   const mineIds = new Set(mineAll.map(i => `${mediaTypeOf(i)}:${i.tmdbId}`));
 
@@ -153,8 +155,11 @@ function renderSearch() {
   }
 
   /* ③ TMDB 작품 — ①에 이미 나온 건 뺀다 */
+  /* **최신순**(2026-09-17 요청) — 개봉·방영 연도가 늦은 것부터. 연도가 같으면 TMDB가 준 순서(관련도)를 지킨다
+     (`sort`는 안정 정렬이다). 연도를 모르는 작품은 맨 뒤 */
   const works = Search.results.filter(r => !mineIds.has(`${r.mediaType}:${r.tmdbId}`) && typeOk(r.mediaType) &&
-    (S !== "unseen" || !myStatus(r.tmdbId, r.mediaType).watched));
+    (S !== "unseen" || !myStatus(r.tmdbId, r.mediaType).watched))
+    .sort((a, b) => (b.year || "0").localeCompare(a.year || "0"));
   const fallback = Search.wasFallback
     ? `<span class="sr-sub">"${esc(q)}" 결과가 없어 "${esc(Search.usedQuery)}"로 찾았어요</span>` : "";
   if (works.length) {
