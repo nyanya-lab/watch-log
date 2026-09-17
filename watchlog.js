@@ -188,6 +188,22 @@ function initWatchlog() {
   $("#filterBtn").addEventListener("click", openFilterModal);
   $("#clearFilterBtn").addEventListener("click", () => { clearAllFilters(); toast("필터를 해제했습니다"); });
 
+  /* 가려둔 TMDB 평점 누르기 — 어디에 있든(탐색 카드·검색 카드·미리보기 창) 한 곳에서 받는다.
+     캡처 단계에서 멈춰야 카드 자체의 클릭(미리보기 열기)이 같이 안 일어난다 */
+  document.addEventListener("click", e => {
+    const b = e.target.closest("[data-reveal]");
+    if (!b) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const key = b.dataset.reveal;
+    VoteReveal.add(key);
+    $$("[data-reveal]").filter(el => el.dataset.reveal === key).forEach(el => {
+      el.outerHTML = el.dataset.fmt === "badge"
+        ? `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${esc(el.dataset.vote)}</span>`
+        : `<span class="wl-rt wl-rt-tmdb"><i class="fa-solid fa-star"></i>${esc(el.dataset.vote)}</span>`;
+    });
+  }, true);
+
   /* 보기 전환 — 다이어리 / 포스터 / 시리즈 */
   loadListView();
   $$("#viewSeg [data-view]").forEach(b => b.addEventListener("click", () => setListView(b.dataset.view)));
@@ -463,11 +479,22 @@ function typeIcon(type) { return TYPE_ICON[type] || TYPE_ICON["기타"]; }
    별점 몰아넣기에서 TMDB 평점을 뺀 것과 같은 이유다: 남의 점수가 눈에 있으면 내 점수가 그쪽으로
    끌려간다. 아직 보는 중이면 내 점수가 아직 안 정해진 상태라 영향이 가장 크다.
    다 보고 체크를 풀면 평소처럼 다시 보인다. */
+/* `hideVote`가 **문자열(작품 키 `movie:123`)**이면 가리되 **눌러서 볼 수 있게** 둔다 —
+   탐색·검색의 **안 본 작품**(2026-09-17 요청: "안 본 건 평점 가리고, 누르면 그 작품만 보이기").
+   한 번 연 작품은 `VoteReveal`에 남아 다시 그려도(다른 뷰·미리보기 창) 보인다. 새로고침하면 다시 가려진다. */
+const VoteReveal = new Set();
+function voteAskHtml(key, vote, badge) {
+  return badge
+    ? `<button class="badge badge-vote vote-ask" data-reveal="${esc(key)}" data-vote="${vote}" data-fmt="badge" title="눌러서 TMDB 평점 보기"><i class="fa-solid fa-star mr-1"></i>?</button>`
+    : `<button class="wl-rt wl-rt-tmdb vote-ask" data-reveal="${esc(key)}" data-vote="${vote}" title="눌러서 TMDB 평점 보기"><i class="fa-solid fa-star"></i>?</button>`;
+}
 function ratingChip(i, hideVote) {
   const mine = i.rating
     ? `<span class="wl-rt wl-rt-mine"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>` : "";
-  const tmdb = (i.voteAverage && !hideVote)
-    ? `<span class="wl-rt wl-rt-tmdb"><i class="fa-solid fa-star"></i>${i.voteAverage}</span>` : "";
+  const ask = typeof hideVote === "string" && !VoteReveal.has(hideVote);
+  const tmdb = !i.voteAverage || hideVote === true ? ""
+    : ask ? voteAskHtml(hideVote, i.voteAverage)
+    : `<span class="wl-rt wl-rt-tmdb"><i class="fa-solid fa-star"></i>${i.voteAverage}</span>`;
   if (!mine && !tmdb) return "";
   return `<div class="wl-tr">${mine}${tmdb}</div>`;
 }

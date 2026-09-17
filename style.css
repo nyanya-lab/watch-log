@@ -197,16 +197,11 @@ body {
 .btn-icon:hover { background: var(--sink); color: var(--ac-d); }
 .btn-icon.on { background: var(--ac); color: #fff; box-shadow: none; }
 .btn-icon.on:hover { background: var(--ac-d); color: #fff; }
-/* TMDB 평점 켜고 끄기 — 꺼져 있으면 별에 사선을 긋는다 (FontAwesome 무료판엔 star-slash가 없다) */
-.vote-toggle { position: relative; }
-.vote-toggle.on { background: #fff8e1; color: #d99a00; box-shadow: inset 0 0 0 1px #f3d98b; }
-.vote-toggle.on:hover { background: #fff1c4; color: #b98200; }
-.vote-toggle:not(.on)::after {
-  content: ""; position: absolute; left: 50%; top: 50%;
-  width: 22px; height: 2px; border-radius: 2px;
-  background: currentColor; box-shadow: 0 0 0 1.5px #fff;
-  transform: translate(-50%, -50%) rotate(-45deg);
-}
+/* 가려둔 TMDB 평점(`?`) — 누르면 그 작품만 보인다. 누를 수 있는 티만 살짝 낸다 */
+.vote-ask { cursor: pointer; }
+.wl-rt.vote-ask { opacity: .8; }
+.wl-rt.vote-ask:hover { opacity: 1; text-decoration: underline; text-underline-offset: 2px; }
+button.badge.vote-ask:hover { filter: brightness(.96); }
 
 /* 입력 */
 .inp {
@@ -1244,10 +1239,15 @@ button.hm-pick:hover { border-color: var(--ac-line); }
 /* ============================================================
    상단바 검색 + 검색 결과 (2026-09-17 개편 5단계) — search.js
    ============================================================ */
-.top-search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 10px;
-  background: var(--sink); color: var(--ink-3); width: 260px; min-width: 140px; flex-shrink: 1; cursor: text; }
-.top-search:focus-within { background: #fff; box-shadow: inset 0 0 0 1.5px var(--ac); color: var(--ac); }
-.top-search i { font-size: 13px; }
+/* 흰 바탕 + 얇은 포인트 테두리. 돋보기는 쉬고 있으면 옅은 포인트 색, 쓰는 중(입력·결과 화면)이면 포인트 색 */
+.top-search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 6px 0 12px; border-radius: 10px;
+  background: #fff; box-shadow: inset 0 0 0 1px var(--ac-line); width: 260px; min-width: 140px; flex-shrink: 1; cursor: text; }
+.top-search > i { font-size: 13px; color: color-mix(in srgb, var(--ac) 45%, #fff); transition: color .12s; }
+.top-search:focus-within, .top-search.on { box-shadow: inset 0 0 0 1.5px var(--ac); }
+.top-search:focus-within > i, .top-search.on > i { color: var(--ac); }
+.ts-x { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 12px;
+  color: var(--ink-3); background: var(--sink); }
+.ts-x:hover { color: var(--ink); background: var(--sink-2); }
 .top-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
 .top-search input::placeholder, .sr-page-input input::placeholder { color: var(--ink-3); font-weight: 500; }
 #topSearchBtn { display: none; }
@@ -1270,47 +1270,21 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 .sr-note { font-size: 13px; font-weight: 600; color: var(--ink-3); background: var(--sink); border-radius: 10px; padding: 11px 14px; margin-bottom: 10px; }
 .sr-note.err { color: #c0392b; }
 .sr-note i { margin-right: 4px; }
-.sr-mine-line { width: 100%; text-align: left; font-size: 13.5px; font-weight: 600; color: var(--ink-2);
-  background: var(--ac-soft); border-radius: 10px; padding: 11px 14px; margin-bottom: 10px; }
-.sr-mine-line b { color: var(--ac-d); }
-.sr-mine-line > i:first-child { color: var(--ac); margin-right: 6px; }
-.sr-mine-line > i:last-child { font-size: 11px; margin-left: 4px; }
-.sr-mine-line:hover { color: var(--ink); }
-
-/* 결과 한 줄 = TMDB 작품 · 오른쪽 칸 = 내 기록(있으면) 또는 담기 버튼 */
-.sr-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 230px; gap: 18px; align-items: center;
-  padding: 16px 8px; margin: 0 -8px; border-top: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
-.sr-list > .sr-row:first-child { border-top: 0; }
-.sr-row:hover { background: #faf9f8; }
-.sr-poster { width: 70px; aspect-ratio: 2/3; border-radius: 7px; object-fit: cover; background: var(--sink);
-  display: grid; place-items: center; color: var(--ink-3); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-.sr-txt { min-width: 0; }
-.sr-t { font-family: var(--font-head); font-weight: 400; font-synthesis: none; -webkit-text-stroke: var(--head-stroke) currentColor;
-  font-size: 18px; color: var(--ink); line-height: 1.3; }
-.sr-m { margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--ink-3); display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
-.sr-o { margin-top: 7px; font-size: 13px; font-weight: 500; color: var(--ink-2); line-height: 1.55;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.sr-mine { border-radius: 12px; padding: 12px 14px; }
-.sr-mine.has { background: var(--ac-soft); }
-.sr-mine.has:hover { box-shadow: inset 0 0 0 1.5px var(--ac-line); }
-.sr-mine .lbl { font-size: 11.5px; font-weight: 800; letter-spacing: .04em; color: var(--ac-d); display: flex; gap: 6px; align-items: center; }
-.sr-mine .big { margin-top: 5px; }
-.sr-mine .none { font-size: 13px; font-weight: 700; color: var(--ink-3); }
-.sr-mine .sub { margin-top: 3px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
-.sr-mine .sr-btn { margin-top: 8px; }
-.sr-mine.none { padding: 0; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-.sr-mine.none .sr-on { background: var(--ac-d); }
-.sr-icon i { margin: 0; }
-.sr-hidden { font-size: 12.5px; font-weight: 700; color: var(--ink-3); align-self: center; }
-.sr-hidden i { margin-right: 4px; }
-@media (max-width: 899px) {
-  .sr-row { grid-template-columns: 64px minmax(0, 1fr); }
-  .sr-poster { width: 64px; }
-  .sr-mine { grid-column: 2; }
-  .sr-mine.none { justify-content: flex-start; }
-}
-@media (max-width: 639px) {
-  .sr-row { gap: 12px; }
-  .sr-t { font-size: 16px; }
-  .sr-mine { grid-column: 1 / -1; }
-}
+/* 검색 결과 — 포스터 격자 세 묶음(내 기록 · 인물 · TMDB 작품) */
+#tab-search .settings-head { margin-bottom: 12px; }
+.sr-sec + .sr-sec { margin-top: 30px; }
+.sr-sec-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+  font-size: 15px; font-weight: 800; color: var(--ink); }
+.sr-sec-h > i { color: var(--ac); font-size: 13px; }
+.sr-sec-h > b { font-family: var(--font-num); font-weight: 400; font-size: 20px; line-height: 1; color: var(--ink-3); }
+.sr-sec-h .sr-more { margin-left: auto; }
+.sr-sub { font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+.sr-people { display: flex; gap: 10px; flex-wrap: wrap; }
+.sr-person { display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border-radius: 999px;
+  border: 1px solid var(--line); background: #fff; text-align: left; max-width: 100%; min-width: 0; }
+.sr-person:hover { border-color: var(--ac-line); }
+.sr-person img, .sr-person .ph { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+  background: var(--sink); display: grid; place-items: center; color: var(--ink-3); }
+.sr-person .tx { display: flex; flex-direction: column; min-width: 0; }
+.sr-person b { font-size: 14px; font-weight: 800; color: var(--ink); }
+.sr-person .tx > span { font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }

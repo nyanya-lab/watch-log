@@ -21,9 +21,6 @@ const Discover = {
   /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
      그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
   recoDir: "desc",
-  /* 추천 카드의 TMDB 평점을 숨길지. **기본은 숨김**(2026-09-17 요청) — 이 기기에 남긴다.
-     정렬을 `★ TMDB 평점`으로 두면 순서로는 드러나지만, 점수 자체가 눈에 걸리는 것과는 다르다. */
-  recoHideVote: true,
   reco: null,        // 캐시된 추천 결과
   personKind: "actor",   // 인물 뷰: actor=배우 | director=감독
   personName: "",        // 고른 사람 (빈 값이면 아직 안 골랐다)
@@ -600,7 +597,6 @@ const RECO_KO_OLD_KEYS = ["watchlog_reco_ko", "watchlog_reco_ko_pct"];
 const RECO_KO_PCT0 = 70;
 const RECO_KO_STEP = 5;
 const RECO_TARGET = 60;
-const LS_RECO_HIDE_VOTE = "watchlog_reco_hide_vote";   // "0"이면 보이기, 없거나 "1"이면 숨김
 
 /* 가나다 정렬 키 — 제목 속 **영어를 소리 나는 대로 한글로** 바꿔서 센다(2026-09-17 요청).
    그대로 `localeCompare`하면 영어가 한글 앞에 몰려서 "가나다로 한 줄씩 훑기"가 안 된다.
@@ -736,12 +732,6 @@ function renderDcReco() {
   $("#dcHint").classList.add("hidden");
   $("#dcRecoBar").classList.remove("hidden");
 
-  const vb = $("#dcRecoVoteBtn");
-  if (vb) {
-    vb.classList.toggle("on", !Discover.recoHideVote);
-    vb.title = Discover.recoHideVote ? "TMDB 평점 보기" : "TMDB 평점 숨기기";
-  }
-
   renderRecoKoInput();
   const data = loadReco();
   const info = $("#dcRecoInfo");
@@ -795,7 +785,6 @@ function renderDcReco() {
     .map(c => ({
       tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
       poster: c.poster, year: c.year, voteAverage: c.voteAverage,
-      hideVote: Discover.recoHideVote,
       /* 윗줄 = 장르(최대 3개)·연도, 아랫줄 = 볼 수 있는 곳(2026-09-17 요청).
          제작국·추천 이유 배지는 뺐다 — 카드마다 `한국`·`한국 작품`이 반복돼 정작 고르는 데
          필요한 장르·OTT가 묻혔다. 제작국은 필터로 거른다. 추천 이유(`c.reason`)는 데이터에 그대로
@@ -1320,6 +1309,9 @@ function frOrder(parts, f, story) {
          hideVote, dim, note, flag, actions[] } */
 function dcCardHtml(e) {
   const st = myStatus(e.tmdbId, e.mediaType);
+  /* **안 본 작품은 TMDB 평점을 가리고, 누르면 그 카드만 보인다**(2026-09-17 요청 — 추천의 전역
+     "평점 숨기기" 버튼을 대체). 본 작품은 이미 내 점수가 있으니 그대로 보인다 */
+  const hideVote = e.hideVote === true ? true : (st.watched ? false : `${e.mediaType}:${e.tmdbId}`);
 
   let flag = e.flag || "";
   if (!flag) {
@@ -1337,7 +1329,7 @@ function dcCardHtml(e) {
 
   return `
     <div class="wl-card dc-card${e.dim ? " dc-dim" : ""}" data-act="detail" data-tid="${e.tmdbId}">
-      ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }, e.hideVote) + flag)}
+      ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }, hideVote) + flag)}
       <div class="wl-body">
         <div class="wl-title-row">
           <i class="fa-solid ${e.mediaType === "tv" ? "fa-tv" : "fa-film"} wl-type"
@@ -1785,6 +1777,24 @@ async function personIdOf(p) {
   return await tmdbFindPersonId(p.name);
 }
 
+/* 검색 결과의 인물을 눌렀을 때 — id를 이미 알고 있으니 바로 필모를 받아 탐색 탭 인물 보기로 연다.
+   내 기록에 한 번도 안 나온 사람이어도 된다(칩 줄에는 없고 결과만 뜬다) */
+async function openPersonFilmo(id, name, kind) {
+  Object.assign(Discover, { view: "person", personKind: kind || "actor", personName: name, personId: id, filmo: [], filmoLoading: true });
+  if (window.showTab) window.showTab("discover");
+  renderDiscover();
+  try {
+    const ck = id + ":" + Discover.personKind;
+    if (!_filmoCache.has(ck)) _filmoCache.set(ck, await tmdbFilmography(id, Discover.personKind));
+    if (Discover.personId === id) Discover.filmo = _filmoCache.get(ck);
+  } catch (e) {
+    toast("필모그래피 조회 실패: " + e.message, "error");
+  } finally {
+    Discover.filmoLoading = false;
+    renderDiscover();
+  }
+}
+
 async function pickPerson(name) {
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
   const p = personRank(Discover.personKind).find(x => x.name === name);
@@ -1962,10 +1972,12 @@ function renderDcDetail(d, mediaType) {
   };
 
   const chips = [];
-  /* 추천 화면에서 평점을 숨겨뒀으면 여기서도 숨긴다 — 카드에서 가려놓고 눌러 들어오자마자
-     점수가 보이면 가린 의미가 없다. 다른 탐색 뷰에서 열었을 때는 평소대로 보인다. */
-  const hideVote = Discover.view === "reco" && Discover.recoHideVote;
-  if (d.voteAverage && !hideVote) chips.push(`<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
+  /* 안 본 작품이면 여기서도 가린다 — 카드에서 가려놓고 눌러 들어오자마자 점수가 보이면 가린 의미가 없다.
+     카드에서 이미 눌러 봤으면(`VoteReveal`) 그대로 보인다 */
+  const voteKey = `${mediaType}:${d.tmdbId}`;
+  if (d.voteAverage) chips.push(!st.watched && !VoteReveal.has(voteKey)
+    ? voteAskHtml(voteKey, d.voteAverage, true)
+    : `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${d.voteAverage}</span>`);
   if (d.runtime) chips.push(`<span class="badge badge-time"><i class="fa-solid fa-clock mr-1"></i>${d.runtime}분</span>`);
   if (d.totalSeasons) chips.push(`<span class="badge badge-season"><i class="fa-solid fa-layer-group mr-1"></i>총 ${d.totalSeasons}시즌</span>`);
   if (d.totalEpisodes) chips.push(`<span class="badge badge-time"><i class="fa-solid fa-list-ol mr-1"></i>총 ${d.totalEpisodes}화</span>`);
@@ -2147,7 +2159,6 @@ function initDiscover() {
   if (!$("#tab-discover")) return;
   Discover.recoKoPct = loadRecoKoPct();
   Discover.recoKo = koPctToCount(Discover.recoKoPct);
-  try { Discover.recoHideVote = localStorage.getItem(LS_RECO_HIDE_VOTE) !== "0"; } catch { /* 기본값 유지 */ }
 
 
   $$(".dc-nav").forEach(btn => {
@@ -2160,12 +2171,6 @@ function initDiscover() {
 
   /* 추천 */
   $("#dcRecoBtn").addEventListener("click", runReco);
-  $("#dcRecoVoteBtn").addEventListener("click", () => {
-    Discover.recoHideVote = !Discover.recoHideVote;
-    try { localStorage.setItem(LS_RECO_HIDE_VOTE, Discover.recoHideVote ? "1" : "0"); }
-    catch { /* 저장 못 해도 이번 판은 적용된다 */ }
-    renderDiscover();
-  });
   /* 아직 안 가져온 게 있으면 가져오기, 실패만 남았으면 연결 고치기 */
   $("#dcPartsBtn").addEventListener("click", (e) =>
     e.currentTarget.dataset.retry === "1" ? runFixDeadColls() : runFetchCollParts());
