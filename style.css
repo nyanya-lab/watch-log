@@ -102,6 +102,8 @@ body {
   color: var(--ink-2); background: transparent; box-shadow: none; transition: background .12s, color .12s; }
 .top-icon:hover { background: var(--sink); color: var(--ink); }
 .top-icon.tab-btn.active { background: var(--sink); color: var(--ink); }
+/* 동기화 아이콘의 저장 중·저장됨 — .top-icon이 .ac-text보다 뒤에 있어 한 단계 구체적으로 준다 */
+.top-icon.ac-text { color: var(--ac); }
 .top-cta { margin-left: 6px; }
 
 /* 폰 아래 탭바 + 떠 있는 기록하기 버튼 */
@@ -244,6 +246,9 @@ body {
 
 /* 설정 탭 패널 */
 .panel { background: #fff; border-radius: 14px; padding: 20px; }
+/* 설정 머리 — 오른쪽 ✕로 보던 탭에 돌아간다 */
+.settings-head { justify-content: space-between; align-items: center; margin-bottom: 0; }
+.settings-head .modal-x { width: 38px; height: 38px; font-size: 19px; }
 .panel-desc { font-size: 13px; color: var(--ink-3); line-height: 1.6; margin-bottom: 14px; }
 
 /* ===== 폼 ===== */

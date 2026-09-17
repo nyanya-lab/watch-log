@@ -118,8 +118,9 @@ function setSyncIcon(state) {
   const map = {
     idle:    ["fa-cloud",             "text-slate-400",   "대기 중 (클릭하면 즉시 저장)"],
     pending: ["fa-pen",               "text-amber-500",   "저장 대기 중..."],
-    saving:  ["fa-spinner fa-spin",   "text-indigo-500",  "서버 저장 중..."],
-    saved:   ["fa-cloud",             "text-emerald-600", "서버에 저장됨"],
+    // 저장 중·저장됨은 포인트 색을 따른다 (Tailwind 색을 박아두면 색을 바꿔도 이 아이콘만 남는다)
+    saving:  ["fa-spinner fa-spin",   "ac-text",          "서버 저장 중..."],
+    saved:   ["fa-cloud",             "ac-text",          "서버에 저장됨"],
     error:   ["fa-triangle-exclamation", "text-red-500",  "저장 실패 — 클릭해서 재시도"],
     local:   ["fa-cloud-slash",       "text-slate-400",   "이 기기에만 저장 중 — 클릭해서 동기화 비밀번호 설정"]
   };
@@ -843,25 +844,35 @@ function initTabs() {
   // 탭마다 스크롤 위치를 기억해서, 돌아오면 보던 자리 그대로 (통계 ↔ 목록)
   const scrollPos = { list: 0, discover: 0, stats: 0, settings: 0 };
   let curTab = "list";
+  let backTab = "list";   // 설정을 닫으면 돌아갈 탭
+
+  const show = (tab) => {
+    if (tab === curTab) return;
+    scrollPos[curTab] = window.scrollY;      // 떠나는 탭 위치 저장
+    if (tab === "settings") backTab = curTab;
+
+    // 같은 탭 버튼이 상단 메뉴와 폰 탭바에 하나씩 있다 — 둘 다 맞춰 켠다
+    $$(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    ["list", "discover", "stats", "settings"].forEach(t => {
+      $("#tab-" + t).classList.toggle("hidden", t !== tab);
+    });
+    if (tab === "stats") renderStats();
+    if (tab === "discover") renderDiscover();
+    curTab = tab;
+
+    // 렌더 끝난 뒤 이전 위치로 복원
+    requestAnimationFrame(() => window.scrollTo(0, scrollPos[tab] || 0));
+  };
 
   $$(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      scrollPos[curTab] = window.scrollY;      // 떠나는 탭 위치 저장
-
-      const tab = btn.dataset.tab;
-      // 같은 탭 버튼이 상단 메뉴와 폰 탭바에 하나씩 있다 — 둘 다 맞춰 켠다
-      $$(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
-      ["list", "discover", "stats", "settings"].forEach(t => {
-        $("#tab-" + t).classList.toggle("hidden", t !== tab);
-      });
-      if (tab === "stats") renderStats();
-      if (tab === "discover") renderDiscover();
-      curTab = tab;
-
-      // 렌더 끝난 뒤 이전 위치로 복원
-      requestAnimationFrame(() => window.scrollTo(0, scrollPos[tab] || 0));
+      /* 설정은 "잠깐 들르는 곳"이다 — 톱니를 한 번 더 누르면 보던 탭으로 돌아간다 */
+      if (btn.dataset.tab === "settings" && curTab === "settings") show(backTab);
+      else show(btn.dataset.tab);
     });
   });
+  const closeBtn = $("#settingsCloseBtn");
+  if (closeBtn) closeBtn.addEventListener("click", () => show(backTab));
 }
 
 /* 콘솔에서 비밀번호 설정용 (선택) */

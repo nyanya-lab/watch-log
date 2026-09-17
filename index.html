@@ -18,7 +18,7 @@
 </script>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260917j">
+<link rel="stylesheet" href="style.css?v=20260917k">
 </head>
 <body>
 
@@ -286,6 +286,11 @@
 
     <!-- ===== 설정 탭 ===== -->
     <section id="tab-settings" class="hidden space-y-5">
+      <!-- 닫으면 보던 탭으로 돌아간다 (톱니를 한 번 더 눌러도 같다) -->
+      <div class="page-head settings-head">
+        <h2 class="page-title hd">설정</h2>
+        <button id="settingsCloseBtn" class="modal-x" title="닫기 — 보던 화면으로"><i class="fa-solid fa-xmark"></i></button>
+      </div>
       <div class="panel">
         <h3 class="text-slate-800 mb-1"><i class="fa-solid fa-palette mr-2 ac-text"></i>화면 설정</h3>
         <p class="text-sm text-slate-500 mb-4">포인트 색 — 버튼·선택된 메뉴·강조에 쓰여요. <b>동기화된 모든 기기에 같이 적용</b>되고,
@@ -743,10 +748,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260917j"></script>
-<script src="tmdb.js?v=20260917j"></script>
-<script src="watchlog.js?v=20260917j"></script>
-<script src="discover.js?v=20260917j"></script>
-<script src="stats.js?v=20260917j"></script>
+<script src="core.js?v=20260917k"></script>
+<script src="tmdb.js?v=20260917k"></script>
+<script src="watchlog.js?v=20260917k"></script>
+<script src="discover.js?v=20260917k"></script>
+<script src="stats.js?v=20260917k"></script>
 </body>
 </html>

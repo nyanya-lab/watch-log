@@ -128,6 +128,7 @@ function renderStats() {
         <div class="flex items-center justify-between mb-4">
           <h3 class="stat-h" style="margin-bottom:0"><i class="fa-solid fa-award"></i>연간 결산</h3>
           <select id="yrYear" class="filter-select">
+            <option value="all">전체</option>
             ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
           </select>
         </div>
@@ -421,7 +422,8 @@ function renderStats() {
      칩·포스터 클릭은 위임으로 받는다(연도를 바꿀 때마다 새로 그려지기 때문). */
   const yrSel = $("#yrYear");
   if (yrSel) {
-    const drawYr = () => renderYearReview(parseInt(yrSel.value));
+    // "전체"는 연도 대신 null로 넘긴다 — 모든 해를 합친 총결산
+    const drawYr = () => renderYearReview(yrSel.value === "all" ? null : parseInt(yrSel.value));
     yrSel.addEventListener("change", drawYr);
     drawYr();
     const body = $("#yrBody");
@@ -461,17 +463,21 @@ function renderYearReview(year) {
   const box = $("#yrBody");
   if (!box) return;
 
-  const Y = String(year);
-  const inY = (d) => (d || "").slice(0, 4) === Y;
-  const list = State.items.filter(i => inY(i.startDate));
+  /* year가 null이면 **전체(총결산)** — 모든 해를 합친다.
+     그때는 연도 조건 없이 기록 전체를 센다. 칩도 연도를 안 걸고 조회하므로 개수가 맞는다
+     (시작일이 비어 있는 기록까지 목록에 나오기 때문에, 여기서도 빼지 않는다). */
+  const all = year == null;
+  const Y = all ? "" : String(year);
+  const inY = (d) => all ? !!d : (d || "").slice(0, 4) === Y;
+  const list = all ? State.items.slice() : State.items.filter(i => inY(i.startDate));
   const rewatch = State.items.filter(i => inY(i.lastWatchStart));
 
   if (!list.length && !rewatch.length) {
-    box.innerHTML = `<p class="stat-note text-center" style="margin:0">${Y}년에 남긴 기록이 없습니다</p>`;
+    box.innerHTML = `<p class="stat-note text-center" style="margin:0">${all ? "아직 남긴 기록이 없습니다" : Y + "년에 남긴 기록이 없습니다"}</p>`;
     return;
   }
 
-  const prev = State.items.filter(i => (i.startDate || "").slice(0, 4) === String(year - 1)).length;
+  const prev = all ? 0 : State.items.filter(i => (i.startDate || "").slice(0, 4) === String(year - 1)).length;
   const diff = list.length - prev;
 
   const min = list.reduce((s, i) => {
@@ -493,14 +499,22 @@ function renderYearReview(year) {
   const topOtt = first(ottCount);
 
   const byMonth = {};
-  list.forEach(i => { const m = +(i.startDate || "").slice(5, 7); if (m) byMonth[m] = (byMonth[m] || 0) + 1; });
+  // 전체일 땐 "2024년 3월"처럼 해까지 붙여 센다 — 여러 해의 3월을 합치면 뜻이 없다
+  list.forEach(i => {
+    const d = i.startDate || "";
+    const m = +d.slice(5, 7);
+    if (!m) return;
+    const k = all ? `${d.slice(0, 4)}년 ${m}` : m;
+    byMonth[k] = (byMonth[k] || 0) + 1;
+  });
   const hotMonth = first(byMonth);
 
   const best = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating).slice(0, 5);
-  const sorted = list.slice().sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  const sorted = list.filter(i => i.startDate).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   const firstWork = sorted[0], lastWork = sorted[sorted.length - 1];
 
-  /* 칩을 누르면 그 조건으로 목록을 조회한다 — 연도를 함께 걸어야 결산에 적힌 개수와 맞는다 */
+  /* 칩을 누르면 그 조건으로 목록을 조회한다 — 연도를 함께 걸어야 결산에 적힌 개수와 맞는다.
+     전체일 땐 Y가 빈 문자열이라 위임 핸들러가 year를 지운다(연도 없이 조회) */
   const chip = (icon, label, v, patch) => v
     ? `<button class="yr-chip" data-jump='${esc(JSON.stringify(patch))}'>
          <i class="fa-solid ${icon}"></i>
@@ -522,11 +536,11 @@ function renderYearReview(year) {
          <span class="wl-meta">${esc(i.startDate || "")}</span></div>` : "";
 
   box.innerHTML = `
-    <p class="yr-hero">${Y}년에 <b>${list.length}편</b>을 처음 봤어요${
+    <p class="yr-hero">${all ? "지금까지" : Y + "년에"} <b>${list.length}편</b>을 ${all ? "" : "처음 "}봤어요${
       prev ? ` <span class="yr-diff ${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "▲" : "▼"} 작년보다 ${Math.abs(diff)}편</span>` : ""}</p>
 
     <div class="yr-tiles">
-      <div class="stat-box"><div class="stat-label">처음 본 작품</div><div class="stat-value">${list.length}</div></div>
+      <div class="stat-box"><div class="stat-label">${all ? "본 작품" : "처음 본 작품"}</div><div class="stat-value">${list.length}</div></div>
       <div class="stat-box"><div class="stat-label">본 날</div><div class="stat-value">${days}<span class="text-sm font-semibold text-slate-400">일</span></div></div>
       <div class="stat-box"><div class="stat-label">예상 시청시간</div><div class="stat-value">${Math.round(min / 60).toLocaleString()}<span class="text-sm font-semibold text-slate-400">시간</span></div></div>
       <div class="stat-box"><div class="stat-label">다시 본 작품</div><div class="stat-value">${rewatch.length}</div></div>
@@ -576,7 +590,7 @@ function topN(obj, n) {
   return { labels, values, rest: rest.map(x => x[0]) };
 }
 
-/* 그 해에 시청한 날짜별 편수. 히트맵과 연간 결산이 함께 쓴다 —
+/* 그 해에 시청한 날짜별 편수 (year가 null이면 모든 해). 히트맵과 연간 결산이 함께 쓴다 —
    "며칠이나 봤나"는 시작~종료 범위를 날짜로 펼쳐야 나오는 값이라 따로 세지 않는다. */
 function watchDays(year) {
   const counts = {};
@@ -589,7 +603,7 @@ function watchDays(year) {
       let guard = 0;
       while (cur <= end && guard++ < 400) {
         const key = cur.toISOString().slice(0, 10);
-        if (key.startsWith(String(year))) counts[key] = (counts[key] || 0) + 1;
+        if (year == null || key.startsWith(String(year))) counts[key] = (counts[key] || 0) + 1;
         cur.setDate(cur.getDate() + 1);
       }
     });
