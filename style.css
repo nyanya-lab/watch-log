@@ -25,7 +25,7 @@
   --font-head: "ChosunMyungjo", "Gowun Batang", serif;        /* 제목 — 조선일보명조 */
   --font-num: "Bebas Neue", "SUIT", sans-serif;               /* 날짜·개수 같은 큰 숫자 */
   --font-watch: "Diphylleia", "Gowun Batang", serif;          /* 보는 중 작품 제목 (홈 배너 — 3단계) */
-  --head-stroke: .45px;
+  --head-stroke: .3px;
 }
 html[data-accent="teal"]     { --ac: #0e9384; --ac-d: #0b7a6e; --ac-soft: #d7f3ef; }
 html[data-accent="plum"]     { --ac: #9d3b77; --ac-d: #83305f; --ac-soft: #f6e1ee; }
@@ -39,7 +39,7 @@ html[data-accent="navy"]     { --ac: #2b4a7e; --ac-d: #223c67; --ac-soft: #e1e7f
 html[data-accent="orchid"]   { --ac: #ad569f; --ac-d: #934787; --ac-soft: #f5e4f2; }
 html[data-accent="sky"]      { --ac: #3a97cf; --ac-d: #2d80b3; --ac-soft: #e0f0f9; }
 
-/* 조선일보명조 — 굵기가 하나(보통)뿐이다. 제목에선 얇게 느껴져서 **같은 색 외곽선 0.45px**로 굵힌다
+/* 조선일보명조 — 굵기가 하나(보통)뿐이다. 제목에선 얇게 느껴져서 **같은 색 외곽선 0.3px**로 굵힌다
    (합성 볼드는 한글 받침을 뭉갠다). 13px 미만에는 쓰지 말 것 — 획이 붙는다. */
 @font-face {
   font-family: "ChosunMyungjo";

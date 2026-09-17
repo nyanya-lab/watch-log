@@ -753,8 +753,10 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
   - 본문 **SUIT**(굵기 9단계라 강약을 굵기로 만든다). Pretendard도 괜찮다고 했던 대안 — 폴백으로 둔다.
   - 제목 **조선일보명조**(`--font-head`, 눈누 CDN `@font-face`). 제목 자리: `.hd` `h1` `.wl-title` `.stat-h` `.dt-title`
     `#selTitle` `#detailContent h4` `.yr-hero` `.modal-head h3` `.panel > h3` `.dc-group-t`.
-    - **굵기가 하나뿐**이라 제목에서 얇게 느껴진다 → **같은 색 외곽선 0.45px**(`--head-stroke`)로 굵힌다.
-      0.3~0.7을 비교해 사용자가 0.45로 골랐다. 합성 볼드는 받침을 뭉개므로 `font-weight: 400` + `font-synthesis: none`.
+    - **굵기가 하나뿐**이라 제목에서 얇게 느껴진다 → **같은 색 외곽선 0.3px**(`--head-stroke`)로 굵힌다.
+      처음엔 0.45였는데 작은 제목에서 **"깨져 보인다"**고 해서 0.3으로 낮췄다(2026-09-17). 외곽선은 획이 겹치는
+      자리 **안쪽에도** 그려져서 굵을수록 뭉개진다. 비교한 대안 — 바깥쪽만(`paint-order: stroke fill`)·
+      그림자 굵히기 — 보다 0.3을 골랐다. 작은 제목만 SUIT로 바꾼 안은 "명조가 좋다"며 되돌렸다. 합성 볼드는 받침을 뭉개므로 `font-weight: 400` + `font-synthesis: none`.
     - 제목 속 아이콘에는 외곽선을 끈다(뭉툭해진다).
   - 큰 숫자 **Bebas Neue**(`--font-num`) — 통계 타일·기록 개수. 한글이 섞이면 SUIT로 떨어진다.
   - 보는 중 작품 제목 **Diphylleia**(`--font-watch`) — 홈 배너용(3단계에서 쓴다). 제목 글꼴 설정과 무관하게 고정.
