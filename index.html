@@ -18,7 +18,7 @@
 </script>
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260917w">
+<link rel="stylesheet" href="style.css?v=20260917x">
 </head>
 <body>
 
@@ -195,52 +195,49 @@
     <!-- ===== 탐색 탭 ===== -->
     <section id="tab-discover" class="hidden space-y-4">
 
-      <div class="flex items-center justify-between gap-2 flex-wrap">
-        <div class="flex gap-1.5 flex-wrap">
-          <button class="dc-nav active" data-view="reco"><i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i>추천</button>
-          <button class="dc-nav" data-view="next"><i class="fa-solid fa-forward mr-1.5"></i>이어보기 <span id="dcNextCount" class="dc-num">0</span></button>
-          <button class="dc-nav" data-view="fr"><i class="fa-solid fa-layer-group mr-1.5"></i>시리즈</button>
-          <button class="dc-nav" data-view="person"><i class="fa-solid fa-user-group mr-1.5"></i>인물</button>
-          <button class="dc-nav" data-view="wish"><i class="fa-solid fa-bookmark mr-1.5"></i>보고싶어요 <span id="dcWishCount" class="dc-num">0</span></button>
-          <button class="dc-nav hidden" data-view="hide"><i class="fa-solid fa-ban mr-1.5"></i>관심없음 <span id="dcHideCount" class="dc-num">0</span></button>
-        </div>
-        <span id="dcCount" class="text-sm font-medium text-slate-500"></span>
+      <!-- 머리 + 뷰 전환 (2026-09-17 다듬기) — 테두리 알약 6개가 "칙칙하다"고 해서
+           기록 화면의 보기 전환(.vseg)과 같은 **눌린 면 위 흰 알약** 한 줄로 바꿨다 -->
+      <div class="page-head dc-head">
+        <h2 class="page-title hd">추천</h2>
+        <span id="dcCount" class="dc-count"></span>
+      </div>
+      <div class="dc-tabs">
+        <button class="dc-nav active" data-view="reco"><i class="fa-solid fa-wand-magic-sparkles"></i>추천</button>
+        <button class="dc-nav" data-view="next"><i class="fa-solid fa-forward"></i>이어보기<span id="dcNextCount" class="dc-num">0</span></button>
+        <button class="dc-nav" data-view="fr"><i class="fa-solid fa-layer-group"></i>시리즈</button>
+        <button class="dc-nav" data-view="person"><i class="fa-solid fa-user-group"></i>인물</button>
+        <button class="dc-nav" data-view="wish"><i class="fa-solid fa-bookmark"></i>보고싶어요<span id="dcWishCount" class="dc-num">0</span></button>
+        <button class="dc-nav hidden" data-view="hide"><i class="fa-solid fa-ban"></i>관심없음<span id="dcHideCount" class="dc-num">0</span></button>
       </div>
 
-      <!-- 추천 뷰 전용 바 -->
-      <div id="dcRecoBar" class="hidden rounded-xl border line-border bg-white/70 px-4 py-3">
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-          <div id="dcRecoInfo" class="text-xs font-semibold text-slate-600 flex-1 min-w-0"></div>
+      <!-- 추천 뷰 전용 바 — 박스를 벗기고 두 줄: ① 기준 정보 ② 한국 비중 · 필터 · 다시 추천받기 -->
+      <div id="dcRecoBar" class="hidden dc-bar">
+        <div id="dcRecoInfo" class="dc-bar-info"></div>
+        <div class="dc-bar-row">
+          <!-- 뽑을 때 쓰는 값이라 필터(보는 조건)와 따로 둔다 -->
+          <div class="dc-ko">
+            <span class="dc-ko-l" title="내가 별점을 높게 준 작품·재시청한 작품과 비슷한 작품, 그리고 내 취향 장르에서 함께 골라옵니다. 이미 기록한 작품은 빠집니다.">한국 작품 비중</span>
+            <label class="dc-pct">
+              <input type="number" id="dcRecoKoInput" inputmode="numeric" min="0" max="100" step="5" value="70">
+              <span>%</span>
+            </label>
+            <!-- 브라우저 기본 화살표는 숫자에 붙어 있어 누르기 어려워 숨기고, 입력칸 바깥에 따로 둔다 -->
+            <div class="dc-step">
+              <button type="button" data-kostep="-5" title="5% 내리기"><i class="fa-solid fa-chevron-down"></i></button>
+              <button type="button" data-kostep="5" title="5% 올리기"><i class="fa-solid fa-chevron-up"></i></button>
+            </div>
+            <span id="dcRecoKoLabel" class="dc-ko-n"></span>
+          </div>
           <div class="flex items-center gap-2 shrink-0">
             <!-- 구분·OTT·정렬은 이 버튼 안으로 접어둔다 (다 펼치면 바가 너무 길어진다) -->
             <button id="dcRecoFilterBtn" class="btn-icon relative" title="필터 · 정렬">
               <i class="fa-solid fa-sliders"></i>
               <span id="dcRecoDot" class="hidden absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500"></span>
             </button>
-            <button id="dcRecoBtn" class="btn btn-sm btn-primary">
+            <button id="dcRecoBtn" class="btn btn-primary">
               <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>추천 받기
             </button>
           </div>
-        </div>
-        <!-- 뽑을 때 쓰는 값이라 필터(보는 조건)와 나란히 두지 않고 [다시 추천받기] 아래에 둔다.
-             바는 **두 줄**로 둔다(2026-09-17 요청) — 예전엔 아래에 설명 문단이 한 줄 더 있어 세 줄이었다.
-             설명은 이 줄 오른쪽으로 올렸고, 좁은 화면에서는 숨긴다(폰은 어차피 줄이 접힌다). -->
-        <div class="flex items-center gap-3 flex-wrap mt-2">
-          <span class="text-xs font-semibold text-slate-500 shrink-0">한국 작품 비중</span>
-          <label class="dc-pct">
-            <input type="number" id="dcRecoKoInput" inputmode="numeric" min="0" max="100" step="5" value="70">
-            <span>%</span>
-          </label>
-          <!-- 브라우저 기본 화살표는 숫자에 붙어 있어 누르기 어려워 숨기고, 입력칸 바깥에 따로 둔다 -->
-          <div class="dc-step">
-            <button type="button" data-kostep="-5" title="5% 내리기"><i class="fa-solid fa-chevron-down"></i></button>
-            <button type="button" data-kostep="5" title="5% 올리기"><i class="fa-solid fa-chevron-up"></i></button>
-          </div>
-          <span id="dcRecoKoLabel" class="text-xs font-semibold text-slate-600 shrink-0"></span>
-          <p class="hidden lg:block flex-1 min-w-0 truncate text-right text-xs font-medium text-slate-400"
-             title="내가 별점을 높게 준 작품·재시청한 작품과 비슷한 작품, 그리고 내 취향 장르에서 함께 골라옵니다. 이미 기록한 작품은 빠집니다.">
-            별점 높게 준·다시 본 작품과 <b>비슷한 작품</b> + <b>내 취향 장르</b>에서 골라옵니다
-          </p>
         </div>
 
         <div id="dcRecoProgress" class="hidden mt-2">
@@ -252,7 +249,7 @@
       </div>
 
       <!-- 시리즈(프랜차이즈) 뷰 전용 바 — 어느 시리즈를 볼지 + 순서 전환 -->
-      <div id="dcFrBar" class="hidden rounded-xl border line-border bg-white/70 px-4 py-3 space-y-2.5">
+      <div id="dcFrBar" class="hidden dc-bar space-y-2.5">
         <div class="flex items-center justify-between gap-3 flex-wrap">
           <div id="dcFrChips" class="flex gap-1 flex-wrap"></div>
           <div class="flex items-center gap-2 shrink-0">
@@ -286,7 +283,7 @@
       </div>
 
       <!-- 인물: 배우·감독 고르기 + 진도 -->
-      <div id="dcPersonBar" class="hidden space-y-2">
+      <div id="dcPersonBar" class="hidden dc-bar space-y-2">
         <div id="dcPersonKind" class="flex gap-1.5 flex-wrap"></div>
         <div id="dcPersonChips" class="flex gap-1.5 flex-wrap"></div>
         <div id="dcPersonMsg" class="text-sm font-semibold text-slate-600"></div>
@@ -779,12 +776,12 @@
     }
   })();
 </script>
-<script src="core.js?v=20260917w"></script>
-<script src="tmdb.js?v=20260917w"></script>
-<script src="watchlog.js?v=20260917w"></script>
-<script src="discover.js?v=20260917w"></script>
-<script src="stats.js?v=20260917w"></script>
-<script src="home.js?v=20260917w"></script>
-<script src="search.js?v=20260917w"></script>
+<script src="core.js?v=20260917x"></script>
+<script src="tmdb.js?v=20260917x"></script>
+<script src="watchlog.js?v=20260917x"></script>
+<script src="discover.js?v=20260917x"></script>
+<script src="stats.js?v=20260917x"></script>
+<script src="home.js?v=20260917x"></script>
+<script src="search.js?v=20260917x"></script>
 </body>
 </html>

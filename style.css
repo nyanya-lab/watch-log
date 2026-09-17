@@ -729,29 +729,75 @@ button.yr-bar:hover .b { background: var(--ac-d); }
 }
 
 /* ===== 탐색 탭 ===== */
-.dc-nav {
-  display: inline-flex; align-items: center;
-  padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--line-2);
-  background: #fff;
-  color: var(--ink-2);
-  font-size: 14px; font-weight: 600;
-  transition: background .12s, color .12s, border-color .12s;
+/* 머리 — 다른 탭처럼 제목 + 오른쪽 개수 */
+.dc-head { justify-content: space-between; align-items: baseline; margin-bottom: 0; }
+.dc-count { font-size: 13px; font-weight: 700; color: var(--ink-3); }
+
+/* 뷰 전환 — 눌린 면 위 흰 알약 한 줄(기록 화면 .vseg와 같은 말투). 폰에서는 옆으로 민다 */
+.dc-tabs { display: flex; gap: 2px; width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none;
+  background: var(--sink); border-radius: 12px; padding: 4px; }
+.dc-tabs::-webkit-scrollbar { display: none; }
+.dc-nav { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; padding: 8px 14px; border-radius: 9px;
+  font-size: 14px; font-weight: 700; color: var(--ink-3); white-space: nowrap; transition: background .12s, color .12s; }
+.dc-nav i { font-size: 12.5px; }
+.dc-nav:hover { color: var(--ink); }
+.dc-nav.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.dc-nav.active i { color: var(--ac); }
+.dc-num { font-family: var(--font-num); font-size: 15px; font-weight: 400; line-height: 1; padding-top: 2px; color: var(--ink-3); }
+.dc-nav.active .dc-num { color: var(--ac-d); }
+
+/* 뷰별 바 — 박스를 벗고 아래 헤어라인만 */
+.dc-bar { padding: 2px 0 14px; border-bottom: 1px solid var(--line); }
+.dc-bar-info { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+.dc-bar-info b { color: var(--ink); font-weight: 800; }
+.dc-basis { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  background: var(--ac-soft); color: var(--ac-d); font-weight: 800; }
+.dc-basis i { font-size: 10px; }
+.dc-dim-t { color: var(--ink-3); opacity: .8; }
+.dc-bar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.dc-ko { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dc-ko-l { font-size: 13px; font-weight: 700; color: var(--ink-2); cursor: help; }
+.dc-ko-n { font-size: 12.5px; font-weight: 700; color: var(--ink-3); }
+
+/* 인물 — 진도 줄 */
+.dc-pmsg { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+.dc-pmsg > b:first-child { font-size: 16px; font-weight: 800; color: var(--ink); }
+.dc-pbar { position: relative; width: 160px; height: 6px; border-radius: 6px; background: var(--sink-2); overflow: hidden; }
+.dc-pbar i { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--ac); }
+.dc-ppct { font-family: var(--font-num); font-size: 18px; line-height: 1; color: var(--ac-d); }
+
+/* 인물 — 필모 타임라인. 구간마다 한 줄: 왼쪽 연도, 오른쪽 포스터가 흐른다.
+   **안 본 작품은 진하게, 본 작품은 연하게**(사용자 선택) — 본 작품의 내 별점 배지는 흐리지 않는다 */
+#dcGrid.dc-tl-on { display: block; }
+.dc-tl-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 18px; padding: 18px 0; border-top: 1px solid var(--line); }
+.dc-tl-row:first-child { border-top: 0; padding-top: 4px; }
+.dc-tl-when { position: sticky; top: 76px; align-self: start; display: flex; flex-direction: column; }
+.dc-tl-when b { font-family: var(--font-num); font-size: 34px; font-weight: 400; line-height: .9; color: var(--ink); }
+.dc-tl-when span { font-family: var(--font-num); font-size: 17px; color: var(--ink-3); }
+.dc-tl-when span::before { content: "~ "; }
+.dc-tl-when em { font-style: normal; margin-top: 8px; font-size: 11.5px; font-weight: 700; color: var(--ink-3); }
+.dc-tl-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 16px 12px; }
+.dc-tl-tile { min-width: 0; text-align: left; cursor: pointer; }
+.dc-tl-img { position: relative; display: block; border-radius: 9px; overflow: hidden; background: var(--sink); }
+.dc-tl-img img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; transition: transform .15s; }
+.dc-tl-tile:hover .dc-tl-img img { transform: scale(1.03); }
+.dc-tl-img .wl-tr { position: absolute; left: 0; right: 0; bottom: 0; }
+.dc-tl-t { display: block; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dc-tl-y { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+.dc-tl-tile.seen .dc-tl-img img { opacity: .38; filter: grayscale(.5); }
+.dc-tl-tile.seen .dc-tl-t, .dc-tl-tile.seen .dc-tl-y { opacity: .5; }
+.dc-tl-tile.seen:hover .dc-tl-img img { opacity: .7; }
+.dc-tl-mine { position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 999px; background: #fff; color: var(--heart); font-size: 12px; font-weight: 800;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.dc-tl-mine i { color: var(--heart-ic); font-size: 10px; }
+@media (max-width: 639px) {
+  .dc-tl-row { grid-template-columns: 1fr; gap: 10px; }
+  .dc-tl-when { position: static; flex-direction: row; align-items: baseline; gap: 8px; }
+  .dc-tl-when em { margin: 0 0 0 auto; }
+  .dc-tl-items { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; }
+  .dc-pbar { width: 100px; }
 }
-.dc-nav:hover { background: var(--sink); color: var(--ac); border-color: var(--ac-line); }
-.dc-nav.active {
-  background: var(--ink);
-  border-color: var(--ink); color: #fff;
-}
-.dc-num {
-  margin-left: 6px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--sink); color: var(--ink-2);
-  font-size: 11px; font-weight: 700;
-}
-.dc-nav.active .dc-num { background: rgba(255,255,255,.25); color: #fff; }
 
 /* 추천 구분 토글 */
 .dc-type {

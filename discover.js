@@ -745,11 +745,10 @@ function renderDcReco() {
        "왜 한국이 적지"를 안 헤아리게 된다. `origin`이 있는 새 캐시에서만 붙인다. */
     const koN = (data.list || []).filter(c => c.origin === "한국").length;
     const hasOrigin = (data.list || []).some(c => c.origin);
-    info.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>
-      ${(data.basis || []).length ? `<b>${esc(data.basis.join("·"))}</b> 취향 기준 · ` : ""}
-      ${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 기준
-      ${hasOrigin ? `· 한국 <b>${koN}</b> · 외국 <b>${(data.list || []).length - koN}</b> ` : ""}
-      <span class="opacity-70">· 국내 정액제로 볼 수 있는 것만</span>`;
+    info.innerHTML = `${(data.basis || []).length ? `<span class="dc-basis"><i class="fa-solid fa-heart"></i>${esc(data.basis.join(" · "))}</span>` : ""}
+      <span>${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())} 기준</span>
+      ${hasOrigin ? `<span>한국 <b>${koN}</b> · 외국 <b>${(data.list || []).length - koN}</b></span>` : ""}
+      <span class="dc-dim-t">국내 정액제로 볼 수 있는 것만</span>`;
   } else {
     info.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i>아직 추천을 만들지 않았어요. 오른쪽 버튼을 눌러보세요.`;
   }
@@ -1311,7 +1310,9 @@ function dcCardHtml(e) {
   const st = myStatus(e.tmdbId, e.mediaType);
   /* **안 본 작품은 TMDB 평점을 가리고, 누르면 그 카드만 보인다**(2026-09-17 요청 — 추천의 전역
      "평점 숨기기" 버튼을 대체). 본 작품은 이미 내 점수가 있으니 그대로 보인다 */
-  const hideVote = e.hideVote === true ? true : (st.watched ? false : `${e.mediaType}:${e.tmdbId}`);
+  /* 본 작품이어도 **아직 보는 중**이면 가린다 — 내 기록 카드와 같은 규칙 */
+  const hideVote = e.hideVote === true || (st.watched && st.recs.some(watchingNow)) ? true
+    : (st.watched ? false : `${e.mediaType}:${e.tmdbId}`);
 
   let flag = e.flag || "";
   if (!flag) {
@@ -1354,6 +1355,7 @@ function dcCardHtml(e) {
 function paintDcCards(entries, empty) {
   Discover._byId = new Map(entries.map(e => [String(e.tmdbId), e]));
   const grid = $("#dcGrid");
+  grid.classList.remove("dc-tl-on");   // 인물 타임라인에서 넘어왔으면 격자로 되돌린다
   const grouped = entries.some(e => e.group);
   grid.classList.toggle("dc-grouped", grouped);
 
@@ -1853,31 +1855,72 @@ function renderDcPerson() {
     return;
   }
 
-  const all = Discover.filmo;
-  const watched = all.filter(f => State.items.some(i => i.tmdbId === f.tmdbId)).length;
-  const list = all
-    .filter(f => !State.items.some(i => i.tmdbId === f.tmdbId) && !isHidden(f.tmdbId, f.mediaType))
-    .map(f => ({
-      tmdbId: f.tmdbId, mediaType: f.mediaType, title: f.title, poster: f.poster,
-      year: f.year, voteAverage: f.voteAverage,
-      note: f.character ? `<span class="badge badge-cast">${esc(f.character)}</span>` : "",
-      _raw: f,          // 보고싶어요에 담을 때 원제·줄거리를 여기서 가져간다
-      actions: [
-        { act: "wish", label: "보고싶어요", icon: "fa-bookmark", cls: "dc-btn-main" },
-        { act: "add", label: "봤어요", icon: "fa-plus" },
-        { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 이 목록에서 숨기기" }
-      ]
-    }));
+  /* ---------- 필모 타임라인 (2026-09-17 요청) ----------
+     예전엔 **안 본 작품만** 격자로 보여줘서 "이 사람 것 중에 뭘 봤더라"를 알 수 없었다.
+     이제 필모 전체를 **연도 구간(3년 또는 5년)마다 한 줄**로 늘어놓는다:
+     - **안 본 작품은 진하게**(고를 대상), **본 작품은 연하게** + 내 별점(이미 본 것은 배경).
+       — 흔히 반대로 하지만 이 뷰는 "다음에 뭘 볼까"가 목적이라 사용자가 이렇게 골랐다.
+     - 구간 폭은 활동 기간이 15년 이하면 3년, 넘으면 5년 — 줄이 너무 많거나 한 줄이 너무 길지 않게.
+     - 줄 안은 최신 연도부터. 관심없음으로 넘긴 작품은 뺀다(예전과 같다).
+     - 누르면: 본 작품 = 내 기록 상세, 안 본 작품 = TMDB 미리보기(거기서 보고싶어요·봤어요). */
+  const all = Discover.filmo.filter(f => !isHidden(f.tmdbId, f.mediaType));
+  const rows = all.map(f => ({ f, st: myStatus(f.tmdbId, f.mediaType) }));
+  const watched = rows.filter(r => r.st.watched).length;
 
-  /* "몇 편 중 몇 편 봤나"를 먼저 알려준다 — 이 뷰의 재미가 그 진도에 있다 */
   $("#dcPersonMsg").innerHTML = all.length
-    ? `<b>${esc(Discover.personName)}</b> — 평가가 쌓인 작품 ${all.length}편 중
-       <b>${watched}편</b>을 봤어요 · 안 본 것 ${list.length}편`
+    ? `<div class="dc-pmsg"><b>${esc(Discover.personName)}</b>
+         <span>평가가 쌓인 작품 <b>${all.length}편</b> 중 <b class="ac-text">${watched}편</b>을 봤어요</span>
+         <span class="dc-pbar"><i style="width:${Math.round(watched / all.length * 100)}%"></i></span>
+         <span class="dc-ppct">${Math.round(watched / all.length * 100)}%</span></div>`
     : `<b>${esc(Discover.personName)}</b>의 작품을 찾지 못했습니다`;
 
-  paintDcCards(list, `<i class="fa-solid fa-circle-check text-4xl mb-3"></i>
-    <p class="font-medium">안 본 작품이 없어요</p>
-    <p class="text-sm mt-1">이 사람 것은 다 보셨네요.</p>`);
+  if (!all.length) {
+    paintDcCards([], `<i class="fa-solid fa-user-slash text-4xl mb-3"></i><p class="font-medium">작품을 찾지 못했어요</p>`);
+    return;
+  }
+
+  const years = rows.map(r => +r.f.year).filter(Boolean);
+  const maxY = Math.max(...years), minY = Math.min(...years);
+  const step = maxY - minY + 1 > 15 ? 5 : 3;
+  const buckets = new Map();
+  rows.forEach(r => {
+    const y = +r.f.year || minY;
+    const k = Math.floor((maxY - y) / step);           // 0 = 가장 최근 구간
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(r);
+  });
+
+  Discover._byId = new Map(all.map(f => [String(f.tmdbId), f]));   // 위임 핸들러가 mediaType을 찾는다
+  const tile = ({ f, st }) => {
+    const seen = st.watched;
+    const key = `${f.mediaType}:${f.tmdbId}`;
+    const vote = seen ? "" : ratingChip({ voteAverage: f.voteAverage }, key);
+    /* 버튼이 아니라 div — 안에 가린 평점 버튼(`★ ?`)이 들어가는데 버튼 안에 버튼은 HTML이 깨진다 */
+    return `<div role="button" tabindex="0" class="dc-tl-tile ${seen ? "seen" : ""}" ${seen
+        ? `data-act="open" data-id="${esc(st.recs[0].id)}"` : `data-act="detail"`} data-tid="${f.tmdbId}" title="${esc(f.title)}">
+      <span class="dc-tl-img">
+        <img src="${esc(f.poster)}" alt="" loading="lazy">
+        ${seen ? `<span class="dc-tl-mine">${st.rating ? `<i class="fa-solid fa-heart"></i>${fmtRating(st.rating)}` : `<i class="fa-solid fa-check"></i>봤어요`}</span>` : vote}
+      </span>
+      <span class="dc-tl-t">${esc(f.title)}</span>
+      <span class="dc-tl-y">${esc(f.year)}${f.mediaType === "tv" ? " · TV" : ""}</span>
+    </div>`;
+  };
+
+  const grid = $("#dcGrid");
+  grid.classList.remove("dc-grouped");
+  grid.classList.add("dc-tl-on");
+  grid.innerHTML = [...buckets.keys()].sort((a, b) => a - b).map(k => {
+    const hi = maxY - k * step, lo = hi - step + 1;
+    const list = buckets.get(k).sort((a, b) => (b.f.year || "").localeCompare(a.f.year || ""));
+    const seenN = list.filter(r => r.st.watched).length;
+    return `<section class="dc-tl-row">
+      <div class="dc-tl-when"><b>${hi}</b><span>${lo}</span><em>${seenN}/${list.length}</em></div>
+      <div class="dc-tl-items">${list.map(tile).join("")}</div>
+    </section>`;
+  }).join("");
+  $("#dcEmpty").classList.add("hidden");
+  $("#dcCount").textContent = `${all.length}편 · 봤어요 ${watched}`;
 }
 
 /* 검색은 상단바로 옮겼다(search.js, 2026-09-17) — 예전 `renderDcSearch`/`runDiscoverSearch` 자리 */
