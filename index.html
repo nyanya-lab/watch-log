@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20260917e">
+<link rel="stylesheet" href="style.css?v=20260917f">
 </head>
 <body>
 
@@ -185,9 +185,14 @@
         <div class="flex items-center gap-3 flex-wrap mt-3">
           <span class="text-xs font-semibold text-slate-500 shrink-0">한국 작품 비중</span>
           <label class="dc-pct">
-            <input type="number" id="dcRecoKoInput" inputmode="numeric" min="0" max="100" step="5" value="67">
+            <input type="number" id="dcRecoKoInput" inputmode="numeric" min="0" max="100" step="5" value="70">
             <span>%</span>
           </label>
+          <!-- 브라우저 기본 화살표는 숫자에 붙어 있어 누르기 어려워 숨기고, 입력칸 바깥에 따로 둔다 -->
+          <div class="dc-step">
+            <button type="button" data-kostep="-5" title="5% 내리기"><i class="fa-solid fa-chevron-down"></i></button>
+            <button type="button" data-kostep="5" title="5% 올리기"><i class="fa-solid fa-chevron-up"></i></button>
+          </div>
           <span id="dcRecoKoLabel" class="text-xs font-semibold text-slate-600 shrink-0"></span>
         </div>
 
@@ -715,10 +720,10 @@
     }
   })();
 </script>
-<script src="core.js?v=20260917e"></script>
-<script src="tmdb.js?v=20260917e"></script>
-<script src="watchlog.js?v=20260917e"></script>
-<script src="discover.js?v=20260917e"></script>
-<script src="stats.js?v=20260917e"></script>
+<script src="core.js?v=20260917f"></script>
+<script src="tmdb.js?v=20260917f"></script>
+<script src="watchlog.js?v=20260917f"></script>
+<script src="discover.js?v=20260917f"></script>
+<script src="stats.js?v=20260917f"></script>
 </body>
 </html>

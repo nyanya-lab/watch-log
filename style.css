@@ -650,10 +650,23 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 }
 .dc-pct:focus-within { box-shadow: inset 0 0 0 2px #4d7c2a; }
 .dc-pct input {
-  width: 52px; height: 100%; padding: 0 2px; text-align: right;
+  width: 40px; height: 100%; padding: 0 2px; text-align: right;
   background: transparent; border: 0; outline: none;
   font-size: 15px; font-weight: 600; color: #2c3129;
+  -moz-appearance: textfield; appearance: textfield;
 }
+/* 기본 화살표는 숫자 바로 옆에 붙어 누르기 어렵다 — 숨기고 `.dc-step`을 칸 바깥에 둔다.
+   키보드 ↑↓는 그대로 5%씩 움직인다(`step="5"`). */
+.dc-pct input::-webkit-inner-spin-button,
+.dc-pct input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.dc-step { display: inline-flex; gap: 4px; margin-left: -4px; }
+.dc-step button {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: #fff; color: #5f6b57; box-shadow: inset 0 0 0 1px #dfe5d8;
+  font-size: 12px; transition: background .12s, color .12s;
+}
+.dc-step button:hover { background: #f2f5ee; color: #3b6d11; }
+.dc-step button:disabled { opacity: .35; pointer-events: none; }
 
 /* ===== 탐색: 시리즈 묶음 (이어보기·관심없음) =====
    **묶음 하나가 그리드 한 칸**이다. 머리글 아래로 그 시리즈의 카드가 가로로 흐르고

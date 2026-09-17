@@ -14,9 +14,9 @@ const Discover = {
   recoOtt: [],       // 추천 뷰의 OTT 필터 (여러 개, 빈 배열 = 전체)
   recoOrigin: [],    // 추천 뷰의 제작국 필터 (여러 개, 빈 배열 = 전체)
   /* 60개 중 한국 작품 몫. **뽑을 때** 쓰는 값이라 위 필터(보는 조건)와 성격이 다르다.
-     입력은 퍼센트(`recoKoPct`)로 받고, 쿼터 로직은 개수(`recoKo`)로 돈다. 기본 67% = 한국 40 · 외국 20. */
-  recoKoPct: 67,
-  recoKo: 40,
+     입력은 퍼센트(`recoKoPct`)로 받고, 쿼터 로직은 개수(`recoKo`)로 돈다. 기본 70% = 한국 42 · 외국 18. */
+  recoKoPct: 70,
+  recoKo: 42,
   recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순 | title=가나다순
   /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
      그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
@@ -592,10 +592,13 @@ function renderRecoFilters(all) {
    칩 네 개 → 비율 바(2026-09-10) → **퍼센트 직접 입력**(2026-09-17 요청). 바는 원하는 값에
    딱 맞추기 어려웠다. 저장도 **입력한 퍼센트 그대로** 한다 — 개수로 저장하면 67을 넣었는데
    다음에 열 때 반올림으로 다른 숫자가 떠 있게 된다.
-   ⚠ 키를 새로 뒀다. 옛 키(`watchlog_reco_ko`, 개수)에 바를 끌어둔 값이 남아 있으면
-   새 기본값(40·20)이 안 먹기 때문 — 기본값을 바꾸자는 요청이라 옛 값은 버린다. */
-const LS_RECO_KO = "watchlog_reco_ko_pct";
-const RECO_KO_PCT0 = 67;
+   ⚠ 기본값을 바꿀 때마다 키를 새로 둔다. 옛 키에 손으로 맞춰둔 값이 남아 있으면 새 기본값이
+   안 먹기 때문 — 기본값을 바꾸자는 요청이라 옛 값은 버린다(`RECO_KO_OLD_KEYS`에서 지운다).
+   67%(2026-09-17 오전) → **70%**(같은 날 오후 요청). */
+const LS_RECO_KO = "watchlog_reco_ko_share";
+const RECO_KO_OLD_KEYS = ["watchlog_reco_ko", "watchlog_reco_ko_pct"];
+const RECO_KO_PCT0 = 70;
+const RECO_KO_STEP = 5;
 const RECO_TARGET = 60;
 const LS_RECO_HIDE_VOTE = "watchlog_reco_hide_vote";   // "0"이면 보이기, 없거나 "1"이면 숨김
 
@@ -699,7 +702,7 @@ function koPctToCount(pct) {
 
 function loadRecoKoPct() {
   try {
-    localStorage.removeItem("watchlog_reco_ko");     // 옛 키(개수) — 위 주석 참고
+    RECO_KO_OLD_KEYS.forEach(k => localStorage.removeItem(k));   // 위 주석 참고
     const n = parseFloat(localStorage.getItem(LS_RECO_KO));
     return isFinite(n) ? Math.min(100, Math.max(0, n)) : RECO_KO_PCT0;
   } catch { return RECO_KO_PCT0; }
@@ -713,6 +716,20 @@ function renderRecoKoInput() {
   const ko = Discover.recoKo;
   if (document.activeElement !== inp) inp.value = Discover.recoKoPct;
   if (label) label.textContent = `한국 ${ko} · 외국 ${RECO_TARGET - ko}`;
+  $$("[data-kostep]").forEach(b => {
+    b.disabled = +b.dataset.kostep < 0 ? Discover.recoKoPct <= 0 : Discover.recoKoPct >= 100;
+  });
+}
+
+/* 퍼센트를 확정한다 — 0~100 정수로 맞춰 개수를 다시 계산하고 이 기기에 남긴다 */
+function setRecoKoPct(pct) {
+  Discover.recoKoPct = Math.round(Math.min(100, Math.max(0, pct)));
+  Discover.recoKo = koPctToCount(Discover.recoKoPct);
+  const inp = $("#dcRecoKoInput");
+  if (inp) inp.value = Discover.recoKoPct;
+  renderRecoKoInput();
+  try { localStorage.setItem(LS_RECO_KO, String(Discover.recoKoPct)); }
+  catch { /* 저장 못 해도 이번 판은 적용된다 */ }
 }
 
 function renderDcReco() {
@@ -2254,15 +2271,19 @@ function initDiscover() {
     });
     koInput.addEventListener("change", () => {
       const v = parseFloat(koInput.value);
-      if (isFinite(v)) Discover.recoKoPct = Math.round(Math.min(100, Math.max(0, v)));
-      Discover.recoKo = koPctToCount(Discover.recoKoPct);
-      koInput.value = Discover.recoKoPct;
-      renderRecoKoInput();
-      try { localStorage.setItem(LS_RECO_KO, String(Discover.recoKoPct)); }
-      catch { /* 저장 못 해도 이번 판은 적용된다 */ }
+      setRecoKoPct(isFinite(v) ? v : Discover.recoKoPct);
     });
     koInput.addEventListener("keydown", e => { if (e.key === "Enter") koInput.blur(); });
   }
+  /* 칸 바깥의 화살표 — **5% 단위로 맞춰** 움직인다. 67처럼 손으로 친 값이면 먼저 가까운 5의
+     배수로 간다(67 → ▲ 70 / ▼ 65). 그냥 ±5 하면 67 → 72처럼 어중간한 값만 이어진다. */
+  $$("[data-kostep]").forEach(b => b.addEventListener("click", () => {
+    const cur = Discover.recoKoPct;
+    const next = +b.dataset.kostep > 0
+      ? Math.floor(cur / RECO_KO_STEP) * RECO_KO_STEP + RECO_KO_STEP
+      : Math.ceil(cur / RECO_KO_STEP) * RECO_KO_STEP - RECO_KO_STEP;
+    setRecoKoPct(next);
+  }));
 
   /* 인물 — 배우/감독 전환과 사람 칩 (그릴 때마다 새로 만들어지므로 위임) */
   if ($("#dcPersonBar")) {
