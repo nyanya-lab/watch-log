@@ -673,9 +673,9 @@ async function tmdbAutoMatch(title, hintType) {
 
 /* ---------- 검색 UI ---------- */
 function initTmdb() {
-  $("#tmdbSearchBtn").addEventListener("click", runSearch);
+  $("#tmdbSearchBtn").addEventListener("click", runTmdbSearch);
   $("#tmdbQuery").addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); runSearch(); }
+    if (e.key === "Enter") { e.preventDefault(); runTmdbSearch(); }
   });
   $("#clearSelection").addEventListener("click", () => {
     State.selectedTmdb = null;
@@ -685,7 +685,10 @@ function initTmdb() {
   });
 }
 
-async function runSearch() {
+/* ⚠ 이름은 `runTmdbSearch`여야 한다 — search.js(나중에 로드)에도 전역 `runSearch`가 있어서
+   같은 이름으로 두면 **뒤에 로드된 쪽이 이겨** 등록·수정 창의 [검색] 버튼이 상단바 검색을
+   부르고 아무 일도 안 일어난다(2026-09-18에 실제로 그랬다). 전역 함수 이름은 파일 간에 겹치면 안 된다. */
+async function runTmdbSearch() {
   const q = $("#tmdbQuery").value.trim();
   if (!q) return;
   const box = $("#tmdbResults");
