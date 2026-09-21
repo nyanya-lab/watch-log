@@ -1845,6 +1845,11 @@ function openEdit(id) {
     $("#modalTitle").textContent = "새로 등록";
     ["fTitle", "fCountry", "fStart", "fEnd", "fReview", "fLastStart", "fLastEnd"]
       .forEach(f => $("#" + f).value = "");
+    /* **새로 등록할 때는 본 날짜 시작을 오늘로 채워둔다**(2026-09-21 요청).
+       대부분 방금 본 걸 적으러 오고, 아니면 그 칸에서 고치거나 [언제 봤는지 기억 안 남]을 켜면
+       비워진다(`syncWatchingFields`). 종료일은 비워둔다 — `saveItem`이 비면 시작일로 채워
+       하루짜리 기록이 된다. `localToday`는 **이 기기 시간대**다(`toISOString`은 UTC라 아침에 어제가 된다). */
+    if (typeof localToday === "function") $("#fStart").value = localToday();
     $("#fType").value = "영화";
     $("#fOtt").value = "";        // 기본값 없음 — 스트리밍 목록은 TMDB(otts)가 채운다
     $("#fCount").value = 1;

@@ -2047,13 +2047,7 @@ function renderDcPerson() {
 /* TMDB 작품 → 등록 모달 (정보 자동 채움). season을 주면 그 시즌까지 미리 선택 */
 async function addFromDiscover(tmdbId, mediaType, season) {
   openEdit(null);
-  /* **[봤어요]로 여는 창은 본 날짜 시작을 오늘로 채워둔다**(2026-09-21 요청).
-     방금 본 걸 기록하러 오는 자리라 매번 날짜를 고르게 할 이유가 없다 — 다르면 그 칸에서 고치면 된다.
-     ⚠ `openEdit(null)`이 날짜 칸을 비우므로 **그 뒤에** 넣는다. 종료일은 비워둔다 —
-     `saveItem`이 비면 시작일로 채워 하루짜리 기록이 된다(여러 날 봤으면 직접 적는다).
-     `localToday`(home.js)는 **이 기기 시간대**다 — `toISOString`은 UTC라 아침 9시 전에는 어제가 된다. */
-  const startBox = $("#fStart");
-  if (startBox && !startBox.value && typeof localToday === "function") startBox.value = localToday();
+  /* 본 날짜 시작은 `openEdit`이 오늘로 채운다 (새로 등록하는 모든 자리에서 같다) */
   await selectTmdb({ tmdbId: +tmdbId, mediaType });
   if (season) {
     $("#fSeason").value = season;
