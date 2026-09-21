@@ -125,7 +125,7 @@ function renderStats() {
   const totalMin = items.reduce((s, i) => {
     const rt = i.runtime || 0;
     if (!rt) return s;
-    return s + (i.type === "영화" ? rt : rt * (i.totalEpisodes || 1));
+    return s + (i.type === "영화" ? rt : rt * (epCount(i) || 1));
   }, 0);
   const totalHours = Math.round(totalMin / 60);
 
@@ -520,7 +520,7 @@ function renderYearReview(year) {
 
   const min = list.reduce((s, i) => {
     const rt = i.runtime || 0;
-    return s + (rt ? (i.type === "영화" ? rt : rt * (i.totalEpisodes || 1)) : 0);
+    return s + (rt ? (i.type === "영화" ? rt : rt * (epCount(i) || 1)) : 0);
   }, 0);
   const days = Object.keys(watchDays(year)).length;
 

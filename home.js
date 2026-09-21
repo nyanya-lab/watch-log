@@ -38,8 +38,11 @@ function lengthLabel(i) {
     if (!m) return "";
     return m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`;
   }
-  const n = +i.totalEpisodes || 0;
+  const n = epCount(i);
   if (!n) return "";
+  /* 그 시즌 분량을 알면 `16부작`. 모르면 `totalEpisodes`(작품 전체)뿐이라 시즌이 여러 개면
+     `전체 N화`로 쓴다 — 그걸 "N부작"이라 하면 거짓이 된다. */
+  if (+i.seasonEpisodes) return `${n}부작`;
   return (i.totalSeasons || 0) > 1 ? `전체 ${n}화` : `${n}부작`;
 }
 
@@ -194,7 +197,7 @@ function periodHtml({ big, sub, from, to, diary }) {
   /* 시청시간 — 통계 탭과 같은 계산(영화 = 상영시간, TV = 회당 × 화수) */
   const min = list.reduce((s, i) => {
     const rt = i.runtime || 0;
-    return s + (rt ? (i.type === "영화" ? rt : rt * (i.totalEpisodes || 1)) : 0);
+    return s + (rt ? (i.type === "영화" ? rt : rt * (epCount(i) || 1)) : 0);
   }, 0);
   const best = rated.slice().sort((a, b) => b.rating - a.rating)[0];
   const pop = (mode) => `data-pop='${esc(JSON.stringify({ from, to, mode, label: big, sub }))}'`;

@@ -101,7 +101,8 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
   releaseYear: "2021",
   runtime: 54,             // 영화=상영시간, TV=회당
   totalSeasons: 2,
-  totalEpisodes: 16,
+  totalEpisodes: 16,       // 작품 **전체** 화수 (시즌을 합친 값)
+  seasonEpisodes: 12,      // **그 시즌만의** 화수. 시즌을 적어둔 TV 기록에만. `epCount(i)`가 먼저 본다
   cert: "청소년관람불가",
   voteAverage: 7.9,        // TMDB 평점 (사용자 rating과 별개)
   companies: ["싸이런픽쳐스"],
@@ -343,7 +344,7 @@ TMDB가 준 `media_type`을 그대로 저장하므로 짐작이 아니고, 국�
 `tmdbDetail` 1회 → `sameWork` 확인(안 맞으면 반대 타입도) → `tmdbProviders` 1회 → 컬렉션(캐시).
 
 - 갱신: `otts` · `voteAverage` · `totalSeasons` · `totalEpisodes` · `collectionId` · `collectionName`
-  · `seriesNo` · `seriesTotal`, 그리고 **확인된 `mediaType`**.
+  · `seriesNo` · `seriesTotal` · **`seasonEpisodes`(시즌 화수)**, 그리고 **확인된 `mediaType`**.
 - ⚠ 안 건드림: `tmdbId` · 제목 · 줄거리 · 장르 · 출연진 · 내 기록(별점·본 날짜·한줄평·`ott`).
 - **시즌 포스터 · 시즌 방영일**(2026-08-07): 시즌을 적어둔 TV 기록만 대상. `tmdbDetail`의
   `poster`/`first_air_date`는 **작품 전체의 값**이라 그대로 두면 킹덤 S1·S2·S3이 전부 같은 포스터에
@@ -715,6 +716,7 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
   같은 작품을 다시 받아 **바로 갱신하고 저장한다**(사용자 선택 — 수정창을 거치지 않는다).
   OTT·평점·포스터·출연진은 시간이 지나면 바뀌는데 저장된 값은 등록 시점 그대로이기 때문.
   **`otts`·`voteAverage`·`totalSeasons`·`totalEpisodes`만 갱신한다** — 시간이 지나면 실제로 바뀌는 값들이다.
+  시즌을 적어둔 기록이면 **그 시즌 화수(`seasonEpisodes`)**도 함께 남긴다(2026-09-22).
   - ⚠ **매칭은 건드리지 않는다.** 제목·구분·국가·포스터·줄거리·출연진, 그리고 `collectionId`·
     `seriesNo`·`seriesTotal`은 그대로 둔다. 전부 손으로 맞춰둘 수 있는 값이라, 덮으면 맞춰둔 게
     TMDB 기준으로 되돌아간다. 처음엔 다 덮어쓰게 만들었다가 두 번 사고가 났다(2026-08-07):
@@ -830,7 +832,15 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
   - 제목은 **디필레이아 고정**(`.hm-watch-title`, `--font-watch`) — 제목 글꼴과 무관(사용자 요청).
   - 배너에는 TMDB 평점을 **안 쓴다**(보는 중이면 가리는 규칙).
   - 장르·연도 뒤, OTT 앞에 **분량**(`lengthLabel`, 2026-09-17 요청): 영화 = 러닝타임(`2시간 3분`), TV = `14부작`.
-    `totalEpisodes`는 작품 **전체** 화수라 시즌이 여러 개면 `전체 16화`로 쓴다(N부작이면 거짓). "같이 보는 중" 줄에도 붙는다.
+    ⚠ **시즌 기록에는 그 시즌 분량만 넣는다**(`epCount`, 2026-09-22 지적 — 경이로운 소문 S2가
+    `전체 28화`로 나와 S1이 같이 껴 있었다). `seasonEpisodes`가 있으면 `12부작`, 없으면 예전처럼
+    `totalEpisodes`로 `전체 28화`(그걸 "N부작"이라 하면 거짓이다). "같이 보는 중" 줄에도 붙는다.
+    - **`epCount(i)`**(watchlog.js) = `seasonEpisodes || totalEpisodes`. 화수를 쓰는 곳이
+      전부 이 함수 하나를 쓴다 — 분량 표시 · **예상 시청시간**(홈·통계 두 곳) · 상세의 `총 N화`.
+      예상 시청시간도 같은 이유로 틀리고 있었다(회당 러닝타임 × 전체 화수).
+    - 값은 TMDB `seasons[].episodes`에서 오므로 **저장해둬야 안다**: 새로 등록(`saveItem`) ·
+      상세 [TMDB 새로고침] · 설정 [최신 정보로 갱신]이 채운다. 옛 기록은 갱신을 한 번 돌려야 채워진다
+      (2026-09-22 기준 대상 30건).
   - 뒤 사진은 `backdrop` 주소의 `/w500/`을 `/w1280/`으로 바꿔 큰 걸 쓴다(`bigImg`).
   - ⚠ backdrop은 16:9인데 배너는 3.4:1쯤이라 **폭에 맞춰 꽉 채우면 위아래가 잘려 얼굴이 날아갔다**(2026-09-17 지적).
     넓은 화면에선 **높이에 맞춰 오른쪽에 통째로** 두고 왼쪽 가장자리를 마스크로 어두운 바탕에 녹인다(`.hm-bd`).

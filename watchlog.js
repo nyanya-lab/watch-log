@@ -39,6 +39,15 @@ function isWatching(i) { return !!(i.startDate && !i.endDate); }
 function isRewatching(i) { return !!(i.lastWatchStart && !i.lastWatchEnd); }
 function watchingNow(i) { return isWatching(i) || isRewatching(i); }
 
+/* ---------- 이 기록의 화수 ----------
+   `totalEpisodes`는 TMDB의 **작품 전체** 화수다. 시즌제 드라마에서 S1만 본 기록에 그걸 쓰면
+   **다른 시즌 분량이 같이 껴서** 보인다(2026-09-22 지적: 경이로운 소문 S1에 1·2가 함께 세어짐).
+   그래서 시즌을 적어둔 기록은 **그 시즌 화수**(`seasonEpisodes`)를 먼저 본다.
+   ⚠ 그 값은 TMDB `seasons[].episodes`에서 오고 **저장해둬야 알 수 있다** — 새로 등록할 때
+   (`saveItem`), 상세 [TMDB 새로고침], 설정 [최신 정보로 갱신]이 채운다. 없으면 예전처럼 전체 화수.
+   화수를 쓰는 곳(분량 표시·예상 시청시간·상세)이 전부 이 함수 하나를 쓴다. */
+function epCount(i) { return +i.seasonEpisodes || +i.totalEpisodes || 0; }
+
 /* 별점 몰아넣기 대상 — 보는 중인 기록은 뺀다.
    아직 다 안 봤으면 점수가 정해지지 않은 상태라 물어봐야 답이 안 나온다
    (보는 중에 TMDB 평점을 가리는 것과 같은 이유). 다 보고 체크를 풀면 다시 들어온다. */
@@ -1309,7 +1318,7 @@ function openDetail(id) {
     i.country,
     ...visibleGenres(i.genres),
     i.runtime ? `${i.runtime}분` : "",
-    i.totalEpisodes ? `총 ${i.totalEpisodes}화` : "",
+    epCount(i) ? `총 ${epCount(i)}화` : "",
     (i.releaseDate ? fmtDate(i.releaseDate) : i.releaseYear) || ""
   ].filter(Boolean).join(" · ");
 
@@ -1592,6 +1601,11 @@ async function refreshTmdbInDetail(btn, itemId) {
       totalSeasons: d.totalSeasons,
       totalEpisodes: d.totalEpisodes
     });
+    /* 시즌을 적어둔 기록은 **그 시즌 화수**도 남긴다 — `totalEpisodes`(작품 전체)만 두면
+       시즌제 드라마의 분량에 다른 시즌이 껴서 세어진다(`epCount` 참고). */
+    const epNo = parseInt(String(i.season || "").replace(/\D/g, "")) || 0;
+    const epSn = epNo && (d.seasons || []).find(s => s.number === epNo);
+    if (epSn && epSn.episodes) i.seasonEpisodes = epSn.episodes;
 
     saveLocal();
     applyFilters();
@@ -1978,6 +1992,7 @@ function saveItem() {
     if (sn) {
       if (sn.poster) base.poster = sn.poster;
       if (sn.airDate) { base.releaseDate = sn.airDate; base.releaseYear = sn.airDate.slice(0, 4); }
+      if (sn.episodes) base.seasonEpisodes = sn.episodes;   // 그 시즌 분량 (전체 화수와 다르다)
     }
   }
 
@@ -2506,6 +2521,10 @@ async function runRefreshAll() {
           if (sn.airDate) {
             put(p, "시즌 방영일", i.releaseDate || null, sn.airDate,
                 { releaseDate: sn.airDate, releaseYear: sn.airDate.slice(0, 4) });
+          }
+          /* 그 시즌 분량 — 작품 전체 화수(`totalEpisodes`)와 다른 값이다 */
+          if (sn.episodes) {
+            put(p, "시즌 화수", i.seasonEpisodes ?? null, sn.episodes, { seasonEpisodes: sn.episodes });
           }
         }
       }
