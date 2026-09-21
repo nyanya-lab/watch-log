@@ -17,10 +17,12 @@ const Discover = {
      입력은 퍼센트(`recoKoPct`)로 받고, 쿼터 로직은 개수(`recoKo`)로 돈다. 기본 70% = 한국 42 · 외국 18. */
   recoKoPct: 70,
   recoKo: 42,
-  recoSort: "vote",  // vote=TMDB 평점순(기본) | score=내 취향 추천순 | title=가나다순
-  /* 기본을 TMDB 평점순으로 둔다 — 목록에 담기는 60개는 이미 내 취향으로 고른 것이라
-     그 안에서는 "남들이 잘 만들었다고 하는 순"이 고르기 쉽다. */
-  recoDir: "desc",
+  recoSort: "title", // title=가나다순(기본) | vote=TMDB 평점순 | score=내 취향 추천순
+  /* **기본은 가나다순**(2026-09-21 요청). 담기는 60개는 이미 내 취향으로 고른 것이라
+     그 안에서는 순위보다 **한 줄씩 훑어 내려가기 좋은 순서**가 낫다 —
+     흐린 카드를 남겨두는 것(`.dc-dim`)도 같은 이유였다(자리가 밀리면 어디까지 봤는지 놓친다).
+     ⚠ 기본값을 바꿀 때 아래 **빨간 점 판정**(`renderRecoFilters`의 `on`)과 [초기화]도 같이 바꿀 것. */
+  recoDir: "asc",
   reco: null,        // 캐시된 추천 결과
   personKind: "actor",   // 인물 뷰: actor=배우 | director=감독
   personName: "",        // 고른 사람 (빈 값이면 아직 안 골랐다)
@@ -441,6 +443,37 @@ async function runReco() {
       return { ...c.card, score: c.score + gm * 0.5 + vote, reason: c.reasons[0] || "" };
     }).sort((a, b) => b.score - a.score);
 
+    /* **같은 영화 시리즈는 한 편만 담는다 — 안 본 편 중 가장 빠른 편**(2026-09-21 요청).
+       유사작 추천(①)은 시드의 속편을 잔뜩 물어와서 한 시리즈가 추천 60칸을 여러 개 차지했다.
+       드라마는 이런 일이 없다 — **시즌이 전부 같은 tmdbId**라 한 시즌만 기록해도 작품째로 빠진다
+       (다음 시즌은 추천이 아니라 [이어보기]가 맡는다). 영화만 편마다 번호가 달라서 생기는 쏠림이다.
+       시리즈는 처음부터 보는 게 순서라 점수가 제일 높은 편이 아니라 **편 번호가 가장 빠른 편**을 남긴다.
+       ⚠ 판정은 **이미 받아둔 캐시**(컬렉션 `collIndex` + 프랜차이즈 `getFrCache`)로만 한다 —
+       목록 응답에는 컬렉션이 없고 후보마다 상세를 받으면 조회가 두 배가 된다. 그래서 캐시에 없는
+       시리즈(한 편도 안 본 데다 [시리즈] 뷰로도 안 받은 것 — 예: 스타워즈)는 예전처럼 여러 편이 올 수 있다. */
+    const seriesOf = new Map();          // tmdbId → { key: 묶음, ord: 순서(작을수록 앞편) }
+    collIndex().forEach((e, id) =>
+      seriesOf.set(id, { key: "c" + e.collectionId, ord: String(e.no || 999).padStart(3, "0") }));
+    /* 프랜차이즈가 있으면 **그쪽이 더 큰 묶음**이라 컬렉션 위에 덮어쓴다 — 실제로 MCU 다섯 편이
+       어벤져스·캡틴 아메리카·가디언즈 **세 컬렉션으로 흩어져** 컬렉션만 보면 안 걸렸다.
+       프랜차이즈 목록은 [시리즈] 뷰에서 [불러오기]를 누른 것만 캐시에 있다(없으면 그냥 안 걸린다). */
+    const frCache = getFrCache();
+    Object.keys(frCache).forEach(k => (frCache[k].parts || []).forEach(p => {
+      if (p.tmdbId) seriesOf.set(p.tmdbId, { key: "f" + k, ord: p.releaseDate || "9999" });
+    }));
+
+    const firstOf = new Map();
+    ranked.forEach(c => {
+      const e = seriesOf.get(c.tmdbId);
+      if (!e) return;
+      const cur = firstOf.get(e.key);
+      if (!cur || e.ord < cur.ord) firstOf.set(e.key, { ord: e.ord, tmdbId: c.tmdbId });
+    });
+    const pool = ranked.filter(c => {
+      const e = seriesOf.get(c.tmdbId);
+      return !e || firstOf.get(e.key).tmdbId === c.tmdbId;
+    });
+
     /* 볼 수 있는 곳을 카드마다 조회해 **국내에서 볼 수 있는 것만 추천에 담는다**(2026-08-07).
        예전엔 상위 60개를 그대로 담고 "국내에 없는 것만/볼 수 있는 것만"을 필터로 골랐는데,
        추천은 "이제 뭘 볼까"에 답하는 자리라 **지금 못 보는 작품은 답이 되지 않는다**.
@@ -473,7 +506,7 @@ async function runReco() {
     /* ⚠ **한국과 외국의 자리를 나눠서 채운다**(2026-09-10).
        점수 순으로만 훑으면 후보가 훨씬 많은 외국이 자리를 다 가져간다 — 실제로 한국 13 / 외국 47이
        나왔다. 자기 몫을 채운 쪽은 **조회조차 건너뛴다**(한 건에 240ms라 그냥 넘기는 게 이득). */
-    for (const c of ranked) {
+    for (const c of pool) {
       if (list.length >= TARGET || checked >= MAX_CALLS) break;
       const isKo = c.origin === "한국";
       if (isKo && koN >= KO_TARGET) continue;
@@ -484,7 +517,7 @@ async function runReco() {
     /* 한쪽이 몫을 못 채웠으면(안 본 한국 작품이 그만큼 없는 경우) **남는 자리는 다른 쪽으로 메운다.**
        비워두면 60개를 채우라는 목적 자체를 못 지킨다. */
     if (list.length < TARGET) {
-      for (const c of ranked) {
+      for (const c of pool) {
         if (list.length >= TARGET || checked >= MAX_CALLS) break;
         if (picked.has(c.tmdbId) || c.otts) continue;   // 이미 담았거나 이미 확인한 것
         await tryPick(c);
@@ -577,7 +610,7 @@ function renderRecoFilters(all) {
 
   // 팝업을 닫아둬도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
   const on = Discover.recoType || Discover.recoOtt.length || Discover.recoOrigin.length
-    || Discover.recoSort !== "vote" || Discover.recoDir !== "desc";
+    || Discover.recoSort !== "title" || Discover.recoDir !== "asc";
   const dot = $("#dcRecoDot");
   if (dot) dot.classList.toggle("hidden", !on);
 }
@@ -2278,7 +2311,7 @@ function initDiscover() {
   $("#applyRecoFilter").addEventListener("click", closeRecoFilter);
   onBackdropClose("#dcRecoModal", closeRecoFilter);
   $("#resetRecoFilter").addEventListener("click", () => {
-    Object.assign(Discover, { recoType: "", recoOtt: [], recoOrigin: [], recoSort: "vote", recoDir: "desc" });
+    Object.assign(Discover, { recoType: "", recoOtt: [], recoOrigin: [], recoSort: "title", recoDir: "asc" });
     renderDiscover();
   });
   window.closeRecoFilterModal = closeRecoFilter;   // Escape 처리용
