@@ -337,9 +337,25 @@ async function runReco() {
   const seenIds = new Set(State.items.map(i => i.tmdbId).filter(Boolean));
   const gmap = await tmdbGenreMap();
 
+  /* **안 본 시즌이 남은 드라마는 후보에서 빼지 않는다**(2026-09-21 요청).
+     드라마는 시즌이 전부 같은 tmdbId라 한 시즌만 기록해도 작품째로 빠졌다 — 안 본 시즌이 있으면
+     "볼 것"이 남은 셈인데도 추천에 영영 안 나왔다. ⚠ **이어보기 목록을 통째로 넣는 게 아니다**
+     (그건 [이어보기]가 하는 일이다) — 추천 점수·국내 시청 가능 조건을 똑같이 통과했을 때
+     **"이미 봤다"는 이유로만 거르지 않는다**는 뜻이다.
+     영화가 시리즈당 **가장 빠른 안 본 편**만 남기는 것과 같은 규칙으로, 드라마도 **안 본 시즌 중
+     가장 낮은 번호**를 카드에 달아준다(`nextSeason` → 카드 배지·[봤어요]의 미리 고른 시즌). */
+  const nextSeason = new Map();
+  continueList().forEach(c => {
+    if (c.mediaType !== "tv") return;
+    const miss = (c.st.missing || []).filter(n => n > 0);
+    if (miss.length) nextSeason.set(c.tmdbId, Math.min(...miss));
+  });
+
   const bump = (card, score, reason) => {
     if (!card.tmdbId || !card.poster) return;        // 포스터 없는 건 카드가 허전해서 뺀다
-    if (seenIds.has(card.tmdbId)) return;            // 이미 본 작품
+    const next = card.mediaType === "tv" ? nextSeason.get(card.tmdbId) : null;
+    if (seenIds.has(card.tmdbId) && !next) return;   // 다 본 작품 (안 본 시즌이 남았으면 남겨둔다)
+    if (next) card.nextSeason = next;
     if (isHidden(card.tmdbId, card.mediaType)) return;   // 관심없음으로 넘긴 작품
     if ((card.voteCount || 0) < 50) return;          // 표본이 너무 적은 작품
     const c = cand.get(card.tmdbId) || { card, score: 0, reasons: [] };
@@ -839,7 +855,9 @@ function renderDcReco() {
   }
 
   const mt = Discover.recoType;   // "" | movie | tv
-  const seenRec = (c) => State.items.find(i => i.tmdbId === c.tmdbId);
+  /* ⚠ **안 본 시즌이 남은 드라마(`nextSeason`)는 "봤어요"로 치지 않는다** — 그 시즌을 보라고
+     담은 카드라 흐리게 만들거나 [내 기록] 버튼으로 바꾸면 안 된다(2026-09-21). */
+  const seenRec = (c) => c.nextSeason ? null : State.items.find(i => i.tmdbId === c.tmdbId);
   /* 캐시를 만든 뒤에 기록하거나 관심없음으로 넘긴 작품도 **빼지 않고 흐리게 남긴다**(2026-09-17).
      예전엔 누르는 순간 빠져서 뒤 카드가 한 칸씩 당겨졌다 — 가나다순으로 한 줄씩 훑는 중에
      자리가 계속 밀려 어디까지 봤는지 놓쳤다. **빠지는 건 [다시 추천받기]를 누를 때뿐이다**
@@ -878,6 +896,11 @@ function renderDcReco() {
       meta: esc([...[...new Set(genreNamesOf(c.genreIds).flatMap(koGenre))].slice(0, 3), c.year]
         .filter(Boolean).join(" · ")),
       note: (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
+      /* 안 본 시즌 배지 — 이어보기 카드와 같은 말투. 안 넘기면 `dcCardHtml`이 기록이 있다고
+         `봤어요` 배지를 달아버린다(`myStatus`는 tmdbId만 본다). */
+      flag: c.nextSeason
+        ? `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>S${c.nextSeason} 안 봄</span>`
+        : "",
       dim: !!(seenRec(c) || isHidden(c.tmdbId, c.mediaType)),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
@@ -888,7 +911,8 @@ function renderDcReco() {
       ] : [
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
-        { act: "add", label: "봤어요", icon: "fa-plus" },
+        /* 안 본 시즌이 있으면 그 시즌을 미리 골라 등록창을 연다 (이어보기 카드와 같다) */
+        { act: "add", label: "봤어요", icon: "fa-plus", season: c.nextSeason || "" },
         { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 다시 추천받을 때 빠진다" }
       ],
       _raw: c
