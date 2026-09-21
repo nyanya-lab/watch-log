@@ -631,6 +631,49 @@ const RECO_KO_PCT0 = 70;
 const RECO_KO_STEP = 5;
 const RECO_TARGET = 60;
 
+/* ---------- 추천 설정은 `State.prefs`에 둔다 = **모든 기기에 따라온다** (2026-09-21 요청) ----------
+   예전엔 한국 비중만 이 기기 localStorage에, 필터·정렬은 아예 메모리에만 있었다. 그래서 폰에서
+   비중을 70 → 50으로 맞춰도 PC는 예전 값으로 뽑았다. 포인트 색과 같은 자리(`prefs`)로 옮겨
+   서버 문서에 함께 올린다 — 저장은 `savePrefs`(core.js)가 3초로 몰아서 한 번만 보낸다.
+   ⚠ **지금 어느 뷰를 보고 있나(`view`)·고른 사람·검색어는 넣지 않는다.** 그건 설정이 아니라
+   그 순간의 자리이고, 동기화하면 폰에서 관심없음을 보던 게 PC 화면까지 바꿔버린다. */
+const RECO_PREF_KEYS = ["recoKoPct", "recoSort", "recoDir", "recoType", "recoOtt", "recoOrigin"];
+
+function applyRecoPrefs() {
+  if (typeof Discover === "undefined") return;
+  const p = (typeof State !== "undefined" && State.prefs) || {};
+  /* 한국 비중은 **이 기기에 남아 있던 옛 값을 한 번 물려받는다** — 설정이 prefs로 오기 전에
+     손으로 맞춰둔 값이 있으면 그게 사용자의 뜻이다. 이후로는 prefs만 본다. */
+  let pct = p.recoKoPct;
+  const legacy = !isFinite(pct);
+  if (legacy) {
+    try {
+      RECO_KO_OLD_KEYS.forEach(k => localStorage.removeItem(k));   // 위 주석 참고
+      const n = parseFloat(localStorage.getItem(LS_RECO_KO));
+      pct = isFinite(n) ? n : RECO_KO_PCT0;
+    } catch { pct = RECO_KO_PCT0; }
+  }
+  Discover.recoKoPct = Math.round(Math.min(100, Math.max(0, pct)));
+  Discover.recoKo = koPctToCount(Discover.recoKoPct);
+  /* 물려받은 값은 **한 번 적어둔다** — 안 적으면 입력칸을 건드릴 때까지 다른 기기로 안 넘어간다.
+     적고 나면 `prefs`에 키가 생기므로 이 길은 다시 안 탄다(되풀이되지 않는다). */
+  if (legacy && typeof savePrefs === "function") savePrefs({ recoKoPct: Discover.recoKoPct });
+  if (p.recoSort) Discover.recoSort = p.recoSort;
+  if (p.recoDir) Discover.recoDir = p.recoDir;
+  if (typeof p.recoType === "string") Discover.recoType = p.recoType;
+  if (Array.isArray(p.recoOtt)) Discover.recoOtt = p.recoOtt.slice();
+  if (Array.isArray(p.recoOrigin)) Discover.recoOrigin = p.recoOrigin.slice();
+}
+
+/* 지금 값을 통째로 `prefs`에 남긴다 (필터 칩 하나만 바뀌어도 여섯 개를 같이 적는다 —
+   조각조각 적으면 어느 게 최신인지 따지게 된다) */
+function saveRecoPrefs() {
+  if (typeof savePrefs !== "function") return;
+  const patch = {};
+  RECO_PREF_KEYS.forEach(k => { patch[k] = Discover[k]; });
+  savePrefs(patch);
+}
+
 /* 가나다 정렬 키 — 제목 속 **영어를 소리 나는 대로 한글로** 바꿔서 센다(2026-09-17 요청).
    그대로 `localeCompare`하면 영어가 한글 앞에 몰려서 "가나다로 한 줄씩 훑기"가 안 된다.
    ⚠ 사전 없이 규칙으로만 옮기므로 **대략적인 발음**이다. 정렬에는 첫 소리가 거의 전부라
@@ -729,14 +772,6 @@ function koPctToCount(pct) {
   return Math.round(Math.min(100, Math.max(0, n)) / 100 * RECO_TARGET);
 }
 
-function loadRecoKoPct() {
-  try {
-    RECO_KO_OLD_KEYS.forEach(k => localStorage.removeItem(k));   // 위 주석 참고
-    const n = parseFloat(localStorage.getItem(LS_RECO_KO));
-    return isFinite(n) ? Math.min(100, Math.max(0, n)) : RECO_KO_PCT0;
-  } catch { return RECO_KO_PCT0; }
-}
-
 /* 입력칸 옆에 실제 개수를 적는다 — 퍼센트만 보면 60개 중 몇 개인지 머릿속으로 계산해야 한다.
    입력 중(포커스)에는 칸의 값을 건드리지 않는다(치는 도중에 숫자가 바뀌면 안 된다). */
 function renderRecoKoInput() {
@@ -750,15 +785,14 @@ function renderRecoKoInput() {
   });
 }
 
-/* 퍼센트를 확정한다 — 0~100 정수로 맞춰 개수를 다시 계산하고 이 기기에 남긴다 */
+/* 퍼센트를 확정한다 — 0~100 정수로 맞춰 개수를 다시 계산하고 **모든 기기에** 남긴다 */
 function setRecoKoPct(pct) {
   Discover.recoKoPct = Math.round(Math.min(100, Math.max(0, pct)));
   Discover.recoKo = koPctToCount(Discover.recoKoPct);
   const inp = $("#dcRecoKoInput");
   if (inp) inp.value = Discover.recoKoPct;
   renderRecoKoInput();
-  try { localStorage.setItem(LS_RECO_KO, String(Discover.recoKoPct)); }
-  catch { /* 저장 못 해도 이번 판은 적용된다 */ }
+  saveRecoPrefs();
 }
 
 function renderDcReco() {
@@ -2238,8 +2272,7 @@ window.addFromDiscover = addFromDiscover;
 /* ---------- 초기화 ---------- */
 function initDiscover() {
   if (!$("#tab-discover")) return;
-  Discover.recoKoPct = loadRecoKoPct();
-  Discover.recoKo = koPctToCount(Discover.recoKoPct);
+  applyRecoPrefs();          // 한국 비중·정렬·필터는 기기마다가 아니라 `prefs`에서 온다
 
 
   $$(".dc-nav").forEach(btn => {
@@ -2312,6 +2345,7 @@ function initDiscover() {
   onBackdropClose("#dcRecoModal", closeRecoFilter);
   $("#resetRecoFilter").addEventListener("click", () => {
     Object.assign(Discover, { recoType: "", recoOtt: [], recoOrigin: [], recoSort: "title", recoDir: "asc" });
+    saveRecoPrefs();
     renderDiscover();
   });
   window.closeRecoFilterModal = closeRecoFilter;   // Escape 처리용
@@ -2341,6 +2375,7 @@ function initDiscover() {
       // 가나다는 ㄱ부터, 점수는 높은 것부터가 자연스러운 첫 방향이다
       else { Discover.recoSort = v; Discover.recoDir = v === "title" ? "asc" : "desc"; }
     }
+    saveRecoPrefs();
     renderDiscover();
   });
 

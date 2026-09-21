@@ -196,6 +196,9 @@ function currentAccent() {
   return ACCENTS.some(x => x[0] === a) ? a : "coral";
 }
 function applyPrefs() {
+  /* 추천 뷰의 설정(한국 비중·정렬·필터)도 `prefs`에 함께 들어 있다 — 다른 기기에서 바뀐 게
+     들어오면 화면에 얹는다. discover.js가 나중에 로드되므로 있을 때만 부른다. */
+  if (typeof applyRecoPrefs === "function") applyRecoPrefs();
   const a = currentAccent();
   if (a === "coral") delete document.documentElement.dataset.accent;
   else document.documentElement.dataset.accent = a;
@@ -209,6 +212,18 @@ function setAccent(key) {
   State.prefs = { ...State.prefs, accent: key };
   applyPrefs();
   saveLocal();   // 수정 시각이 바뀌어야 다른 기기가 알아채고 받아간다
+}
+
+/* 화면 설정만 바뀐 경우 — **서버로는 몰아서 한 번만** 보낸다(`touchCache`와 같은 생각).
+   추천 필터 칩처럼 연달아 눌리는 값이 섞여 있어서, 누를 때마다 문서를 통째로 올리면 낭비다.
+   ⚠ 기기에만 남아야 하는 값(API 키·동기화 비밀번호)은 여기에 넣지 말 것. */
+let _prefPush = null;
+function savePrefs(patch) {
+  State.prefs = { ...State.prefs, ...patch };
+  try { localStorage.setItem(LS_PREFS, JSON.stringify(State.prefs)); }
+  catch { /* 저장 공간 문제면 이번 판만 적용된다 */ }
+  clearTimeout(_prefPush);
+  _prefPush = setTimeout(() => saveLocal(), 3000);
 }
 
 /* ---------- 서버 백업 (2026-08-07) ----------
