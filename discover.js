@@ -631,15 +631,16 @@ const RECO_KO_PCT0 = 70;
 const RECO_KO_STEP = 5;
 const RECO_TARGET = 60;
 
-/* ---------- 추천 설정은 `State.prefs`에 둔다 = **모든 기기에 따라온다** (2026-09-21 요청) ----------
-   예전엔 한국 비중만 이 기기 localStorage에, 필터·정렬은 아예 메모리에만 있었다. 그래서 폰에서
+/* ---------- 탐색 탭 설정은 `State.prefs`에 둔다 = **모든 기기에 따라온다** (2026-09-21 요청) ----------
+   예전엔 한국 비중만 이 기기 localStorage에, 나머지는 아예 메모리에만 있었다. 그래서 폰에서
    비중을 70 → 50으로 맞춰도 PC는 예전 값으로 뽑았다. 포인트 색과 같은 자리(`prefs`)로 옮겨
    서버 문서에 함께 올린다 — 저장은 `savePrefs`(core.js)가 3초로 몰아서 한 번만 보낸다.
-   ⚠ **지금 어느 뷰를 보고 있나(`view`)·고른 사람·검색어는 넣지 않는다.** 그건 설정이 아니라
-   그 순간의 자리이고, 동기화하면 폰에서 관심없음을 보던 게 PC 화면까지 바꿔버린다. */
-const RECO_PREF_KEYS = ["recoKoPct", "recoSort", "recoDir", "recoType", "recoOtt", "recoOrigin"];
+   **보고 있는 뷰·고른 사람·시리즈 선택까지 함께 넘긴다**("다 동기화해줘") — 폰에서 보던 자리에서
+   PC가 이어진다. ⚠ 입력 중인 검색어는 넣지 않는다(글자 하나 칠 때마다 올릴 일이 아니다). */
+const DC_PREF_KEYS = ["recoKoPct", "recoSort", "recoDir", "recoType", "recoOtt", "recoOrigin",
+                      "view", "personKind", "personName", "personId", "frKey", "frStory"];
 
-function applyRecoPrefs() {
+function applyDcPrefs() {
   if (typeof Discover === "undefined") return;
   const p = (typeof State !== "undefined" && State.prefs) || {};
   /* 한국 비중은 **이 기기에 남아 있던 옛 값을 한 번 물려받는다** — 설정이 prefs로 오기 전에
@@ -663,14 +664,31 @@ function applyRecoPrefs() {
   if (typeof p.recoType === "string") Discover.recoType = p.recoType;
   if (Array.isArray(p.recoOtt)) Discover.recoOtt = p.recoOtt.slice();
   if (Array.isArray(p.recoOrigin)) Discover.recoOrigin = p.recoOrigin.slice();
+  if (p.view) Discover.view = p.view;
+  if (p.personKind) Discover.personKind = p.personKind;
+  if (p.frKey) Discover.frKey = p.frKey;
+  if (typeof p.frStory === "boolean") Discover.frStory = p.frStory;
+
+  /* 고른 사람이 다른 기기에서 바뀌었으면 **그 필모를 다시 받는다** — 이름만 바꿔두면 인물 뷰가
+     빈 화면이 된다(필모는 세션 메모리 캐시라 이 기기엔 없다). 인물 뷰를 보고 있을 때만,
+     키가 있을 때만 — 아니면 조회할 이유도 없고 키 없는 기기에서는 토스트만 뜬다.
+     기다리지 않는다(받아지면 `pickPerson`이 다시 그린다). */
+  const name = typeof p.personName === "string" ? p.personName : Discover.personName;
+  if (name !== Discover.personName) {
+    Discover.personName = name;
+    Discover.personId = p.personId || null;
+    Discover.filmo = [];
+    if (name && Discover.view === "person" && typeof getTmdbKey === "function" && getTmdbKey())
+      pickPerson(name);
+  }
 }
 
-/* 지금 값을 통째로 `prefs`에 남긴다 (필터 칩 하나만 바뀌어도 여섯 개를 같이 적는다 —
-   조각조각 적으면 어느 게 최신인지 따지게 된다) */
-function saveRecoPrefs() {
+/* 지금 값을 통째로 `prefs`에 남긴다 (칩 하나만 바뀌어도 전부 같이 적는다 —
+   조각조각 적으면 어느 게 최신인지 따지게 된다). 값이 그대로면 `savePrefs`가 아무 일도 안 한다. */
+function saveDcPrefs() {
   if (typeof savePrefs !== "function") return;
   const patch = {};
-  RECO_PREF_KEYS.forEach(k => { patch[k] = Discover[k]; });
+  DC_PREF_KEYS.forEach(k => { patch[k] = Discover[k]; });
   savePrefs(patch);
 }
 
@@ -792,7 +810,7 @@ function setRecoKoPct(pct) {
   const inp = $("#dcRecoKoInput");
   if (inp) inp.value = Discover.recoKoPct;
   renderRecoKoInput();
-  saveRecoPrefs();
+  saveDcPrefs();
 }
 
 function renderDcReco() {
@@ -1860,6 +1878,7 @@ async function openPersonFilmo(id, name, kind) {
     toast("필모그래피 조회 실패: " + e.message, "error");
   } finally {
     Discover.filmoLoading = false;
+    saveDcPrefs();          // 고른 사람도 다른 기기로 넘긴다
     renderDiscover();
   }
 }
@@ -1889,6 +1908,7 @@ async function pickPerson(name) {
     toast("필모그래피 조회 실패: " + e.message, "error");
   } finally {
     Discover.filmoLoading = false;
+    saveDcPrefs();          // 고른 사람도 다른 기기로 넘긴다
     renderDiscover();
   }
 }
@@ -2272,12 +2292,13 @@ window.addFromDiscover = addFromDiscover;
 /* ---------- 초기화 ---------- */
 function initDiscover() {
   if (!$("#tab-discover")) return;
-  applyRecoPrefs();          // 한국 비중·정렬·필터는 기기마다가 아니라 `prefs`에서 온다
+  applyDcPrefs();            // 한국 비중·정렬·필터·보던 자리는 기기마다가 아니라 `prefs`에서 온다
 
 
   $$(".dc-nav").forEach(btn => {
     btn.addEventListener("click", () => {
       Discover.view = btn.dataset.view;
+      saveDcPrefs();
       renderDiscover();
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
@@ -2327,6 +2348,7 @@ function initDiscover() {
       if (kind) {
         if (Discover.personKind === kind.dataset.pkind) return;
         Object.assign(Discover, { personKind: kind.dataset.pkind, personName: "", personId: null, filmo: [] });
+        saveDcPrefs();
         renderDiscover();
         return;
       }
@@ -2345,7 +2367,7 @@ function initDiscover() {
   onBackdropClose("#dcRecoModal", closeRecoFilter);
   $("#resetRecoFilter").addEventListener("click", () => {
     Object.assign(Discover, { recoType: "", recoOtt: [], recoOrigin: [], recoSort: "title", recoDir: "asc" });
-    saveRecoPrefs();
+    saveDcPrefs();
     renderDiscover();
   });
   window.closeRecoFilterModal = closeRecoFilter;   // Escape 처리용
@@ -2375,7 +2397,7 @@ function initDiscover() {
       // 가나다는 ㄱ부터, 점수는 높은 것부터가 자연스러운 첫 방향이다
       else { Discover.recoSort = v; Discover.recoDir = v === "title" ? "asc" : "desc"; }
     }
-    saveRecoPrefs();
+    saveDcPrefs();
     renderDiscover();
   });
 
@@ -2384,12 +2406,14 @@ function initDiscover() {
     const b = e.target.closest("[data-fr]");
     if (!b) return;
     Discover.frKey = b.dataset.fr;
+    saveDcPrefs();
     renderDiscover();
   });
   $("#dcFrSort").addEventListener("click", e => {
     const b = e.target.closest("[data-order]");
     if (!b) return;
     Discover.frStory = b.dataset.order === "story";
+    saveDcPrefs();
     renderDiscover();
   });
   $("#dcFrLoadBtn").addEventListener("click", async (e) => {

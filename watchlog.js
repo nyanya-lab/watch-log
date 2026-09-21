@@ -117,16 +117,33 @@ function autoFixTargets() {
 }
 
 /* ---------- 기록 화면 보기: 다이어리 / 포스터 / 시리즈 (2026-09-17 개편 4단계) ----------
-   **이 기기에서 마지막에 고른 보기**로 열린다(사용자 선택). 처음엔 다이어리.
+   **마지막에 고른 보기**로 열린다(사용자 선택). 처음엔 다이어리.
+   ⚠ 자리는 `State.prefs` = **모든 기기에 따라온다**(2026-09-21 "다 동기화해줘"). 예전엔 이 기기
+   localStorage(`watchlog_list_view`)뿐이었다 — 그 값은 **한 번 물려받고** 그 뒤로는 prefs만 본다.
    시리즈는 예전 `#seriesBtn` 토글(`Filters.seriesView`)을 그대로 쓴다 — 시리즈 카드를 누르면
    `filterBySeries`가 시리즈 보기를 끄고 그 시리즈 기록만 보여주는데, 그때는 **직전의 다이어리/포스터**로
    보여야 해서 둘을 따로 기억한다(`view` + `series`). */
 const LS_LIST_VIEW = "watchlog_list_view";
 function loadListView() {
-  let v = {};
-  try { v = JSON.parse(localStorage.getItem(LS_LIST_VIEW) || "{}") || {}; } catch {}
-  State.listView = v.view === "poster" ? "poster" : "diary";
-  Filters.seriesView = !!v.series;
+  const p = (typeof State !== "undefined" && State.prefs) || {};
+  let v = p;
+  let legacy = false;
+  if (p.listView === undefined) {                 // 아직 prefs에 없으면 이 기기 값을 물려받는다
+    legacy = true;
+    try { const o = JSON.parse(localStorage.getItem(LS_LIST_VIEW) || "{}") || {};
+          v = { listView: o.view, listSeries: o.series }; }
+    catch { v = {}; }
+  }
+  State.listView = v.listView === "poster" ? "poster" : "diary";
+  Filters.seriesView = !!v.listSeries;
+  if (legacy) saveListView();                     // 안 적으면 보기를 바꿀 때까지 다른 기기로 안 간다
+}
+
+/* 지금 보기를 `prefs`에 남긴다. `savePrefs`는 값이 그대로면 아무 일도 안 하므로
+   **그릴 때마다 불러도 된다**(아래 `renderHeaderCount` 참고). */
+function saveListView() {
+  if (typeof savePrefs !== "function") return;
+  savePrefs({ listView: State.listView, listSeries: !!Filters.seriesView });
 }
 function setListView(v) {
   if (v === "series") { Filters.seriesView = true; Filters.group = ""; }
@@ -979,7 +996,7 @@ function renderHeaderCount() {
   const curView = Filters.seriesView ? "series" : State.listView;
   /* 저장은 그릴 때 한다 — 시리즈 카드를 누르거나(`filterBySeries`) 통계에서 넘어오면(`jumpToList`)
      버튼을 안 거치고 시리즈 보기가 꺼지는데, 그걸 기억하지 않으면 다음에 시리즈 보기로 열린다 */
-  try { localStorage.setItem(LS_LIST_VIEW, JSON.stringify({ view: State.listView, series: Filters.seriesView })); } catch {}
+  saveListView();
   $$("#viewSeg [data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === curView));
 
   const pb = $("#pendingBtn");

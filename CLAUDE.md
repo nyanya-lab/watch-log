@@ -189,11 +189,13 @@ TMDB가 준 `media_type`을 그대로 저장하므로 짐작이 아니고, 국�
 - `watchlog_wishes` — 보고싶어요 목록 (`State.wishes`)
 - `watchlog_hides` — 관심없음 목록 (`State.hides`)
 - `watchlog_prefs` — 화면 설정 (`State.prefs`). **동기화된다** — 아래 "화면 설정" 참고.
-  `{ accent, recoKoPct, recoSort, recoDir, recoType, recoOtt, recoOrigin }` — 포인트 색과
-  **추천 뷰의 설정 전부**(한국 비중·정렬·필터)가 여기 있다(2026-09-21 "전부 동기화해줘").
-  값만 넣는다 — **지금 어느 뷰를 보고 있나·고른 사람·검색어는 안 넣는다**(그 순간의 자리라
-  동기화하면 폰에서 보던 화면이 PC까지 바꾼다).
-- `watchlog_reco_ko_share` — 옛 한국 비중(이 기기). 이제 **물려받을 때 한 번만 읽고** prefs로 옮긴다
+  `{ accent, listView, listSeries, recoKoPct, recoSort, recoDir, recoType, recoOtt, recoOrigin,
+  view, personKind, personName, personId, frKey, frStory }` — 포인트 색 · **기록 화면 보기** ·
+  **탐색 탭 설정 전부**(한국 비중·정렬·필터·보던 뷰·고른 사람·시리즈)가 여기 있다
+  (2026-09-21 "다 동기화해줘"). ⚠ **입력 중인 검색어는 안 넣는다**(글자 하나 칠 때마다 올릴 일이 아니다).
+  기기에만 남아야 하는 값(API 키·동기화 비밀번호)도 안 넣는다.
+- `watchlog_reco_ko_share` · `watchlog_list_view` — 옛 자리(이 기기). 이제 **물려받을 때 한 번만 읽고**
+  prefs로 옮긴다 (안 옮기면 그 값을 건드릴 때까지 다른 기기로 안 넘어간다)
 - `watchlog_reco` — 추천 결과 캐시 `{generatedAt, basis:[장르], list:[...]}`
 - `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
   영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
@@ -775,8 +777,15 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
   - **`savePrefs(patch)`**(core.js, 2026-09-21) — `prefs`만 바뀐 경우의 저장. localStorage에는 바로 쓰고
     **서버로는 3초로 몰아서 한 번**만 보낸다(`touchCache`와 같은 생각). 추천 필터 칩처럼 연달아
     눌리는 값이 들어와서, 누를 때마다 문서를 통째로 올리면 낭비다.
-  - `applyPrefs()`가 **`applyRecoPrefs()`(discover.js)도 부른다** — 다른 기기에서 온 추천 설정을
-    `Discover`에 얹는다. 받아온 뒤에는 어느 경로든 `renderDiscover()`가 뒤따르므로 화면도 맞춰진다.
+    - ⚠ **값이 그대로면 아무 일도 안 한다.** 기록 화면 보기는 `renderHeaderCount`가 **그릴 때마다**
+      적는데(버튼을 안 거치고 바뀌는 길이 있어서), 그냥 두면 필터를 만질 때마다 수정 시각이 바뀌어
+      다른 기기가 헛되이 받아간다. 검증: `applyFilters()`를 세 번 불러도 `watchlog_modified` 그대로.
+  - `applyPrefs()`가 **`applyDcPrefs()`(discover.js)와 `loadListView()`(watchlog.js)도 부른다** —
+    다른 기기에서 온 설정을 화면 상태에 얹는다. 받아오는 길은 모두 뒤에 `applyFilters()`·
+    `renderDiscover()`가 따라오므로 다시 그려진다.
+    - 고른 사람이 바뀌어 들어오면 **인물 뷰를 보고 있고 키가 있을 때만** 필모를 다시 받는다
+      (필모는 세션 메모리 캐시라 이 기기엔 없다). 아니면 조회할 이유가 없고, 키 없는 기기에서는
+      토스트만 뜬다.
 - **글꼴 (2026-09-17 개편)** — 역할마다 다르다.
   - 본문 **SUIT**(굵기 9단계라 강약을 굵기로 만든다). Pretendard도 괜찮다고 했던 대안 — 폴백으로 둔다.
   - 제목 **조선일보명조**(`--font-head`, 눈누 CDN `@font-face`). 제목 자리: `.hd` `h1` `.wl-title` `.stat-h` `.dt-title`
@@ -881,8 +890,8 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
 
 ## 기록 탭 보기 — 다이어리 / 포스터 / 시리즈 (2026-09-17 개편 4단계)
 
-검색창 옆 `#viewSeg`로 바꾼다. **이 기기에서 마지막에 고른 보기**로 열린다(`watchlog_list_view` =
-`{view:"diary"|"poster", series}`, 처음엔 다이어리). 저장은 버튼이 아니라 **`renderHeaderCount`가 그릴 때** 한다 —
+검색창 옆 `#viewSeg`로 바꾼다. **마지막에 고른 보기**로 열린다(`State.prefs`의 `listView`·`listSeries`,
+처음엔 다이어리). **동기화된다**(2026-09-21) — 예전엔 이 기기 `watchlog_list_view`뿐이었고, 그 값은 한 번 물려받는다. 저장은 버튼이 아니라 **`renderHeaderCount`가 그릴 때** 한다 —
 시리즈 카드를 누르거나(`filterBySeries`) 통계에서 넘어오면(`jumpToList`) 버튼을 안 거치고 시리즈 보기가 꺼지기 때문.
 시리즈를 따로 두는 건 시리즈 카드를 누른 뒤 **직전의 다이어리/포스터**로 그 시리즈를 보여주기 위해서다.
 

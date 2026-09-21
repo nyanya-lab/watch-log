@@ -196,9 +196,11 @@ function currentAccent() {
   return ACCENTS.some(x => x[0] === a) ? a : "coral";
 }
 function applyPrefs() {
-  /* 추천 뷰의 설정(한국 비중·정렬·필터)도 `prefs`에 함께 들어 있다 — 다른 기기에서 바뀐 게
-     들어오면 화면에 얹는다. discover.js가 나중에 로드되므로 있을 때만 부른다. */
-  if (typeof applyRecoPrefs === "function") applyRecoPrefs();
+  /* 탐색 탭 설정(한국 비중·정렬·필터·보던 자리)과 기록 화면 보기도 `prefs`에 함께 들어 있다 —
+     다른 기기에서 바뀐 게 들어오면 화면에 얹는다. 받아오는 길은 모두 뒤에 `applyFilters()`·
+     `renderDiscover()`가 따라오므로 다시 그려진다. 두 파일이 나중에 로드되므로 있을 때만 부른다. */
+  if (typeof applyDcPrefs === "function") applyDcPrefs();
+  if (typeof loadListView === "function") loadListView();
   const a = currentAccent();
   if (a === "coral") delete document.documentElement.dataset.accent;
   else document.documentElement.dataset.accent = a;
@@ -219,7 +221,11 @@ function setAccent(key) {
    ⚠ 기기에만 남아야 하는 값(API 키·동기화 비밀번호)은 여기에 넣지 말 것. */
 let _prefPush = null;
 function savePrefs(patch) {
-  State.prefs = { ...State.prefs, ...patch };
+  const next = { ...State.prefs, ...patch };
+  /* **안 바뀌었으면 아무 일도 안 한다** — 기록 화면 보기처럼 그릴 때마다 적는 값이 있어서,
+     그냥 두면 필터를 만질 때마다 수정 시각이 바뀌어 다른 기기가 헛되이 받아간다. */
+  if (JSON.stringify(next) === JSON.stringify(State.prefs || {})) return;
+  State.prefs = next;
   try { localStorage.setItem(LS_PREFS, JSON.stringify(State.prefs)); }
   catch { /* 저장 공간 문제면 이번 판만 적용된다 */ }
   clearTimeout(_prefPush);
