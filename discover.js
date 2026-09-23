@@ -857,9 +857,24 @@ function renderDcReco() {
   }
 
   const mt = Discover.recoType;   // "" | movie | tv
-  /* ⚠ **안 본 시즌이 남은 드라마(`nextSeason`)는 "봤어요"로 치지 않는다** — 그 시즌을 보라고
+  /* ⚠ 카드에 저장된 `nextSeason`은 **추천을 뽑던 때의 값**이라, 그 시즌을 보기 시작하면 낡는다
+     (2026-09-23: 경이로운 소문 S2를 보는 중인데 카드는 아직 `S2 안 봄`이었다).
+     그래서 **그릴 때마다 지금 기록으로 다시 센다** — 캐시 값은 쓰지 않는다. */
+  const nextNow = new Map();
+  continueList().forEach(c => {
+    if (c.mediaType !== "tv") return;
+    const miss = (c.st.missing || []).filter(n => n > 0);
+    if (miss.length) nextNow.set(c.tmdbId, Math.min(...miss));
+  });
+  const nextOf = (c) => c.mediaType === "tv" ? nextNow.get(c.tmdbId) : null;
+
+  /* ⚠ **안 본 시즌이 남은 드라마는 "봤어요"로 치지 않는다** — 그 시즌을 보라고
      담은 카드라 흐리게 만들거나 [내 기록] 버튼으로 바꾸면 안 된다(2026-09-21). */
-  const seenRec = (c) => c.nextSeason ? null : State.items.find(i => i.tmdbId === c.tmdbId);
+  const seenRec = (c) => nextOf(c) ? null : State.items.find(i => i.tmdbId === c.tmdbId);
+  /* **보는 중인 작품은 흐리게 하지 않는다**(2026-09-23 지적). `.dc-dim`은 "다시 추천받으면 빠질
+     정리된 카드"라는 뜻인데, 지금 보고 있는 작품을 흐리게 깔아두면 오히려 안 보인다.
+     버튼은 [내 기록] 그대로다 — 그 기록으로 가는 게 맞는 동작이다. */
+  const watchingRec = (c) => State.items.some(i => i.tmdbId === c.tmdbId && watchingNow(i));
   /* 캐시를 만든 뒤에 기록하거나 관심없음으로 넘긴 작품도 **빼지 않고 흐리게 남긴다**(2026-09-17).
      예전엔 누르는 순간 빠져서 뒤 카드가 한 칸씩 당겨졌다 — 가나다순으로 한 줄씩 훑는 중에
      자리가 계속 밀려 어디까지 봤는지 놓쳤다. **빠지는 건 [다시 추천받기]를 누를 때뿐이다**
@@ -900,10 +915,10 @@ function renderDcReco() {
       note: (c.otts || []).map(o => `<span class="badge badge-ott">${esc(o)}</span>`).join(""),
       /* 안 본 시즌 배지 — 이어보기 카드와 같은 말투. 안 넘기면 `dcCardHtml`이 기록이 있다고
          `봤어요` 배지를 달아버린다(`myStatus`는 tmdbId만 본다). */
-      flag: c.nextSeason
-        ? `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>S${c.nextSeason} 안 봄</span>`
+      flag: nextOf(c)
+        ? `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>S${nextOf(c)} 안 봄</span>`
         : "",
-      dim: !!(seenRec(c) || isHidden(c.tmdbId, c.mediaType)),
+      dim: !!((seenRec(c) && !watchingRec(c)) || isHidden(c.tmdbId, c.mediaType)),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
       actions: seenRec(c) ? [
@@ -914,7 +929,7 @@ function renderDcReco() {
         { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
           cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
         /* 안 본 시즌이 있으면 그 시즌을 미리 골라 등록창을 연다 (이어보기 카드와 같다) */
-        { act: "add", label: "봤어요", icon: "fa-plus", season: c.nextSeason || "" },
+        { act: "add", label: "봤어요", icon: "fa-plus", season: nextOf(c) || "" },
         { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 다시 추천받을 때 빠진다" }
       ],
       _raw: c
@@ -1427,7 +1442,12 @@ function dcCardHtml(e) {
 
   let flag = e.flag || "";
   if (!flag) {
-    if (st.watched) flag = `<span class="dc-flag dc-flag-seen"><i class="fa-solid fa-check mr-1"></i>봤어요</span>`;
+    /* **아직 보는 중이면 `봤어요`가 아니라 `보는 중`**(2026-09-23 지적 — 경이로운 소문 S2가
+       보는 중인데 추천 카드에 `봤어요`로 떴다). 내 기록 카드의 `.wl-live` 배지와 같은 뜻·같은 색이다.
+       ⚠ `봤어요`보다 **먼저** 본다 — `myStatus`는 기록이 있으면 무조건 `watched`라서 순서가 뒤면 안 걸린다. */
+    if (st.watched && st.recs.some(watchingNow))
+      flag = `<span class="dc-flag dc-flag-live"><i class="fa-solid fa-circle mr-1"></i>보는 중</span>`;
+    else if (st.watched) flag = `<span class="dc-flag dc-flag-seen"><i class="fa-solid fa-check mr-1"></i>봤어요</span>`;
     else if (st.hidden) flag = `<span class="dc-flag dc-flag-hide"><i class="fa-solid fa-ban mr-1"></i>관심없음</span>`;
     else if (st.wished) flag = `<span class="dc-flag dc-flag-wish"><i class="fa-solid fa-bookmark mr-1"></i>담아둠</span>`;
   }

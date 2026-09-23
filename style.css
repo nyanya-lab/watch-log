@@ -826,6 +826,9 @@ button.yr-bar:hover .b { background: var(--ac-d); }
   background: rgba(29,26,24,.74);
 }
 .dc-flag-seen { background: rgba(47,125,79,.92); }
+/* 보는 중 — 내 기록 카드의 `.wl-live`와 같은 포인트 색으로 (같은 뜻이니 같은 색이어야 한다) */
+.dc-flag-live { background: var(--ac); }
+.dc-flag-live i { font-size: 9px; }
 .dc-flag-wish { background: rgba(224,112,15,.9); }
 .dc-flag-next { background: rgba(220,68,68,.9); }
 
