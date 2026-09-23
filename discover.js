@@ -871,10 +871,6 @@ function renderDcReco() {
   /* ⚠ **안 본 시즌이 남은 드라마는 "봤어요"로 치지 않는다** — 그 시즌을 보라고
      담은 카드라 흐리게 만들거나 [내 기록] 버튼으로 바꾸면 안 된다(2026-09-21). */
   const seenRec = (c) => nextOf(c) ? null : State.items.find(i => i.tmdbId === c.tmdbId);
-  /* **보는 중인 작품은 흐리게 하지 않는다**(2026-09-23 지적). `.dc-dim`은 "다시 추천받으면 빠질
-     정리된 카드"라는 뜻인데, 지금 보고 있는 작품을 흐리게 깔아두면 오히려 안 보인다.
-     버튼은 [내 기록] 그대로다 — 그 기록으로 가는 게 맞는 동작이다. */
-  const watchingRec = (c) => State.items.some(i => i.tmdbId === c.tmdbId && watchingNow(i));
   /* 캐시를 만든 뒤에 기록하거나 관심없음으로 넘긴 작품도 **빼지 않고 흐리게 남긴다**(2026-09-17).
      예전엔 누르는 순간 빠져서 뒤 카드가 한 칸씩 당겨졌다 — 가나다순으로 한 줄씩 훑는 중에
      자리가 계속 밀려 어디까지 봤는지 놓쳤다. **빠지는 건 [다시 추천받기]를 누를 때뿐이다**
@@ -918,7 +914,9 @@ function renderDcReco() {
       flag: nextOf(c)
         ? `<span class="dc-flag dc-flag-next"><i class="fa-solid fa-forward mr-1"></i>S${nextOf(c)} 안 봄</span>`
         : "",
-      dim: !!((seenRec(c) && !watchingRec(c)) || isHidden(c.tmdbId, c.mediaType)),
+      /* 보는 중인 작품도 **이미 내 기록이라 흐리게 깐다**(2026-09-23 요청 — 잠깐 예외로 뒀다가
+         되돌렸다). 흐려지는 건 포스터·제목뿐이라 `보는 중` 배지와 [내 기록] 버튼은 또렷하다. */
+      dim: !!(seenRec(c) || isHidden(c.tmdbId, c.mediaType)),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
       actions: seenRec(c) ? [
