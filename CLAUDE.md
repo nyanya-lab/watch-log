@@ -36,7 +36,7 @@ dev-local.js            로컬 테스트 전용 (.gitignore, 배포에 없음)
 **Firebase SDK는 안 싣는다.** 동기화는 Realtime Database REST(fetch)로만 한다 —
 예전엔 쓰지도 않는 `firebase-app-compat`+`firebase-firestore-compat`를 매 로드마다 받고 있었다.
 
-favicon은 `<link rel="icon">`에 이모지 SVG를 data URI로 넣었다 (파일 업로드 불필요).
+favicon은 `<link rel="icon">`에 SVG를 data URI로 넣었다 (파일 업로드 불필요). **상단 로고(`.brand-sq`)와 같은 모양** — 잉크색 둥근 네모 + FontAwesome clapperboard(2026-09-23). 로고를 바꾸면 여기도 바꿀 것.
 
 ## 설정값 (core.js 상단)
 
