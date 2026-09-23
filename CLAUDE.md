@@ -61,8 +61,8 @@ const AUTO_SYNC_DELAY = 2500;
   ```json
   { "rules": { "watchlog": { "$room": { ".read": true, ".write": true } } } }
   ```
-- 최초 비밀번호 설정 시(`firstSyncAfterPw`): 새 방이 비어 있으면 예전 `/watchlog/data`
-  데이터를 옮길지 confirm으로 물어본 뒤 복사. 자동 삭제/덮어쓰기 없음.
+- 비밀번호 설정 시(`firstSyncAfterPw`): 방에 기록이 있으면 **받아온다**(이 기기에 기록이 있으면 confirm).
+  방이 비어 있으면 이 기기 기록을 올린다.
 
 TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `localStorage.watchlog_tmdb_key`
 
@@ -308,6 +308,8 @@ PC가 다시 올려 살렸다(서버 `_bak_prev`에도 사본이 있었다). 시
 - `syncOnBoot`: **이 기기가 비었고 서버에 기록이 있으면 시각과 무관하게 서버를 따른다.**
 - `autoPush`: `wouldWipeServer` — 빈 기기가 기록 있는 서버를 **자동으로는 절대** 덮지 않는다.
 - `pushToServer`(구름 버튼): 이 기기가 비었으면 올리지 않고 **받아온다**. 서버의 절반 미만이면 confirm.
+- **비밀번호를 넣으면 서버 것을 받아오는 걸로 시작한다**(`firstSyncAfterPw`, 사용자 요청). 방에 기록이 있으면
+  시각 비교 없이 받아오고, 이 기기에 따로 적은 기록이 있을 때만 confirm. **같은 비밀번호를 다시 넣어도** 받아온다.
 - `pullFromServer`(실시간·받아오기 버튼): **서버가 비었는데 이 기기엔 기록이 있으면 받지 않는다** —
   한 기기의 사고를 실시간 구독이 모든 기기로 퍼뜨리지 않게.
 

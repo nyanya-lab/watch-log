@@ -815,9 +815,8 @@ async function saveSyncPw() {
   localStorage.setItem(LS_SYNC_PW, v);
   closeSyncPwModal();
 
-  if (v === prev) { toast("동기화 비밀번호가 그대로입니다"); return; }
-
-  toast("동기화 비밀번호 저장됨 — 서버 확인 중...");
+  /* 같은 비밀번호를 다시 넣은 것도 "받아와 달라"는 뜻으로 본다 — 예전엔 아무 일도 안 했다 */
+  toast(v === prev ? "서버 확인 중..." : "동기화 비밀번호 저장됨 — 서버 확인 중...");
   await firstSyncAfterPw();
   applyFilters();
   updateSyncPwStatus();
@@ -833,7 +832,23 @@ async function firstSyncAfterPw() {
   try {
     const d = await fetchServer();
 
-    // 새 방에 이미 데이터가 있음 → 평소 부팅 동기화 로직으로
+    /* 방에 기록이 있으면 **서버 것을 받아오는 걸로 시작한다** (2026-09-23 요청).
+       예전엔 시각 비교(`syncOnBoot`)로 넘겨서, 설정만 저장된 새 폰이 "더 최신"으로 잡혀
+       비밀번호만 넣고 끝나거나 빈 채로 올리는 사고가 났다. 비밀번호를 넣는 건 곧
+       "그 방의 기록을 쓰겠다"는 뜻이다. 이 기기에 **따로 적어둔 기록이 있을 때만** 묻는다. */
+    if (d && Array.isArray(d.items) && d.items.length) {
+      if (State.items.length && !isSeedData() && !confirm(
+        `서버에 기록 ${d.items.length}개가 있어요. 받아올까요?\n\n` +
+        `이 기기의 기록 ${State.items.length}개는 서버 것으로 바뀝니다.\n` +
+        `[취소]를 누르면 아무것도 안 바뀝니다.`
+      )) { setSyncIcon("idle"); return; }
+      if (await pullFromServer(true)) {
+        if (window.renderDiscover) renderDiscover();
+        toast(`서버에서 불러옴 (${State.items.length}개)`, "success");
+      } else setSyncIcon("error");
+      return;
+    }
+    // 방은 있는데 기록이 0개 → 평소 부팅 동기화 로직으로
     if (d && Array.isArray(d.items)) { await syncOnBoot(); return; }
 
     // 이 기기 데이터를 새 방에 올림 — 시드는 올리지 않는다
