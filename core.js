@@ -309,6 +309,10 @@ async function serverChangedBehindUs() {
   } catch { return false; }   // 확인 실패는 막지 않는다 (오프라인에서도 저장은 되어야 함)
 }
 let _lastServerSeen = null;
+/* 이 기기는 비었는데 서버엔 기록이 있다 → 올리면 서버가 통째로 지워진다 */
+function wouldWipeServer(d) {
+  return !State.items.length && !!d && Array.isArray(d.items) && d.items.length > 0;
+}
 
 async function autoPush() {
   _syncTimer = null;
@@ -319,6 +323,12 @@ async function autoPush() {
   if (await serverChangedBehindUs()) {
     setSyncIcon("error");
     toast("다른 기기에서 먼저 저장했어요. 구름 아이콘을 눌러 확인하세요", "error");
+    return;
+  }
+  /* 빈 기기가 기록 있는 서버를 덮는 일은 **자동으로는 절대** 하지 않는다 (2026-09-23 사고) */
+  if (wouldWipeServer(_lastServerSeen)) {
+    setSyncIcon("error");
+    toast(`이 기기는 비어 있어 서버 기록(${_lastServerSeen.items.length}개)을 덮지 않았어요`, "error");
     return;
   }
 
@@ -362,9 +372,26 @@ async function pushToServer() {
     openSyncPwModal();
     return false;
   }
+  /* 구름 버튼은 확인 없이 이 기기 것을 올린다 — **서버보다 훨씬 적으면 먼저 묻는다** (2026-09-23 사고:
+     새 폰에서 목록이 비어 보여 눌렀더니 0개가 서버 337개를 덮었다). 비었으면 받아오기를 권한다. */
+  let cur = null;
+  try { cur = await fetchServer(); } catch { /* 확인 실패는 막지 않는다 (오프라인) */ }
+  const sc = cur && Array.isArray(cur.items) ? cur.items.length : 0;
+  if (sc && State.items.length < sc * 0.5) {
+    if (!State.items.length) {
+      toast(`이 기기는 비어 있어요 — 서버 기록 ${sc}개를 받아옵니다`);
+      await manualPull();
+      return false;
+    }
+    const ok = confirm(
+      `서버에는 ${sc}개가 있는데 이 기기에는 ${State.items.length}개뿐이에요.\n` +
+      `이 기기 것으로 서버를 덮어쓸까요?\n\n[취소]를 누르면 아무것도 안 바뀝니다.`
+    );
+    if (!ok) { setSyncIcon("idle"); return false; }
+  }
   State.syncing = true;
   setSyncIcon("saving");
-  try { await rotateServerBackup(await fetchServer()); } catch { /* 백업 실패가 저장을 막지 않는다 */ }
+  try { await rotateServerBackup(cur); } catch { /* 백업 실패가 저장을 막지 않는다 */ }
   const stamp = new Date().toISOString();
   try {
     const res = await fetch(url, {
@@ -488,6 +515,13 @@ async function pullFromServer(silent) {
       if (!silent) toast("서버에 데이터가 없습니다", "error");
       return false;
     }
+    /* 서버가 **비었는데** 이 기기엔 기록이 있으면 받지 않는다 — 다른 기기가 빈 채로 올린 사고를
+       실시간 구독이 모든 기기로 퍼뜨리게 된다(2026-09-23). 되돌릴 쪽이 남아 있어야 한다. */
+    if (!d.items.length && State.items.length) {
+      setSyncIcon("error");
+      toast(`서버가 비어 있어 받지 않았어요 (이 기기 ${State.items.length}개 유지)`, "error");
+      return false;
+    }
     State.items = d.items;
     adoptLists(d);
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
@@ -542,6 +576,22 @@ async function syncOnBoot() {
 
     const serverMod = d.updatedAt || "";
     const serverCount = d.items.length;
+
+    /* 이 기기가 **비어 있으면** 시각과 무관하게 서버를 따른다 (2026-09-23 사고).
+       새 폰은 기록이 없어도 화면 설정(`savePrefs`)만 저장되면 "방금 수정됨"이 되어,
+       아래 "로컬이 더 최신" 분기로 가서 **0개를 서버에 올렸다** — 시드 사고와 같은 구조. */
+    if (!localCount && serverCount) {
+      State.items = d.items;
+      adoptLists(d);
+      localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+      localStorage.setItem(LS_MODIFIED, serverMod || new Date().toISOString());
+      State.serverStamp = serverMod || "";
+      applyFilters();
+      if (window.renderDiscover) renderDiscover();
+      setSyncIcon("saved");
+      toast(`서버에서 불러옴 (${State.items.length}개)`);
+      return;
+    }
 
     /* 로컬이 시드일 뿐이면 시각과 무관하게 무조건 서버를 따른다.
        시드는 부팅 때 자동으로 들어간 것이라 항상 "방금 수정됨"으로 보이는데,
