@@ -7,6 +7,9 @@
 <!-- 파일을 따로 올리지 않아도 되게 SVG로 넣는다 (favicon.ico 404 제거).
      상단 로고(.brand-sq — 잉크색 둥근 네모 + FontAwesome clapperboard)와 같은 모양이다. 로고를 바꾸면 여기도 -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%231d1a18'/><path transform='translate(8 8) scale(.03125)' fill='%23fff' d='M448 32H361.9l-1 1-127 127h92.1l1-1L453.8 32.3c-1.9-.2-3.8-.3-5.8-.3zm64 128V96c0-15.1-5.3-29.1-14-40l-104 104H512zM294.1 32H201.9l-1 1L73.9 160h92.1l1-1 127-127zM64 32C28.7 32 0 60.7 0 96v64H6.1l1-1 127-127H64zM512 192H0V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V192z'/></svg>">
+<!-- 앱으로 설치할 때(작업표시줄·홈 화면) Chrome은 위 SVG를 안 쓰고 manifest의 PNG를 쓴다 — 없으면 "냐" 글자 아이콘을 만든다 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

@@ -25,6 +25,8 @@ discover.js      2066줄  탐색 탭 (추천·이어보기·시리즈·인물·�
 stats.js          651줄  Chart.js 통계 + 연간 결산 + 히트맵
 home.js                  홈 탭 (보는 중 배너·최근 본 작품·정리할 것) — 2026-09-17 신설
 search.js                상단바 검색 + 결과 화면(TMDB 결과에 내 기록 겹치기) — 2026-09-17 신설
+manifest.webmanifest     앱 설치 정보 (이름·아이콘) — 2026-09-23
+icon-192.png · icon-512.png · apple-touch-icon.png  설치 아이콘 (로고와 같은 모양)
 dev-local.js            로컬 테스트 전용 (.gitignore, 배포에 없음)
 .gitignore              dev-local.js, .claude/ 제외
 ```
@@ -37,6 +39,7 @@ dev-local.js            로컬 테스트 전용 (.gitignore, 배포에 없음)
 예전엔 쓰지도 않는 `firebase-app-compat`+`firebase-firestore-compat`를 매 로드마다 받고 있었다.
 
 favicon은 `<link rel="icon">`에 SVG를 data URI로 넣었다 (파일 업로드 불필요). **상단 로고(`.brand-sq`)와 같은 모양** — 잉크색 둥근 네모 + FontAwesome clapperboard(2026-09-23). 로고를 바꾸면 여기도 바꿀 것.
+**앱으로 설치할 때는 이 SVG를 안 쓴다** — Chrome은 `manifest.webmanifest`의 PNG(192·512)를 쓰고, 없으면 제목 첫 글자("냐")로 아이콘을 만든다(2026-09-23). PNG는 headless Chrome으로 같은 SVG를 찍어 만들었다. 이미 설치한 앱은 아이콘이 안 바뀌므로 지우고 다시 설치해야 한다.
 
 ## 설정값 (core.js 상단)
 
