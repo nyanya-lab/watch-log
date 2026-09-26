@@ -387,6 +387,19 @@ async function tmdbDetail(id, mediaType) {
       episodes: s.episode_count
     })));
 
+  /* 시즌 수는 **이미 방영을 시작한 시즌까지만** 센다.
+     TMDB `number_of_seasons`는 발표만 된 다음 시즌(방영일이 미래이거나 비어 있음)까지 세어서,
+     그대로 저장하면 이어보기·추천이 아직 볼 수 없는 시즌을 "안 봄"으로 띄운다(무빙 S2, 2026-09-26).
+     방영일이 적힌 시즌이 하나도 없으면(옛 작품 데이터 누락) 예전처럼 TMDB 값을 쓴다.
+     시즌 목록(`seasons`)은 그대로 둔다 — 상세의 "이 시리즈"가 미방영 시즌을 `미개봉`으로 보여준다. */
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const dated = seasons.filter(s => s.airDate);
+  const aired = dated.filter(s => s.airDate <= today);
+  const totalSeasons = dated.length
+    ? (aired.length ? Math.max(...aired.map(s => s.number)) : null)
+    : (d.number_of_seasons || null);
+
   const companies = (d.production_companies || []).slice(0, 3).map(c => c.name);
 
   // TMDB 공식 시리즈(컬렉션) — 제목이 달라도 같은 시리즈면 같은 id (영화만 제공)
@@ -406,7 +419,7 @@ async function tmdbDetail(id, mediaType) {
     country: country || "",
     releaseDate: d.release_date || d.first_air_date || "",
     releaseYear: (d.release_date || d.first_air_date || "").slice(0, 4),
-    totalSeasons: d.number_of_seasons || null,
+    totalSeasons,
     totalEpisodes: d.number_of_episodes || null,
     seasons,
     runtime,
