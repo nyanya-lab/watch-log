@@ -905,14 +905,16 @@ function paintRecoRows(entries, flip) {
   Discover._byId = new Map(entries.map(e => [String(e.tmdbId), e]));
   const grid = $("#dcGrid");
   grid.classList.remove("dc-tl-on", "dc-grouped");
+  /* 줄은 **치우기 전 전체 목록**으로 나눈다 — 그래야 치운 줄이 자리째 빠지고 남은 줄 번호가 안 바뀐다 */
   const rows = [];
-  for (let i = 0; i < entries.length; i += 5) rows.push(entries.slice(i, i + 5));
-  grid.innerHTML = rows.map((r, i) => {
+  for (let i = 0; i < entries.length; i += 5)
+    rows.push({ no: i / 5 + 1, items: entries.slice(i, i + 5).filter(e => !flip.gone.includes(recoKeyOf(e))) });
+  grid.innerHTML = rows.filter(r => r.items.length).map(({ no, items: r }) => {
     const keys = r.map(recoKeyOf).join(",");
     const anyDown = r.some(e => e.facedown);
     return `<div class="dc-row">
       <div class="dc-row-head">
-        <span class="dc-row-no">${i + 1}</span>
+        <span class="dc-row-no">${no}</span>
         <div class="dc-row-acts">
           ${anyDown ? `<button data-act="rowshow" data-keys="${keys}" title="이 줄 5개를 앞면으로 (뒤집기 횟수와 따로 센다)"><i class="fa-solid fa-eye mr-1"></i>이 줄 공개</button>` : ""}
           <button data-act="rowgone" data-keys="${keys}" title="이번 추천 목록에서 이 줄을 치운다 (모든 기기)"><i class="fa-solid fa-xmark mr-1"></i>치우기</button>
@@ -1049,9 +1051,10 @@ function renderDcReco() {
     }));
 
   /* **5개씩 한 줄**로 그린다(2026-09-29) — 줄마다 [이 줄 공개]·[치우기]를 달려면 줄이 화면 폭과
-     상관없이 같아야 한다(폰은 한 줄을 옆으로 민다). 치운 작품은 빼고 나머지로 줄을 다시 채운다. */
+     상관없이 같아야 한다(폰은 한 줄을 옆으로 민다). 치운 줄은 **자리째 빠지고 번호는 그대로**다
+     (1번 줄을 치우면 2번부터 — 다시 채우면 번호가 매번 바뀌어 어디까지 봤는지 헷갈린다). */
   const shownList = list.filter(e => !flip.gone.includes(recoKeyOf(e)));
-  if (data && shownList.length) paintRecoRows(shownList, flip);
+  if (data && shownList.length) paintRecoRows(list, flip);
   else paintDcCards(list, `
     <i class="fa-solid fa-wand-magic-sparkles text-4xl mb-3"></i>
     <p class="font-medium">아직 추천이 없어요</p>
