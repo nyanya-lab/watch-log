@@ -1431,12 +1431,12 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 
 /* ---------- 추천: 5개씩 한 줄 (2026-09-29) ----------
    줄마다 [이 줄 공개]·[치우기]를 달려고 줄을 화면 폭과 상관없이 5개로 고정한다. 폰은 한 줄을 옆으로 민다 */
-#dcGrid.dc-rows { display: flex; flex-direction: column; gap: 18px; }
-.dc-row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
-  padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-.dc-row-no { font-family: var(--font-num); font-size: 18px; color: var(--ink-3); letter-spacing: .04em; line-height: 1; }
+/* 위 여백을 줄였다(2026-09-29 — 바 헤어라인에서 카드까지 57px → 36px 남짓): 줄 머리의 밑줄을 없애고 붙였다 */
+#dcGrid.dc-rows { display: flex; flex-direction: column; gap: 18px; margin-top: 8px; }
+.dc-row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; min-height: 24px; }
+.dc-row-no { font-family: var(--font-num); font-size: 17px; color: var(--ink-3); letter-spacing: .04em; line-height: 1; }
 .dc-row-acts { display: flex; gap: 4px; }
-.dc-row-acts button { font-size: 12px; font-weight: 600; color: var(--ink-3); padding: 4px 8px; border-radius: 6px; }
+.dc-row-acts button { font-size: 12px; font-weight: 600; color: var(--ink-3); padding: 3px 8px; border-radius: 6px; }
 .dc-row-acts button:hover { background: var(--sink); color: var(--ink-2); }
 .dc-row-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; align-items: start; }
 @media (max-width: 639px) {
