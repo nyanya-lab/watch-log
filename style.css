@@ -1428,3 +1428,27 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 .dc-flipin .wl-poster-wrap { animation: dcFlipIn .45s ease-out; }
 @keyframes dcFlipIn { from { transform: rotateY(90deg); } to { transform: rotateY(0); } }
 #dcRecoRevealBtn.on, #dcRecoShuffleBtn.on { color: var(--ac); }
+
+/* ---------- 추천: 5개씩 한 줄 (2026-09-29) ----------
+   줄마다 [이 줄 공개]·[치우기]를 달려고 줄을 화면 폭과 상관없이 5개로 고정한다. 폰은 한 줄을 옆으로 민다 */
+#dcGrid.dc-rows { display: flex; flex-direction: column; gap: 18px; }
+.dc-row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.dc-row-no { font-family: var(--font-num); font-size: 18px; color: var(--ink-3); letter-spacing: .04em; line-height: 1; }
+.dc-row-acts { display: flex; gap: 4px; }
+.dc-row-acts button { font-size: 12px; font-weight: 600; color: var(--ink-3); padding: 4px 8px; border-radius: 6px; }
+.dc-row-acts button:hover { background: var(--sink); color: var(--ink-2); }
+.dc-row-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 639px) {
+  .dc-row-cards { grid-template-columns: repeat(5, 40%); overflow-x: auto; scroll-snap-type: x mandatory;
+    padding-bottom: 4px; }
+  .dc-row-cards > * { scroll-snap-align: start; }
+}
+.dc-rows-foot { font-size: 13px; color: var(--ink-3); text-align: center; padding: 4px 0 8px; }
+.dc-link { color: var(--ac); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+/* 뒷면의 자리 채움 막대 — 앞면의 제목·볼 수 있는 곳·버튼 자리와 높이를 맞춘다 */
+.dc-sk { background: var(--sink); border-radius: 4px; }
+.dc-sk-t { height: 13px; width: 72%; margin: 3px 0 5px; }
+.dc-sk-o { height: 18px; width: 42%; margin: 6px 0 2px; border-radius: 999px; }
+.dc-sk-acts { display: flex; gap: 5px; margin-top: 8px; }
+.dc-sk-acts span { width: 34px; height: 29px; border-radius: 8px; background: var(--sink); }

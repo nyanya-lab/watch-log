@@ -862,9 +862,23 @@ function recoFlipState() {
   const data = loadReco();
   const gen = data ? data.generatedAt : "";
   const f = (State.prefs || {}).recoFlip;
-  return f && f.gen === gen ? { gen, ids: f.ids || [], all: !!f.all } : { gen, ids: [], all: false };
+  return f && f.gen === gen
+    ? { gen, ids: f.ids || [], all: !!f.all, shown: f.shown || [], gone: f.gone || [] }
+    : { gen, ids: [], all: false, shown: [], gone: [] };
 }
-function saveRecoFlip(f) { savePrefs({ recoFlip: { gen: f.gen, ids: f.ids, all: f.all } }); }
+/* `ids` = 한 장씩 뒤집은 것(10번 제한에 센다) / `shown` = [이 줄 공개]로 연 것(따로 센다) /
+   `gone` = [치우기]로 이번 목록에서 치운 것. 전부 prefs라 모든 기기에 따라온다 */
+function saveRecoFlip(f) {
+  savePrefs({ recoFlip: { gen: f.gen, ids: f.ids, all: f.all, shown: f.shown, gone: f.gone } });
+}
+function recoRowAct(kind, keys) {
+  const f = recoFlipState();
+  if (kind === "show") f.shown = [...new Set([...f.shown, ...keys])];
+  else if (kind === "gone") f.gone = [...new Set([...f.gone, ...keys])];
+  else if (kind === "ungone") f.gone = [];
+  saveRecoFlip(f);
+  renderDiscover();
+}
 function flipRecoCard(key) {
   const f = recoFlipState();
   if (f.all || f.ids.includes(key)) return;
@@ -886,6 +900,29 @@ function shuffleReco() {
   toast(again ? "다시 섞었어요" : "랜덤 순서로 바꿨어요");
   saveDcPrefs();
   renderDiscover();
+}
+function paintRecoRows(entries, flip) {
+  Discover._byId = new Map(entries.map(e => [String(e.tmdbId), e]));
+  const grid = $("#dcGrid");
+  grid.classList.remove("dc-tl-on", "dc-grouped");
+  const rows = [];
+  for (let i = 0; i < entries.length; i += 5) rows.push(entries.slice(i, i + 5));
+  grid.innerHTML = rows.map((r, i) => {
+    const keys = r.map(recoKeyOf).join(",");
+    const anyDown = r.some(e => e.facedown);
+    return `<div class="dc-row">
+      <div class="dc-row-head">
+        <span class="dc-row-no">${i + 1}</span>
+        <div class="dc-row-acts">
+          ${anyDown ? `<button data-act="rowshow" data-keys="${keys}" title="이 줄 5개를 앞면으로 (뒤집기 횟수와 따로 센다)"><i class="fa-solid fa-eye mr-1"></i>이 줄 공개</button>` : ""}
+          <button data-act="rowgone" data-keys="${keys}" title="이번 추천 목록에서 이 줄을 치운다 (모든 기기)"><i class="fa-solid fa-xmark mr-1"></i>치우기</button>
+        </div>
+      </div>
+      <div class="dc-row-cards">${r.map(dcCardHtml).join("")}</div>
+    </div>`;
+  }).join("") + (flip.gone.length
+    ? `<div class="dc-rows-foot">치운 작품 ${flip.gone.length}개 · <button class="dc-link" data-ungone>되돌리기</button></div>` : "");
+  $("#dcEmpty").classList.add("hidden");
 }
 function toggleRecoRevealAll() {
   const f = recoFlipState();
@@ -990,29 +1027,39 @@ function renderDcReco() {
          되돌렸다). 흐려지는 건 포스터·제목뿐이라 `보는 중` 배지와 [내 기록] 버튼은 또렷하다. */
       dim: !!(seenRec(c) || isHidden(c.tmdbId, c.mediaType)),
       /* 뒤집힌 카드 — 흐린 카드는 제외(이미 아는 작품), 전체 공개면 전부 앞면 */
-      facedown: !(seenRec(c) || isHidden(c.tmdbId, c.mediaType)) && !flip.all && !flip.ids.includes(recoKeyOf(c)),
+      facedown: !(seenRec(c) || isHidden(c.tmdbId, c.mediaType)) && !flip.all
+        && !flip.ids.includes(recoKeyOf(c)) && !flip.shown.includes(recoKeyOf(c)),
       backMeta: esc([...new Set(genreNamesOf(c.genreIds).flatMap(koGenre))].slice(0, 3).join(" · ")),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
+      /* 버튼은 **아이콘만** 둔다(2026-09-29) — 글자 버튼이 두 줄로 접혀 앞면 카드가 길어지고,
+         그 줄의 뒤집힌 카드들 밑이 통째로 비었다. 뜻은 `title`로 남긴다. */
       actions: seenRec(c) ? [
         { act: "open", id: seenRec(c).id, label: "내 기록", icon: "fa-book-open" }
       ] : isHidden(c.tmdbId, c.mediaType) ? [
         { act: "unhide", label: "되돌리기", icon: "fa-rotate-left" }
       ] : [
-        { act: "wish", label: isWished(c.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
+        { act: "wish", label: "", icon: "fa-bookmark", title: isWished(c.tmdbId) ? "담아둠 — 누르면 뺀다" : "보고싶어요",
           cls: isWished(c.tmdbId) ? "dc-btn-on" : "dc-btn-main" },
         /* 안 본 시즌이 있으면 그 시즌을 미리 골라 등록창을 연다 (이어보기 카드와 같다) */
-        { act: "add", label: "봤어요", icon: "fa-plus", season: nextOf(c) || "" },
+        { act: "add", label: "", icon: "fa-plus", title: "봤어요", season: nextOf(c) || "" },
         { act: "hide", label: "", icon: "fa-ban", cls: "dc-btn-icon", title: "관심없음 — 다시 추천받을 때 빠진다" }
       ],
       _raw: c
     }));
 
-  paintDcCards(list, `
+  /* **5개씩 한 줄**로 그린다(2026-09-29) — 줄마다 [이 줄 공개]·[치우기]를 달려면 줄이 화면 폭과
+     상관없이 같아야 한다(폰은 한 줄을 옆으로 민다). 치운 작품은 빼고 나머지로 줄을 다시 채운다. */
+  const shownList = list.filter(e => !flip.gone.includes(recoKeyOf(e)));
+  if (data && shownList.length) paintRecoRows(shownList, flip);
+  else paintDcCards(list, `
     <i class="fa-solid fa-wand-magic-sparkles text-4xl mb-3"></i>
     <p class="font-medium">아직 추천이 없어요</p>
     <p class="text-sm mt-1">"추천 받기"를 누르면 내 기록을 바탕으로 골라옵니다.</p>`);
   // 흐리게 남은 카드가 몇 개인지 — 다시 추천받으면 이만큼 빠진다
+  if (data && list.length && !shownList.length) {
+    $("#dcGrid").innerHTML = `<div class="dc-rows-foot">줄을 전부 치웠어요 · <button class="dc-link" data-ungone>되돌리기</button> · 또는 [다시 추천받기]</div>`;
+  }
   const nDim = list.filter(e => e.dim).length;
   const flipTxt = !data ? "" : flip.all ? " · 전체 공개" : ` · 뒤집기 ${flip.ids.length}/${RECO_FLIP_MAX}`;
   $("#dcCount").textContent = `${list.length}개${nDim ? ` · 정리 ${nDim}` : ""}${flipTxt}`;
@@ -1525,7 +1572,12 @@ function dcCardHtml(e) {
     <div class="wl-card dc-card dc-back" data-act="flip" data-tid="${e.tmdbId}" data-key="${e.mediaType}:${e.tmdbId}"
          title="눌러서 뒤집기">
       <div class="wl-poster-wrap dc-back-face"><i class="fa-solid fa-clapperboard"></i></div>
-      <div class="wl-body"><div class="wl-meta dc-back-meta">${e.backMeta || "장르 정보 없음"}</div></div>
+      <div class="wl-body">
+        <div class="dc-sk dc-sk-t"></div>
+        <div class="wl-meta dc-back-meta">${e.backMeta || "장르 정보 없음"}</div>
+        <div class="dc-sk dc-sk-o"></div>
+        <div class="dc-sk-acts"><span></span><span></span><span></span></div>
+      </div>
     </div>`;
   const st = myStatus(e.tmdbId, e.mediaType);
   /* **안 본 작품은 TMDB 평점을 가리고, 누르면 그 카드만 보인다**(2026-09-17 요청 — 추천의 전역
@@ -1646,6 +1698,7 @@ function renderDiscover() {
   if (Discover.view !== "person" && $("#dcPersonBar")) $("#dcPersonBar").classList.add("hidden");
   if (Discover.view !== "next" && $("#dcNewBar")) $("#dcNewBar").classList.add("hidden");
   $("#dcGrid").classList.toggle("dc-reco", Discover.view === "reco");
+  $("#dcGrid").classList.toggle("dc-rows", Discover.view === "reco" && !!loadReco());
 
   if (Discover.view === "reco") return renderDcReco();
   if (Discover.view === "wish") return renderDcWish();
@@ -2578,6 +2631,11 @@ function initDiscover() {
   $("#dcRecoRevealBtn")?.addEventListener("click", toggleRecoRevealAll);
   $("#dcRecoShuffleBtn")?.addEventListener("click", shuffleReco);
 
+  // 치운 줄 되돌리기 — 목록 끝의 안내에 뜬다
+  document.addEventListener("click", e => {
+    if (e.target.closest("[data-ungone]")) recoRowAct("ungone");
+  });
+
   $("#dcGrid").addEventListener("click", e => {
     /* 묶음 안 카드를 넘기는 화살표. 카드 바깥이라 detail과 겹치지 않는다 */
     const arrow = e.target.closest(".dc-arrow");
@@ -2593,6 +2651,11 @@ function initDiscover() {
     const entry = Discover._byId.get(String(tid));
 
     if (act === "flip") { flipRecoCard(btn.dataset.key); return; }
+    if (act === "rowshow" || act === "rowgone") {
+      recoRowAct(act === "rowshow" ? "show" : "gone", btn.dataset.keys.split(","));
+      if (act === "rowgone") toast("이 줄을 치웠어요");
+      return;
+    }
     if (act === "detail") { openDcDetail(tid, entry ? entry.mediaType : "movie"); return; }
 
     e.stopPropagation();
