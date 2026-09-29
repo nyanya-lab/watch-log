@@ -25,6 +25,7 @@ const Discover = {
      흐린 카드를 남겨두는 것(`.dc-dim`)도 같은 이유였다(자리가 밀리면 어디까지 봤는지 놓친다).
      ⚠ 기본값을 바꿀 때 아래 **빨간 점 판정**(`renderRecoFilters`의 `on`)과 [초기화]도 같이 바꿀 것. */
   recoDir: "asc",
+  recoSeed: "",      // 랜덤 정렬의 섞는 번호 — prefs로 동기화돼 모든 기기가 같은 순서를 본다
   reco: null,        // 캐시된 추천 결과
   personKind: "actor",   // 인물 뷰: actor=배우 | director=감독
   personName: "",        // 고른 사람 (빈 값이면 아직 안 골랐다)
@@ -627,6 +628,8 @@ function renderRecoFilters(all) {
         <button class="fchip ${Discover.recoSort === "score" ? "on" : ""}" data-rsort="score">추천순${arrow("score")}</button>
         <button class="fchip ${Discover.recoSort === "vote" ? "on" : ""}" data-rsort="vote">★ TMDB 평점${arrow("vote")}</button>
         <button class="fchip ${Discover.recoSort === "title" ? "on" : ""}" data-rsort="title">가나다${arrow("title")}</button>
+        <button class="fchip ${Discover.recoSort === "rand" ? "on" : ""}" data-rsort="rand"
+          title="${Discover.recoSort === "rand" ? "한 번 더 누르면 다시 섞어요" : "순서를 섞어요 (모든 기기에 같은 순서)"}"><i class="fa-solid fa-shuffle mr-1"></i>랜덤${Discover.recoSort === "rand" ? `<i class="fa-solid fa-rotate ml-1 text-[11px]"></i>` : ""}</button>
       </div>
     </div>`;
 
@@ -659,7 +662,7 @@ const RECO_TARGET = 50;   // 한 번에 담는 추천 개수 (2026-09-21에 60 �
    서버 문서에 함께 올린다 — 저장은 `savePrefs`(core.js)가 3초로 몰아서 한 번만 보낸다.
    **보고 있는 뷰·고른 사람·시리즈 선택까지 함께 넘긴다**("다 동기화해줘") — 폰에서 보던 자리에서
    PC가 이어진다. ⚠ 입력 중인 검색어는 넣지 않는다(글자 하나 칠 때마다 올릴 일이 아니다). */
-const DC_PREF_KEYS = ["recoKoPct", "recoSort", "recoDir", "recoType", "recoOtt", "recoOrigin",
+const DC_PREF_KEYS = ["recoKoPct", "recoSort", "recoDir", "recoSeed", "recoType", "recoOtt", "recoOrigin",
                       "view", "personKind", "personName", "personId", "frKey", "frStory"];
 
 function applyDcPrefs() {
@@ -683,6 +686,7 @@ function applyDcPrefs() {
   if (legacy && typeof savePrefs === "function") savePrefs({ recoKoPct: Discover.recoKoPct });
   if (p.recoSort) Discover.recoSort = p.recoSort;
   if (p.recoDir) Discover.recoDir = p.recoDir;
+  if (typeof p.recoSeed === "string") Discover.recoSeed = p.recoSeed;
   if (typeof p.recoType === "string") Discover.recoType = p.recoType;
   if (Array.isArray(p.recoOtt)) Discover.recoOtt = p.recoOtt.slice();
   if (Array.isArray(p.recoOrigin)) Discover.recoOrigin = p.recoOrigin.slice();
@@ -839,6 +843,48 @@ function setRecoKoPct(pct) {
    앱이 구분을 "예능"으로 잡는 기준(`mapType`)과 같은 두 장르다. TV 장르라 영화에는 안 걸린다.
    ① 받아올 때 `without_genres`로 빼고(자리를 예능이 먹지 않게) ② 유사작 추천처럼 거를 수 없는
    응답은 `bump`에서 ③ 그 전에 만든 캐시는 그릴 때 거른다. 검색·인물·보고싶어요는 건드리지 않는다. */
+/* ---------- 랜덤 정렬 · 뒤집어 보기 (2026-09-29 요청) ----------
+   다음에 볼 걸 고를 때 **한 줄에 하나씩** 보려는 사용자라, 추천 카드를 **뒤집어 두고(장르만)
+   직접 한 장씩 뒤집게** 한다. 추천 한 번에 **10번**까지, 넘으면 확인을 받는다.
+   · 흐린 카드(뽑은 뒤 기록했거나 관심없음)는 앞면 그대로 — 이미 아는 작품이다.
+   · 뒤집은 카드·전체 공개 여부는 `prefs.recoFlip`에 남아 **모든 기기에 따라온다**.
+     추천을 새로 뽑으면(`generatedAt`이 바뀌면) 저절로 처음부터다.
+   · 랜덤 순서도 모든 기기에서 같아야 해서, 섞는 번호(`recoSeed`)로 작품마다 고정된 값을 만든다. */
+const RECO_FLIP_MAX = 10;
+const recoKeyOf = (c) => `${c.mediaType}:${c.tmdbId}`;
+function randKey(c) {
+  const str = (Discover.recoSeed || "") + "|" + recoKeyOf(c);
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function recoFlipState() {
+  const data = loadReco();
+  const gen = data ? data.generatedAt : "";
+  const f = (State.prefs || {}).recoFlip;
+  return f && f.gen === gen ? { gen, ids: f.ids || [], all: !!f.all } : { gen, ids: [], all: false };
+}
+function saveRecoFlip(f) { savePrefs({ recoFlip: { gen: f.gen, ids: f.ids, all: f.all } }); }
+function flipRecoCard(key) {
+  const f = recoFlipState();
+  if (f.all || f.ids.includes(key)) return;
+  if (f.ids.length >= RECO_FLIP_MAX && !confirm(
+    `이번 추천에서 뒤집기 ${RECO_FLIP_MAX}번을 다 썼어요.
+그래도 뒤집을까요?`)) return;
+  f.ids.push(key);
+  saveRecoFlip(f);
+  renderDiscover();
+  // 방금 뒤집은 카드만 넘어가는 움직임을 준다
+  const el = document.querySelector(`#dcGrid .dc-card[data-key="${key}"]`);
+  if (el) el.classList.add("dc-flipin");
+}
+function toggleRecoRevealAll() {
+  const f = recoFlipState();
+  f.all = !f.all;
+  saveRecoFlip(f);
+  renderDiscover();
+}
+
 const RECO_SKIP_GENRES = [10764, 10767];   // Reality · Talk
 function isRecoSkipGenre(c) {
   return (c.genreIds || []).some(id => RECO_SKIP_GENRES.includes(id));
@@ -880,6 +926,7 @@ function renderDcReco() {
     if (miss.length) nextNow.set(c.tmdbId, Math.min(...miss));
   });
   const nextOf = (c) => c.mediaType === "tv" ? nextNow.get(c.tmdbId) : null;
+  const flip = recoFlipState();
 
   /* ⚠ **안 본 시즌이 남은 드라마는 "봤어요"로 치지 않는다** — 그 시즌을 보라고
      담은 카드라 흐리게 만들거나 [내 기록] 버튼으로 바꾸면 안 된다(2026-09-21). */
@@ -905,6 +952,8 @@ function renderDcReco() {
       || Discover.recoOrigin.includes(c.origin === "한국" ? "한국" : "외국"))
     .sort((a, b) => {
       const sgn = Discover.recoDir === "asc" ? 1 : -1;
+      if (Discover.recoSort === "rand")
+        return randKey(a) - randKey(b);
       if (Discover.recoSort === "title")
         return sgn * titleSortKey(a.title).localeCompare(titleSortKey(b.title), "ko");
       return Discover.recoSort === "vote"
@@ -931,6 +980,9 @@ function renderDcReco() {
       /* 보는 중인 작품도 **이미 내 기록이라 흐리게 깐다**(2026-09-23 요청 — 잠깐 예외로 뒀다가
          되돌렸다). 흐려지는 건 포스터·제목뿐이라 `보는 중` 배지와 [내 기록] 버튼은 또렷하다. */
       dim: !!(seenRec(c) || isHidden(c.tmdbId, c.mediaType)),
+      /* 뒤집힌 카드 — 흐린 카드는 제외(이미 아는 작품), 전체 공개면 전부 앞면 */
+      facedown: !(seenRec(c) || isHidden(c.tmdbId, c.mediaType)) && !flip.all && !flip.ids.includes(recoKeyOf(c)),
+      backMeta: esc([...new Set(genreNamesOf(c.genreIds).flatMap(koGenre))].slice(0, 3).join(" · ")),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
       actions: seenRec(c) ? [
@@ -953,7 +1005,15 @@ function renderDcReco() {
     <p class="text-sm mt-1">"추천 받기"를 누르면 내 기록을 바탕으로 골라옵니다.</p>`);
   // 흐리게 남은 카드가 몇 개인지 — 다시 추천받으면 이만큼 빠진다
   const nDim = list.filter(e => e.dim).length;
-  if (nDim) $("#dcCount").textContent = `${list.length}개 · 정리 ${nDim}`;
+  const flipTxt = !data ? "" : flip.all ? " · 전체 공개" : ` · 뒤집기 ${flip.ids.length}/${RECO_FLIP_MAX}`;
+  $("#dcCount").textContent = `${list.length}개${nDim ? ` · 정리 ${nDim}` : ""}${flipTxt}`;
+  const rv = $("#dcRecoRevealBtn");
+  if (rv) {
+    rv.classList.toggle("hidden", !data);
+    rv.innerHTML = `<i class="fa-solid ${flip.all ? "fa-eye-slash" : "fa-eye"}"></i>`;
+    rv.title = flip.all ? "다시 가리기 (뒤집은 카드만 남기기)" : "전체 공개 — 모든 카드를 앞면으로";
+    rv.classList.toggle("on", flip.all);
+  }
 }
 
 /* ---------- 영화 시리즈 이어보기 ----------
@@ -1445,6 +1505,13 @@ function frOrder(parts, f, story) {
 /* e = { tmdbId, mediaType, title, poster, year, meta(이스케이프된 HTML — 있으면 year 대신), voteAverage,
          hideVote, dim, note, flag, actions[] } */
 function dcCardHtml(e) {
+  /* 뒤집힌 추천 카드 — **장르만** 보인다. 누르면 뒤집힌다(`flipRecoCard`) */
+  if (e.facedown) return `
+    <div class="wl-card dc-card dc-back" data-act="flip" data-tid="${e.tmdbId}" data-key="${e.mediaType}:${e.tmdbId}"
+         title="눌러서 뒤집기">
+      <div class="wl-poster-wrap dc-back-face"><i class="fa-solid fa-clapperboard"></i><span>뒤집기</span></div>
+      <div class="wl-body"><div class="wl-meta dc-back-meta">${e.backMeta || "장르 정보 없음"}</div></div>
+    </div>`;
   const st = myStatus(e.tmdbId, e.mediaType);
   /* **안 본 작품은 TMDB 평점을 가리고, 누르면 그 카드만 보인다**(2026-09-17 요청 — 추천의 전역
      "평점 숨기기" 버튼을 대체). 본 작품은 이미 내 점수가 있으니 그대로 보인다 */
@@ -1472,7 +1539,7 @@ function dcCardHtml(e) {
     </button>`).join("");
 
   return `
-    <div class="wl-card dc-card${e.dim ? " dc-dim" : ""}" data-act="detail" data-tid="${e.tmdbId}">
+    <div class="wl-card dc-card${e.dim ? " dc-dim" : ""}" data-act="detail" data-tid="${e.tmdbId}" data-key="${e.mediaType}:${e.tmdbId}">
       ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }, hideVote) + flag)}
       <div class="wl-body">
         <div class="wl-title-row">
@@ -2451,8 +2518,16 @@ function initDiscover() {
         : Discover.recoOrigin.concat([v]);
     } else if (chip.dataset.rsort) {
       const v = chip.dataset.rsort;
+      /* 랜덤은 방향이 없다 — 같은 칩을 다시 누르면 **다시 섞는다**. 섞는 번호(`recoSeed`)를 prefs에
+         남기므로 모든 기기가 같은 순서를 본다 */
+      if (v === "rand") {
+        const again = Discover.recoSort === "rand" && Discover.recoSeed;
+        Discover.recoSort = "rand";
+        if (again || !Discover.recoSeed) Discover.recoSeed = Math.random().toString(36).slice(2, 10);
+        if (again) toast("다시 섞었어요");
+      }
       // 같은 칩을 다시 누르면 방향만 뒤집는다 (목록 탭 정렬과 같은 규칙)
-      if (Discover.recoSort === v) Discover.recoDir = Discover.recoDir === "asc" ? "desc" : "asc";
+      else if (Discover.recoSort === v) Discover.recoDir = Discover.recoDir === "asc" ? "desc" : "asc";
       // 가나다는 ㄱ부터, 점수는 높은 것부터가 자연스러운 첫 방향이다
       else { Discover.recoSort = v; Discover.recoDir = v === "title" ? "asc" : "desc"; }
     }
@@ -2485,6 +2560,8 @@ function initDiscover() {
   });
 
   /* 카드/버튼 클릭은 위임으로 한 번에 처리 */
+  $("#dcRecoRevealBtn")?.addEventListener("click", toggleRecoRevealAll);
+
   $("#dcGrid").addEventListener("click", e => {
     /* 묶음 안 카드를 넘기는 화살표. 카드 바깥이라 detail과 겹치지 않는다 */
     const arrow = e.target.closest(".dc-arrow");
@@ -2499,6 +2576,7 @@ function initDiscover() {
     const tid = btn.dataset.tid;
     const entry = Discover._byId.get(String(tid));
 
+    if (act === "flip") { flipRecoCard(btn.dataset.key); return; }
     if (act === "detail") { openDcDetail(tid, entry ? entry.mediaType : "movie"); return; }
 
     e.stopPropagation();
