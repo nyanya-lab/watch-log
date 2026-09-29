@@ -355,6 +355,7 @@ async function runReco() {
 
   const bump = (card, score, reason) => {
     if (!card.tmdbId || !card.poster) return;        // 포스터 없는 건 카드가 허전해서 뺀다
+    if (isRecoSkipGenre(card)) return;               // 리얼리티·토크 예능 (솔로지옥·런닝맨 등)
     const next = card.mediaType === "tv" ? nextSeason.get(card.tmdbId) : null;
     if (seenIds.has(card.tmdbId) && !next) return;   // 다 본 작품 (안 본 시즌이 남았으면 남겨둔다)
     if (next) card.nextSeason = next;
@@ -416,6 +417,7 @@ async function runReco() {
         try {
           const list = await tmdbDiscoverList(mt, {
             with_genres: ids.join("|"),
+            ...(mt === "tv" ? { without_genres: RECO_SKIP_GENRES.join(",") } : {}),
             sort_by: "popularity.desc",
             "vote_average.gte": "7",
             "vote_count.gte": "200"
@@ -439,6 +441,8 @@ async function runReco() {
           try {
             const list = await tmdbDiscoverList(mt, {
               with_original_language: "ko",
+              /* 한국 TV 인기순은 예능이 상위를 채운다 — 받는 단계에서 빼야 자리가 드라마로 찬다 */
+              ...(mt === "tv" ? { without_genres: RECO_SKIP_GENRES.join(",") } : {}),
               sort_by: "popularity.desc",
               "vote_average.gte": "7",
               /* ⚠ 장르 발굴은 200인데 여기는 **50**이다. 한국 작품은 글로벌 투표수가 적어
@@ -831,6 +835,15 @@ function setRecoKoPct(pct) {
   saveDcPrefs();
 }
 
+/* 추천에서 빼는 장르 — **리얼리티·토크 예능**(2026-09-29 요청: 솔로지옥·런닝맨 같은 건 빼 달라).
+   앱이 구분을 "예능"으로 잡는 기준(`mapType`)과 같은 두 장르다. TV 장르라 영화에는 안 걸린다.
+   ① 받아올 때 `without_genres`로 빼고(자리를 예능이 먹지 않게) ② 유사작 추천처럼 거를 수 없는
+   응답은 `bump`에서 ③ 그 전에 만든 캐시는 그릴 때 거른다. 검색·인물·보고싶어요는 건드리지 않는다. */
+const RECO_SKIP_GENRES = [10764, 10767];   // Reality · Talk
+function isRecoSkipGenre(c) {
+  return (c.genreIds || []).some(id => RECO_SKIP_GENRES.includes(id));
+}
+
 function renderDcReco() {
   $("#dcHint").classList.add("hidden");
   $("#dcRecoBar").classList.remove("hidden");
@@ -881,6 +894,7 @@ function renderDcReco() {
 
   const list = all
     .filter(c => !mt || c.mediaType === mt)
+    .filter(c => !isRecoSkipGenre(c))   // 예능 — 이 규칙이 생기기 전 캐시에도 적용된다
     /* 추천은 **국내에서 볼 수 있는 것만** 담는다(`runReco`). 예전 캐시에는 못 보는 것도
        섞여 있으므로 그릴 때 한 번 더 거른다 — 다시 뽑기 전까지 옛 결과가 그대로 뜨기 때문. */
     .filter(c => (c.otts || []).length > 0)
