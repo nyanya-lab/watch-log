@@ -1415,15 +1415,19 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 }
 
 /* ---------- 뒤집힌 추천 카드 (2026-09-29) ----------
-   장르만 보인다. 포스터 자리는 포인트 색 단색 면 */
+   장르만 보인다. 포스터 자리는 아주 옅은 포인트 면 + 물음표 원 */
 .dc-back-face {
   aspect-ratio: 2/3;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  background: var(--ac);   /* 포인트 색 단색 (2026-09-29 — 줄무늬는 정신없다고 해서 뺐다) */
-  color: rgba(255, 255, 255, .9);
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--ac) 7%, #fff);   /* 아주 옅은 포인트 면 + 가운데 물음표 (2026-09-29 고름) */
+  transition: background .15s;
 }
-.dc-back-face i { font-size: 30px; }
-.dc-back:hover .dc-back-face { background: var(--ac-d); color: #fff; }
+.dc-back-face i {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--ac-soft); color: var(--ac); font-size: 17px;
+}
+.dc-back:hover .dc-back-face { background: color-mix(in srgb, var(--ac) 12%, #fff); }
 .dc-back-meta { font-weight: 600; color: var(--ink-2); }
 .dc-flipin .wl-poster-wrap { animation: dcFlipIn .45s ease-out; }
 @keyframes dcFlipIn { from { transform: rotateY(90deg); } to { transform: rotateY(0); } }

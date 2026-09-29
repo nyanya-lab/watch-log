@@ -1524,7 +1524,7 @@ function dcCardHtml(e) {
   if (e.facedown) return `
     <div class="wl-card dc-card dc-back" data-act="flip" data-tid="${e.tmdbId}" data-key="${e.mediaType}:${e.tmdbId}"
          title="눌러서 뒤집기">
-      <div class="wl-poster-wrap dc-back-face"><i class="fa-solid fa-clapperboard"></i></div>
+      <div class="wl-poster-wrap dc-back-face"><i class="fa-solid fa-question"></i></div>
       <div class="wl-body"><div class="wl-meta dc-back-meta">${e.backMeta || "장르 정보 없음"}</div></div>
     </div>`;
   const st = myStatus(e.tmdbId, e.mediaType);
