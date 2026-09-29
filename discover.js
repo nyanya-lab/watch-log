@@ -878,6 +878,15 @@ function flipRecoCard(key) {
   const el = document.querySelector(`#dcGrid .dc-card[data-key="${key}"]`);
   if (el) el.classList.add("dc-flipin");
 }
+/* 섞기 버튼(밖) — 랜덤이 아니면 랜덤으로, 이미 랜덤이면 **다시 섞는다**. 필터 팝업의 `랜덤` 칩과 같은 일 */
+function shuffleReco() {
+  const again = Discover.recoSort === "rand" && Discover.recoSeed;
+  Discover.recoSort = "rand";
+  if (again || !Discover.recoSeed) Discover.recoSeed = Math.random().toString(36).slice(2, 10);
+  toast(again ? "다시 섞었어요" : "랜덤 순서로 바꿨어요");
+  saveDcPrefs();
+  renderDiscover();
+}
 function toggleRecoRevealAll() {
   const f = recoFlipState();
   f.all = !f.all;
@@ -1007,6 +1016,12 @@ function renderDcReco() {
   const nDim = list.filter(e => e.dim).length;
   const flipTxt = !data ? "" : flip.all ? " · 전체 공개" : ` · 뒤집기 ${flip.ids.length}/${RECO_FLIP_MAX}`;
   $("#dcCount").textContent = `${list.length}개${nDim ? ` · 정리 ${nDim}` : ""}${flipTxt}`;
+  const sh = $("#dcRecoShuffleBtn");
+  if (sh) {
+    sh.classList.toggle("hidden", !data);
+    sh.classList.toggle("on", Discover.recoSort === "rand");
+    sh.title = Discover.recoSort === "rand" ? "다시 섞기" : "랜덤 순서로 섞기";
+  }
   const rv = $("#dcRecoRevealBtn");
   if (rv) {
     rv.classList.toggle("hidden", !data);
@@ -1509,7 +1524,7 @@ function dcCardHtml(e) {
   if (e.facedown) return `
     <div class="wl-card dc-card dc-back" data-act="flip" data-tid="${e.tmdbId}" data-key="${e.mediaType}:${e.tmdbId}"
          title="눌러서 뒤집기">
-      <div class="wl-poster-wrap dc-back-face"><i class="fa-solid fa-clapperboard"></i><span>뒤집기</span></div>
+      <div class="wl-poster-wrap dc-back-face"><i class="fa-solid fa-clapperboard"></i></div>
       <div class="wl-body"><div class="wl-meta dc-back-meta">${e.backMeta || "장르 정보 없음"}</div></div>
     </div>`;
   const st = myStatus(e.tmdbId, e.mediaType);
@@ -2561,6 +2576,7 @@ function initDiscover() {
 
   /* 카드/버튼 클릭은 위임으로 한 번에 처리 */
   $("#dcRecoRevealBtn")?.addEventListener("click", toggleRecoRevealAll);
+  $("#dcRecoShuffleBtn")?.addEventListener("click", shuffleReco);
 
   $("#dcGrid").addEventListener("click", e => {
     /* 묶음 안 카드를 넘기는 화살표. 카드 바깥이라 detail과 겹치지 않는다 */
