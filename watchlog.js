@@ -567,6 +567,29 @@ function fmtRating(n) {
 /* 카드 포스터 블록 — 목록 카드·시리즈 카드·탐색 카드가 **모두 같은 구조**를 쓴다.
    포스터가 없을 때의 대체 표시가 세 곳에 흩어져 있으면 한 곳만 고치는 실수가 난다.
    오버레이(평점 띠·시즌·편수·flag)는 카드마다 달라서 그대로 받아 얹는다. */
+/* 큰 가로 사진 — **2시즌 이상인 기록은 그 시즌 1화 장면**(`seasonBackdrop`)을 먼저 쓴다(2026-10-01).
+   작품 backdrop은 시즌 구분이 없어서 드림하이 S2 배너에 드림하이 1 사진이 깔렸다.
+   홈 배너·상세 위쪽 사진이 이 함수 하나를 쓴다. */
+const seasonNoOf = (i) => parseInt(String(i.season || "").replace(/\D/g, "")) || 0;
+function heroImg(i) { return i.seasonBackdrop || i.backdrop || ""; }
+/* 장면 사진을 아직 안 받아본 시즌 기록이면 **한 번** 받아서 저장한다(받으면 다시 그린다).
+   `seasonBackdrop`이 ""면 "그 시즌엔 장면 사진이 없다"로 확정된 것이라 다시 묻지 않는다.
+   S1은 작품 사진이 대개 맞으므로 건드리지 않는다. */
+const _stillAsk = new Set();
+function ensureSeasonStill(i) {
+  if (!i || i.seasonBackdrop !== undefined || !i.tmdbId || mediaTypeOf(i) !== "tv") return;
+  if (seasonNoOf(i) < 2 || _stillAsk.has(i.id) || !getTmdbKey()) return;
+  _stillAsk.add(i.id);
+  tmdbSeasonStill(i.tmdbId, seasonNoOf(i)).then(url => {
+    if (url === null) { _stillAsk.delete(i.id); return; }   // 실패 — 다음에 다시
+    i.seasonBackdrop = url;
+    saveLocal();
+    if (typeof renderHome === "function") renderHome();
+    const hero = document.querySelector(`#detailModal:not(.hidden) .dt-hero[data-id="${i.id}"]`);
+    if (hero && url) hero.style.backgroundImage = `url('${url}')`;
+  });
+}
+
 function posterBlock(src, overlay) {
   return `<div class="wl-poster-wrap">
         ${src
@@ -1345,8 +1368,9 @@ function openDetail(id) {
 
   /* 위쪽 가로 사진은 **원래 비율(16:9) 그대로** 보여준다(`.dt-hero`). 예전엔 높이 128px 띠라
      가로 사진의 절반 넘게 잘렸다(2026-09-17 지적). 탐색 미리보기(`renderDcDetail`)도 같다 */
-  const header = i.backdrop
-    ? `<div class="dt-hero" style="background-image:url('${i.backdrop.replace("/w500/", "/w780/")}')">
+  ensureSeasonStill(i);
+  const header = heroImg(i)
+    ? `<div class="dt-hero" data-id="${i.id}" style="background-image:url('${heroImg(i).replace("/w500/", "/w780/")}')">
          <div class="dt-hero-fade"></div>
          <button onclick="document.getElementById('detailModal').classList.add('hidden')"
            class="modal-x absolute top-3 right-3" style="background:rgba(255,255,255,.85)"><i class="fa-solid fa-xmark"></i></button>
@@ -1359,12 +1383,12 @@ function openDetail(id) {
 
   $("#detailContent").innerHTML = `
     ${header}
-    <div class="p-5 ${i.backdrop ? "dt-over" : ""}">
+    <div class="p-5 ${heroImg(i) ? "dt-over" : ""}">
       <div class="flex gap-4 mb-4">
         ${i.poster
           ? `<img src="${i.poster}" class="w-24 rounded-lg object-cover self-start" alt="">`
           : `<div class="w-24 aspect-[2/3] rounded-lg bg-slate-200 flex items-center justify-center text-slate-400"><i class="fa-solid fa-film text-2xl"></i></div>`}
-        <div class="flex-1 min-w-0 ${i.backdrop ? "dt-over-t" : ""}">
+        <div class="flex-1 min-w-0 ${heroImg(i) ? "dt-over-t" : ""}">
           <h4 class="dt-title">
             ${esc(i.title)}
             ${i.cert ? `<span class="badge badge-cert align-middle ml-1">${esc(certLabel(i.cert))}</span>` : ""}
@@ -1606,6 +1630,11 @@ async function refreshTmdbInDetail(btn, itemId) {
     const epNo = parseInt(String(i.season || "").replace(/\D/g, "")) || 0;
     const epSn = epNo && (d.seasons || []).find(s => s.number === epNo);
     if (epSn && epSn.episodes) i.seasonEpisodes = epSn.episodes;
+    // 2시즌 이상이면 그 시즌 1화 장면 사진도 다시 받는다 (조회 실패면 있던 값 그대로)
+    if (epNo >= 2) {
+      const still = await tmdbSeasonStill(i.tmdbId, epNo);
+      if (still !== null) i.seasonBackdrop = still;
+    }
 
     saveLocal();
     applyFilters();
@@ -2017,7 +2046,11 @@ function saveItem() {
   }
 
   if (State.editingId) {
-    Object.assign(State.items.find(x => x.id === State.editingId), base);
+    const old = State.items.find(x => x.id === State.editingId);
+    /* 시즌이나 작품을 바꿨으면 받아둔 시즌 장면 사진은 남의 것이다 — 비워서 다시 받게 한다 */
+    if (old && (old.season !== base.season || (base.tmdbId && old.tmdbId !== base.tmdbId)))
+      base.seasonBackdrop = undefined;
+    Object.assign(old, base);
     toast("수정되었습니다", "success");
   } else {
     State.items.unshift({
@@ -2526,6 +2559,14 @@ async function runRefreshAll() {
           if (sn.episodes) {
             put(p, "시즌 화수", i.seasonEpisodes ?? null, sn.episodes, { seasonEpisodes: sn.episodes });
           }
+          /* 2시즌 이상이면 그 시즌 1화 장면 사진 — 홈 배너·상세 위쪽 사진이 쓴다 */
+          if (no >= 2) {
+            const still = await tmdbSeasonStill(i.tmdbId, no);
+            if (still && differs(i.seasonBackdrop || null, still)) {
+              p.diff.push({ label: "시즌 장면 사진", from: i.seasonBackdrop || "", to: still,
+                            keys: { seasonBackdrop: still }, img: "wide" });
+            }
+          }
         }
       }
 
@@ -2624,7 +2665,7 @@ function showRefreshPreview(plan, unsure, fail) {
   const val = (v) => (v === "" || v == null) ? "(없음)" : esc(String(v));
   /* 포스터처럼 주소를 글자로 보여줘야 알 수 없는 값은 그림으로 그린다 (`c.img`) */
   const cell = (c, v, cls) => c.img
-    ? (v ? `<img class="rf-thumb ${cls}" src="${esc(v)}" alt="" loading="lazy">`
+    ? (v ? `<img class="rf-thumb${c.img === "wide" ? " rf-thumb-w" : ""} ${cls}" src="${esc(c.img === "wide" ? v.replace("/original/", "/w300/") : v)}" alt="" loading="lazy">`
          : `<span class="${cls}">(없음)</span>`)
     : `<span class="${cls}">${val(v)}</span>`;
   const rows = [...groups].map(([label, list]) => `

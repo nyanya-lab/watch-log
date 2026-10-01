@@ -222,6 +222,23 @@ async function tmdbGenreMap() {
 }
 
 /* ---------- 한국 스트리밍(OTT) 판별 ---------- */
+/* 그 시즌 **1화 장면 사진** — TMDB에는 시즌별 가로 이미지(backdrop)가 없다(2026-10-01).
+   작품 backdrop은 하나뿐이라 드림하이 S2 기록의 배너에 드림하이 1 사진이 깔렸다.
+   돌려주는 값: 주소 = 찾음 / "" = 그 시즌엔 장면 사진이 없다(확정) / null = 조회 실패(다음에 다시).
+   장면 사진은 크기 목록이 포스터·backdrop과 달라서(w300·original) 원본을 쓴다. */
+async function tmdbSeasonStill(tvId, seasonNo) {
+  const key = getTmdbKey();
+  if (!key || !tvId || !seasonNo) return null;
+  try {
+    const res = await fetch(`${TMDB_BASE}/tv/${tvId}/season/${seasonNo}?api_key=${key}&language=ko-KR`);
+    if (!res.ok) return res.status === 404 ? "" : null;
+    const d = await res.json();
+    const ep = (d.episodes || []).filter(e => e.still_path)
+      .sort((a, b) => (a.episode_number || 0) - (b.episode_number || 0))[0];
+    return ep ? "https://image.tmdb.org/t/p/original" + ep.still_path : "";
+  } catch { return null; }
+}
+
 async function tmdbProviders(id, mediaType) {
   try {
     const key = getTmdbKey();

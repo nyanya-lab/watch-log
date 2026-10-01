@@ -1054,6 +1054,7 @@ button.yr-bar:hover .b { background: var(--ac-d); }
   width: 34px; height: 51px; object-fit: cover; border-radius: 4px;
   background: var(--line); display: inline-block; vertical-align: middle;
 }
+.rf-thumb-w { width: 72px; height: 40px; }   /* 시즌 장면 사진(가로) */
 img.rf-a { opacity: .5; }
 img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 

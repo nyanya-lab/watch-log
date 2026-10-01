@@ -56,9 +56,11 @@ function heroHtml(w, cls) {
     : (!i.rating
         ? `<button class="btn btn-primary" data-rate="${esc(i.id)}"><i class="fa-solid fa-heart"></i>별점 남기기</button>`
         : "");
+  ensureSeasonStill(i);   // 2시즌 이상이면 그 시즌 장면 사진을 한 번 받아온다 (받으면 다시 그린다)
+  const bd = heroImg(i);
   return `<section class="hm-hero ${cls || ""}">
-    ${i.backdrop ? `<div class="hm-bd-fill" style="background-image:url('${esc(i.backdrop)}')" aria-hidden="true"></div>
-      <img class="hm-bd" src="${esc(bigImg(i.backdrop))}" alt="">` : ""}
+    ${bd ? `<div class="hm-bd-fill" style="background-image:url('${esc(bd)}')" aria-hidden="true"></div>
+      <img class="hm-bd" src="${esc(bigImg(bd))}" alt="">` : ""}
     <div class="hm-hero-in">
       ${i.poster ? `<img class="hm-hero-poster" src="${esc(i.poster)}" alt="" data-open="${esc(i.id)}">` : ""}
       <div style="min-width:0">
