@@ -224,6 +224,38 @@ function myStatus(tmdbId, mediaType) {
 
 /* ---------- 이어보기 목록 ----------
    시즌이 2개 이상인데 일부만 본 작품. (예: 총 2시즌인데 S1만 기록됨 → S2 안 봄) */
+/* **저장된 시즌 수가 아직 방영 안 한 시즌까지 세고 있으면 저절로 고친다**(2026-10-05).
+   `tmdbDetail`이 방영한 시즌만 세게 된 건 2026-09-28부터라, 그 전에 저장한 기록은 발표만 된 시즌까지
+   들어 있다(무빙·지금 우리 학교는 S2). 손으로 [TMDB 새로고침]을 누르기 전까지 추천·이어보기에
+   `S2 안 봄`이 떴다. 그래서 **안 본 시즌이 있다고 나온 드라마만** 화면에 그릴 때 한 번 확인한다.
+   · `mediaType`이 **저장된** tv 기록만 — 짐작으로 조회해 남의 작품 값을 넣지 않는다.
+   · **줄이기만** 한다. 늘어난 건 [새로 나온 시즌 확인]이 `새 시즌` 배지와 함께 할 일이다.
+   · 세션마다 작품당 한 번, 240ms 간격으로 하나씩. 고친 게 있으면 저장하고 다시 그린다. */
+const _airChecked = new Set();
+let _airChecking = false;
+async function verifyAiredSeasons(list) {
+  if (_airChecking || !getTmdbKey()) return;
+  const todo = list.filter(c => c.item && c.item.mediaType === "tv" && !_airChecked.has(c.tmdbId));
+  if (!todo.length) return;
+  _airChecking = true;
+  let changed = false;
+  for (const c of todo) {
+    _airChecked.add(c.tmdbId);
+    try {
+      const d = await tmdbDetail(c.tmdbId, "tv");
+      const recs = State.items.filter(i => i.tmdbId === c.tmdbId && i.mediaType === "tv");
+      const stored = Math.max(...recs.map(i => i.totalSeasons || 0), 0);
+      if (d && d.totalSeasons && d.totalSeasons < stored) {
+        recs.forEach(i => { i.totalSeasons = d.totalSeasons; if (d.totalEpisodes) i.totalEpisodes = d.totalEpisodes; });
+        changed = true;
+      }
+    } catch { _airChecked.delete(c.tmdbId); }   // 실패는 다음에 다시
+    await new Promise(r => setTimeout(r, 240));
+  }
+  _airChecking = false;
+  if (changed) { saveLocal(); applyFilters(); renderDiscover(); }
+}
+
 function continueList() {
   const byId = new Map();
   State.items.forEach(i => {
@@ -967,6 +999,7 @@ function renderDcReco() {
   /* ⚠ 카드에 저장된 `nextSeason`은 **추천을 뽑던 때의 값**이라, 그 시즌을 보기 시작하면 낡는다
      (2026-09-23: 경이로운 소문 S2를 보는 중인데 카드는 아직 `S2 안 봄`이었다).
      그래서 **그릴 때마다 지금 기록으로 다시 센다** — 캐시 값은 쓰지 않는다. */
+  verifyAiredSeasons(continueList());   // 방영 안 한 시즌이 섞인 옛 기록을 한 번 확인해 고친다 (기다리지 않는다)
   const nextNow = new Map();
   continueList().forEach(c => {
     if (c.mediaType !== "tv") return;
@@ -1738,6 +1771,7 @@ function newBadge(mark, label) {
 /* 이어보기 — TV의 안 본 시즌 + 영화 시리즈의 안 본 편을 함께 */
 function renderDcNext() {
   $("#dcHint").classList.add("hidden");
+  verifyAiredSeasons(continueList());   // 위 renderDcReco와 같다
 
   // TV: 안 본 시즌
   const tv = continueList().map(c => {
