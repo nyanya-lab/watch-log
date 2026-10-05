@@ -19,7 +19,7 @@ const Discover = {
      (`RECO_TARGET`이 바뀌면 저장된 퍼센트 그대로 새 개수가 나온다). */
   recoKoPct: 70,
   recoKo: 35,
-  recoSort: "title", // title=가나다순(기본) | vote=TMDB 평점순 | score=내 취향 추천순
+  recoSort: "rand",  // rand=랜덤(기본, 2026-10-05) | title=가나다순 | vote=TMDB 평점순 | score=내 취향 추천순
   /* **기본은 가나다순**(2026-09-21 요청). 담기는 50개는 이미 내 취향으로 고른 것이라
      그 안에서는 순위보다 **한 줄씩 훑어 내려가기 좋은 순서**가 낫다 —
      흐린 카드를 남겨두는 것(`.dc-dim`)도 같은 이유였다(자리가 밀리면 어디까지 봤는지 놓친다).
@@ -742,7 +742,9 @@ function renderRecoFilters(all) {
 
   // 팝업을 닫아둬도 뭔가 걸려 있으면 아이콘에 점을 찍어 알린다 (목록 탭 필터 버튼과 같은 방식)
   const on = Discover.recoType || Discover.recoOtt.length || Discover.recoOrigin.length
-    || Discover.recoSort !== "title" || Discover.recoDir !== "asc";
+    /* 기본 정렬은 **랜덤**(2026-10-05 요청 — 랜덤으로 두면 필터를 건 것처럼 빨간 점이 떴다).
+       랜덤은 방향이 없으므로 방향은 따지지 않는다 */
+    || Discover.recoSort !== "rand";
   const dot = $("#dcRecoDot");
   if (dot) dot.classList.toggle("hidden", !on);
 }
@@ -2672,7 +2674,7 @@ function initDiscover() {
   $("#applyRecoFilter").addEventListener("click", closeRecoFilter);
   onBackdropClose("#dcRecoModal", closeRecoFilter);
   $("#resetRecoFilter").addEventListener("click", () => {
-    Object.assign(Discover, { recoType: "", recoOtt: [], recoOrigin: [], recoSort: "title", recoDir: "asc" });
+    Object.assign(Discover, { recoType: "", recoOtt: [], recoOrigin: [], recoSort: "rand", recoDir: "asc" });
     saveDcPrefs();
     renderDiscover();
   });
