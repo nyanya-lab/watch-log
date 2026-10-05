@@ -544,6 +544,79 @@ async function runReco() {
     const picked = new Set();
     let checked = 0, koN = 0, fgN = 0;
 
+    /* ---- 영화 시리즈는 **한 시리즈에 한 편, 그것도 내가 안 본 편 중 가장 앞편**으로 바꿔 담는다 (2026-10-05) ----
+       위 `pool`은 캐시가 아는 시리즈만, 그것도 **후보 중에서** 가장 앞편을 남긴다. 그래서 캐시에 없는 시리즈는
+       후보로 온 편이 그대로 담겼다 — 스타워즈를 한 편도 안 봤는데 9편이 추천에 들어갔다(사용자 지적:
+       "하나도 안 봤으면 1부터, 한 번 추천에 그 시리즈는 하나만").
+       · 캐시에 없는 영화는 `tmdbDetail` 1회로 컬렉션을 알아내고, 편 목록은 `tmdbCollection`으로 받아 캐시에 남긴다
+         (다음 추천부터는 조회가 안 는다). 이 확인은 **담을지 따져볼 영화에만** 한다.
+       · 고르는 편 = 개봉했고 · 내 기록에 없고(번호판 또는 편 번호로) · 관심없음이 아닌 편 중 **가장 앞편**.
+         프랜차이즈(MCU 등)는 개봉일 순 목록에서 같은 규칙.
+       · 후보가 그 편이 아니면 **그 편으로 갈아끼운다**(포스터·제목·평점은 그 편 것, 장르는 같은 시리즈라 후보 것을 쓴다).
+       · 그 시리즈를 다 봤거나 남은 편이 전부 관심없음이면 담지 않는다. */
+    const today = new Date().toISOString().slice(0, 10);
+    const pickedSeries = new Set();
+    const headMemo = new Map();
+    const pause = () => new Promise(r => setTimeout(r, 240));
+    const nextUnseen = (parts, seenNo) => parts
+      .filter(p => p.tmdbId && p.releaseDate && p.releaseDate <= today)
+      .find(p => !seenIds.has(p.tmdbId) && !(seenNo && seenNo.has(p.no)) && !isHidden(p.tmdbId, "movie"));
+    const seriesHead = async (c) => {
+      if (c.mediaType !== "movie") return null;
+      if (headMemo.has(c.tmdbId)) return headMemo.get(c.tmdbId);
+      let out = null;
+      const e = seriesOf.get(c.tmdbId);
+      let parts = null, key = null, seenNo = null;
+      if (e && e.key[0] === "f") {
+        key = e.key;
+        parts = ((frCache[e.key.slice(1)] || {}).parts || []).slice()
+          .sort((a, b) => (a.releaseDate || "").localeCompare(b.releaseDate || ""));
+      } else {
+        let cid = e ? e.key.slice(1) : null;
+        if (!cid) {
+          try { const d = await tmdbDetail(c.tmdbId, "movie"); cid = d && d.collectionId ? String(d.collectionId) : null; }
+          catch { /* 모르면 단독 영화로 친다 */ }
+          await pause();
+        }
+        if (cid) {
+          key = "c" + cid;
+          let info = getCollCache()[cid];
+          if (!info || !info.parts) {
+            try { info = await tmdbCollection(cid); saveCollInfo(info); } catch { info = null; }
+            await pause();
+          }
+          parts = info && info.parts ? info.parts : null;
+          seenNo = new Set(State.items.filter(i => String(i.collectionId || "") === cid)
+            .map(i => i.seriesNo).filter(Boolean));
+        }
+      }
+      if (key) {
+        const nx = parts ? nextUnseen(parts, seenNo) : c;     // 편 목록을 못 받으면 후보 그대로
+        if (!nx) out = { key, card: null };
+        else if (nx === c || nx.tmdbId === c.tmdbId) out = { key, card: c };
+        else {
+          let d2 = null;
+          try { d2 = await tmdbDetail(nx.tmdbId, "movie"); } catch { /* 없으면 목록 정보만 */ }
+          await pause();
+          out = { key, card: { ...c, tmdbId: nx.tmdbId, title: nx.title || (d2 && d2.title) || c.title,
+            originalTitle: (d2 && d2.originalTitle) || "", poster: nx.poster || (d2 && d2.poster) || c.poster,
+            year: (nx.releaseDate || "").slice(0, 4), overview: (d2 && d2.overview) || "",
+            voteAverage: d2 ? d2.voteAverage : null, otts: undefined } };
+        }
+      }
+      headMemo.set(c.tmdbId, out);
+      return out;
+    };
+    /* 시리즈 규칙을 거쳐 한 건 담아본다 */
+    const tryPickSeries = async (c) => {
+      const h = await seriesHead(c);
+      if (!h) return tryPick(c);
+      if (!h.card || pickedSeries.has(h.key) || picked.has(h.card.tmdbId)) return false;
+      const ok = await tryPick(h.card);
+      if (ok) pickedSeries.add(h.key);
+      return ok;
+    };
+
     /* 한 건 확인하고 담기. 담았으면 true. */
     const tryPick = async (c) => {
       checked++;
@@ -566,7 +639,7 @@ async function runReco() {
       const isKo = c.origin === "한국";
       if (isKo && koN >= KO_TARGET) continue;
       if (!isKo && fgN >= TARGET - KO_TARGET) continue;
-      await tryPick(c);
+      await tryPickSeries(c);
     }
 
     /* 한쪽이 몫을 못 채웠으면(안 본 한국 작품이 그만큼 없는 경우) **남는 자리는 다른 쪽으로 메운다.**
@@ -575,7 +648,9 @@ async function runReco() {
       for (const c of pool) {
         if (list.length >= TARGET || checked >= MAX_CALLS) break;
         if (picked.has(c.tmdbId) || c.otts) continue;   // 이미 담았거나 이미 확인한 것
-        await tryPick(c);
+        const h = headMemo.get(c.tmdbId);
+        if (h && (!h.card || pickedSeries.has(h.key) || h.card.otts)) continue;   // 그 시리즈는 이미 따져봤다
+        await tryPickSeries(c);
       }
     }
 
