@@ -844,6 +844,10 @@ gap을 주면 "미등록/265/개"가 각각 flex 항목이 되어 숫자 앞뒤�
 전부 로컬 기록으로 그린다(TMDB 호출 없음). `applyFilters` 끝에서 `renderHome()`을 부르는데
 **홈이 숨어 있으면 바로 돌아간다** — 탭을 열 때(`initTabs`) 다시 그린다. 클릭은 `#tab-home` 위임 하나(`initHome`).
 
+- **맨 위 [최신 정보로 갱신] 알림 한 줄**(`refreshNoticeHtml`, 2026-10-05 요청): 마지막 갱신(`watchlog_updated_at`의
+  refresh·옛 ott/rating/collection 중 최근)이 **30일**(`REFRESH_DAYS`)을 넘거나 한 번도 안 했으면 뜬다. TMDB 키가 없는 기기엔 안 뜬다.
+  [지금 갱신] = 설정 탭으로 가서 `runRefreshAll`(미리보기를 거친다 — 자동으로 바꾸지 않는다) ·
+  [나중에] = `prefs.refreshSnooze`에 7일 뒤를 적는다(동기화). 오래된 정보 사고(무빙·지금 우리 학교는 S2)가 계기.
 - 머리: 오늘 날짜 · `올해 N편째 보고 있어요`(`startDate` 기준) · 전체 기록 / 이번 달(`recDate` 기준).
 - 배너 제목(디필레이아)은 글자 왼쪽 여백이 있어 안으로 들어가 보이므로 아래 줄(`.hm-meta`·`.hm-since`)을 3px 들여 쓴다.
 - **보는 중 배너**(`heroArea`): 0개 = 가장 최근에 본 작품(별점 없으면 [별점 남기기]) / 1개 = 큰 배너 /

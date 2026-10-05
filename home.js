@@ -104,6 +104,32 @@ function heroArea(ws, latest) {
   </div>${dots}`;
 }
 
+/* ---------- [최신 정보로 갱신] 알림 (2026-10-05) ----------
+   저장된 OTT·평점·시즌 수는 등록 때 값이라 시간이 지나면 어긋난다(무빙·지금 우리 학교는 S2 사례).
+   마지막 갱신이 `REFRESH_DAYS`일을 넘으면 홈 맨 위에 한 줄 띄운다. **자동으로 돌리지는 않는다** —
+   [지금 갱신]은 설정의 [최신 정보로 갱신]과 똑같이 미리보기를 거친다("보여주고 나서 하기").
+   마지막 실행 시각(`watchlog_updated_at`)은 캐시로 동기화되고, [나중에](`prefs.refreshSnooze`)도 동기화된다. */
+const REFRESH_DAYS = 30, REFRESH_SNOOZE_DAYS = 7;
+function refreshNoticeHtml() {
+  if (!State.items.length || !getTmdbKey()) return "";        // 키가 없으면 돌릴 수도 없다
+  const u = getUpd();
+  const last = [u.refresh, u.ott, u.rating, u.collection].filter(Boolean).sort().pop();
+  const days = last ? Math.floor((Date.now() - Date.parse(last)) / 86400000) : null;
+  if (days !== null && days < REFRESH_DAYS) return "";
+  const snooze = (State.prefs || {}).refreshSnooze;
+  if (snooze && Date.now() < Date.parse(snooze)) return "";
+  const msg = days === null ? "최신 정보로 갱신을 아직 한 번도 안 했어요"
+                            : `최신 정보로 갱신한 지 <b>${days}일</b> 됐어요`;
+  return `<div class="hm-notice">
+    <i class="fa-solid fa-rotate"></i>
+    <span>${msg}<span class="hm-notice-sub"> · 볼 수 있는 곳·평점·시즌 정보가 바뀌었을 수 있어요</span></span>
+    <div class="hm-notice-acts">
+      <button class="btn btn-primary" data-refresh-now>지금 갱신</button>
+      <button class="btn hm-notice-later" data-refresh-later>나중에</button>
+    </div>
+  </div>`;
+}
+
 function renderHome() {
   const box = $("#tab-home");
   if (!box || box.classList.contains("hidden")) return;
@@ -144,6 +170,7 @@ function renderHome() {
   const [, mm, dd] = today.split("-").map(Number);
 
   box.innerHTML = `
+    ${refreshNoticeHtml()}
     <div class="hm-greet">
       <div>
         <div class="hm-eyebrow">${y}년 ${mm}월 ${dd}일</div>
@@ -287,6 +314,12 @@ function initHome() {
       if (p.mode === "rated") list = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating);
       else list.sort((a, b) => recDate(b).localeCompare(recDate(a)));
       return showWorksPopup(`${p.label} · ${p.mode === "rated" ? "별점 높은 순" : "본 작품"}`, p.sub, list);
+    }
+    if ((el = t("[data-refresh-now]"))) { window.showTab("settings"); return runRefreshAll(); }
+    if ((el = t("[data-refresh-later]"))) {
+      savePrefs({ refreshSnooze: new Date(Date.now() + REFRESH_SNOOZE_DAYS * 86400000).toISOString() });
+      toast(`${REFRESH_SNOOZE_DAYS}일 뒤에 다시 알려드릴게요`);
+      return renderHome();
     }
     if ((el = t("[data-finish]"))) return finishWatching(el.dataset.finish);
     if ((el = t("[data-rate]"))) return rateOne(el.dataset.rate);

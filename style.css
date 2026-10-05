@@ -1453,3 +1453,19 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 .dc-sk-o { height: 18px; width: 42%; margin: 6px 0 2px; border-radius: 999px; }
 .dc-sk-acts { display: flex; gap: 5px; margin-top: 8px; }
 .dc-sk-acts span { width: 34px; height: 29px; border-radius: 8px; background: var(--sink); }
+
+/* ---------- 홈 맨 위 [최신 정보로 갱신] 알림 한 줄 (2026-10-05) ---------- */
+.hm-notice { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; padding: 10px 12px 10px 14px;
+  border-radius: 10px; background: var(--ac-soft); color: var(--ink); font-size: 13.5px; font-weight: 600; }
+.hm-notice > i { color: var(--ac); }
+.hm-notice > span { flex: 1; min-width: 0; }
+.hm-notice b { color: var(--ac-d); }
+.hm-notice-sub { color: var(--ink-2); font-weight: 500; }
+.hm-notice-acts { display: flex; gap: 6px; flex-shrink: 0; }
+.hm-notice-acts .btn { padding: 6px 12px; font-size: 12.5px; }
+.hm-notice-later { background: #fff; }
+@media (max-width: 639px) {
+  .hm-notice { flex-wrap: wrap; }
+  .hm-notice-sub { display: none; }
+  .hm-notice-acts { width: 100%; justify-content: flex-end; }
+}
