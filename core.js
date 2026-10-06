@@ -740,6 +740,26 @@ function initVisibilitySync() {
   };
   document.addEventListener("visibilitychange", check);
   window.addEventListener("focus", check);
+
+  /* **열어둔 채로 있는 PC를 위한 1분 확인**(2026-10-06). 실시간 연결이 조용히 끊겨도(절전·와이파이 재연결)
+     창이 계속 앞에 떠 있으면 위 visibility/focus가 안 일어나서, 옛 데이터를 들고 있다가 그걸로 덮을 수 있었다.
+     `updatedAt` 숫자 하나만 받는 작은 요청이다. 끊긴 스트림도 다시 붙인다.
+     ⚠ 이 기기에 **아직 안 올린 변경이 있으면 받지 않는다**(받으면 그 변경이 덮인다) — 올리는 쪽이 먼저다. */
+  setInterval(async () => {
+    if (!hasSyncPassword() || State.syncing || _syncTimer || _prefPush) return;
+    if (!_es || _es.readyState === 2) startRealtime();
+    try {
+      const pw = encodeURIComponent(getSyncPassword());
+      const res = await fetch(`${FIREBASE_DB_URL}/${SYNC_BRANCH}/${pw}/updatedAt.json?t=${Date.now()}`);
+      if (!res.ok) return;
+      const stamp = await res.json();
+      const localMod = localStorage.getItem(LS_MODIFIED) || "";
+      if (!stamp || stamp <= localMod || _syncTimer || _prefPush) return;
+      const editing = $("#editModal") && !$("#editModal").classList.contains("hidden");
+      if (editing) { _pullPending = true; return; }
+      await applyRemoteUpdate();
+    } catch { /* 오프라인이면 다음 분에 다시 */ }
+  }, 60 * 1000);
 }
 
 /* 저장 대기 중 페이지 닫기 방지 */
