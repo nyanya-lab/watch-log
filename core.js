@@ -916,6 +916,36 @@ function initVisibilitySync() {
   }, 30000);
 }
 
+/* ---------- 오래 쉬었으면 새로고침 묻기 (2026-10-07 요청) ----------
+   아무 조회·클릭 없이 **1시간**이 지나면 그 순간 창을 띄운다. [새로고침] = 로고와 같은 강력 새로고침
+   (`hardReload` — 새 버전 코드 + 서버 최신 기록) / [그냥 쓰기]·Escape·바깥 = 닫고 다시 1시간을 센다.
+   · "조회"는 누르기·키 입력·스크롤·휠로 센다(보기만 하며 스크롤해도 쉰 게 아니다).
+   · 등록·수정 창이 열려 있으면 띄우지 않는다 — 새로고침하면 적던 내용이 날아간다. 닫으면 다음 확인에서 뜬다.
+   · 탭이 가려져 있으면 브라우저가 타이머를 늦추므로, 다시 보일 때도 한 번 확인한다. */
+const IDLE_MS = 60 * 60 * 1000;
+let _lastAct = Date.now();
+function closeIdleModal() {
+  $("#idleModal").classList.add("hidden");
+  _lastAct = Date.now();
+}
+function initIdleRefresh() {
+  const bump = () => { _lastAct = Date.now(); };
+  ["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => document.addEventListener(t, bump, { capture: true, passive: true }));
+  window.addEventListener("scroll", bump, { passive: true });
+  const check = () => {
+    const m = $("#idleModal");
+    if (!m || !m.classList.contains("hidden")) return;
+    if (Date.now() - _lastAct < IDLE_MS) return;
+    if (!$("#editModal").classList.contains("hidden")) return;
+    m.classList.remove("hidden");
+  };
+  setInterval(check, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
+  $("#idleReloadBtn").addEventListener("click", () => hardReload());
+  $("#idleKeepBtn").addEventListener("click", closeIdleModal);
+  onBackdropClose("#idleModal", closeIdleModal);
+}
+
 /* 저장 대기 중 페이지 닫기 방지 */
 window.addEventListener("beforeunload", (e) => {
   if (_syncTimer) {
@@ -1089,6 +1119,7 @@ function onBackdropClose(sel, close) {
    등록/수정 모달은 State도 정리해야 하므로 closeEdit()을 쓴다. */
 function initEscapeKey() {
   const layers = [
+    { sel: "#idleModal", close: () => closeIdleModal() },
     { sel: "#quickRateModal", close: () => closeQuickRate() },
     { sel: "#dcModal" },
     { sel: "#detailModal" },
@@ -1187,6 +1218,7 @@ function bootApp() {
   initTabs();
   initEscapeKey();
   initVisibilitySync();
+  initIdleRefresh();
   initWatchlog();
   initTmdb();
   initDiscover();
