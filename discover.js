@@ -1087,7 +1087,7 @@ function pickRandomReco() {
 window.pickRandomReco = pickRandomReco;
 
 /* 미리보기 창의 [시청 기록 추가] — 랜덤으로 뽑은 작품이면 어떤 작품인지 적어둔다.
-   그 작품을 **보는 중으로** 등록하면 `askGoneAfterPick`이 "그 줄을 치울까요?"를 묻는다(2026-10-06 요청). */
+   (그 줄을 치울지 묻는 건 이제 어디서 등록하든 `askGoneAfterRecord`가 한다 — 2026-10-07) */
 function dcAddFromModal(tmdbId, mediaType) {
   Discover._pickAdd = Discover.pickMode ? `${mediaType}:${tmdbId}` : null;
   $("#dcModal").classList.add("hidden");
@@ -1095,14 +1095,22 @@ function dcAddFromModal(tmdbId, mediaType) {
 }
 window.dcAddFromModal = dcAddFromModal;
 
-/* `saveItem`이 새 기록을 저장한 뒤 부른다. pickKey는 저장 전에 받아둔 값(`closeEdit`이 비우기 때문) */
-function askGoneAfterPick(pickKey, item) {
-  if (!pickKey || !item || `${item.mediaType}:${item.tmdbId}` !== pickKey || !watchingNow(item)) return;
-  const row = (Discover._recoRowOf || new Map()).get(pickKey);
-  if (!row || row.every(k => recoFlipState().gone.includes(k))) return;
-  if (!confirm(`「${item.title}」${josa(item.title, "을", "를")} 보는 중으로 적었어요.\n\n이 작품이 있던 줄(5개)을 추천에서 치울까요?`)) return;
-  recoRowAct("gone", row);
-  toast("그 줄을 치웠어요");
+/* **새 기록을 저장한 뒤** 부른다(`saveItem`). 그 작품이 지금 추천 목록에 있으면 "그 줄을 치울까요?"를 묻는다.
+   예전엔 랜덤 뽑기로 고른 작품을 보는 중으로 적을 때만 물었는데(2026-10-06), **어디서 등록하든·다 봤든** 묻도록 넓혔다
+   (2026-10-07 요청 — 검색·기록하기로 적어도 추천에 그대로 있었다). 그 줄을 이미 치웠으면 묻지 않는다.
+   다른 기기에서 등록한 건 그 기기에서 묻는다(여기선 흐리게만 바뀐다). */
+function askGoneAfterRecord(item) {
+  if (!item || !item.tmdbId) return;
+  const key = `${item.mediaType || mediaTypeOf(item)}:${item.tmdbId}`;
+  const row = recoRowMap().get(key);
+  if (!row) return;
+  const gone = recoFlipState().gone;
+  if (row.keys.every(k => gone.includes(k))) return;
+  if (!confirm(`「${item.title}」${josa(item.title, "은", "는")} 지금 추천 ${row.no}번째 줄에 있던 작품이에요.
+
+그 줄(5개)을 추천에서 치울까요?`)) return;
+  recoRowAct("gone", row.keys);
+  toast(`추천 ${row.no}번째 줄을 치웠어요`);
 }
 
 function toggleRecoRevealAll() {
@@ -1115,6 +1123,45 @@ function toggleRecoRevealAll() {
 const RECO_SKIP_GENRES = [10764, 10767];   // Reality · Talk
 function isRecoSkipGenre(c) {
   return (c.genreIds || []).some(id => RECO_SKIP_GENRES.includes(id));
+}
+
+/* 추천 목록을 **화면에 보이는 순서대로** 거르고 정렬한다 — 그리는 곳(`renderDcReco`)과 줄 계산(`recoRowMap`)이
+   같은 순서를 써야 "몇 번째 줄"이 서로 맞는다 */
+function recoSortedRaw(all) {
+  const mt = Discover.recoType;
+  return (all || [])
+    .filter(c => !mt || c.mediaType === mt)
+    .filter(c => !isRecoSkipGenre(c))   // 예능 — 이 규칙이 생기기 전 캐시에도 적용된다
+    /* 추천은 **국내에서 볼 수 있는 것만** 담는다(`runReco`). 예전 캐시에는 못 보는 것도
+       섞여 있으므로 그릴 때 한 번 더 거른다 — 다시 뽑기 전까지 옛 결과가 그대로 뜨기 때문. */
+    .filter(c => (c.otts || []).length > 0)
+    /* OTT 필터 — 고른 게 없으면 통과, 있으면 그중 하나라도 있어야 한다 */
+    .filter(c => !Discover.recoOtt.length || (c.otts || []).some(o => Discover.recoOtt.includes(o)))
+    /* 제작국 필터 — 옛 캐시에는 `origin`이 없으므로 그때는 거르지 않는다(전부 사라지면 안 된다) */
+    .filter(c => !Discover.recoOrigin.length || !c.origin
+      || Discover.recoOrigin.includes(c.origin === "한국" ? "한국" : "외국"))
+    .sort((a, b) => {
+      const sgn = Discover.recoDir === "asc" ? 1 : -1;
+      if (Discover.recoSort === "rand")
+        return randKey(a) - randKey(b);
+      if (Discover.recoSort === "title")
+        return sgn * titleSortKey(a.title).localeCompare(titleSortKey(b.title), "ko");
+      return Discover.recoSort === "vote"
+        ? sgn * ((a.voteAverage || 0) - (b.voteAverage || 0))
+        : sgn * ((a.score || 0) - (b.score || 0));
+    });
+}
+/* 작품 키 → { no: 몇 번째 줄, keys: 그 줄 5개 } — 추천 화면을 안 열었어도 계산된다 */
+function recoRowMap() {
+  const m = new Map();
+  const data = loadReco();
+  if (!data) return m;
+  const sorted = recoSortedRaw(data.list);
+  for (let i = 0; i < sorted.length; i += 5) {
+    const keys = sorted.slice(i, i + 5).map(recoKeyOf);
+    keys.forEach(k => m.set(k, { no: i / 5 + 1, keys }));
+  }
+  return m;
 }
 
 function renderDcReco() {
@@ -1167,27 +1214,7 @@ function renderDcReco() {
 
   renderRecoFilters(all);
 
-  const list = all
-    .filter(c => !mt || c.mediaType === mt)
-    .filter(c => !isRecoSkipGenre(c))   // 예능 — 이 규칙이 생기기 전 캐시에도 적용된다
-    /* 추천은 **국내에서 볼 수 있는 것만** 담는다(`runReco`). 예전 캐시에는 못 보는 것도
-       섞여 있으므로 그릴 때 한 번 더 거른다 — 다시 뽑기 전까지 옛 결과가 그대로 뜨기 때문. */
-    .filter(c => (c.otts || []).length > 0)
-    /* OTT 필터 — 고른 게 없으면 통과, 있으면 그중 하나라도 있어야 한다 */
-    .filter(c => !Discover.recoOtt.length || (c.otts || []).some(o => Discover.recoOtt.includes(o)))
-    /* 제작국 필터 — 옛 캐시에는 `origin`이 없으므로 그때는 거르지 않는다(전부 사라지면 안 된다) */
-    .filter(c => !Discover.recoOrigin.length || !c.origin
-      || Discover.recoOrigin.includes(c.origin === "한국" ? "한국" : "외국"))
-    .sort((a, b) => {
-      const sgn = Discover.recoDir === "asc" ? 1 : -1;
-      if (Discover.recoSort === "rand")
-        return randKey(a) - randKey(b);
-      if (Discover.recoSort === "title")
-        return sgn * titleSortKey(a.title).localeCompare(titleSortKey(b.title), "ko");
-      return Discover.recoSort === "vote"
-        ? sgn * ((a.voteAverage || 0) - (b.voteAverage || 0))
-        : sgn * ((a.score || 0) - (b.score || 0));
-    })
+  const list = recoSortedRaw(all)
     .map(c => ({
       tmdbId: c.tmdbId, mediaType: c.mediaType, title: c.title,
       poster: c.poster, year: c.year, voteAverage: c.voteAverage,
@@ -1236,12 +1263,6 @@ function renderDcReco() {
      상관없이 같아야 한다(폰은 한 줄을 옆으로 민다). 치운 줄은 **자리째 빠지고 번호는 그대로**다
      (1번 줄을 치우면 2번부터 — 다시 채우면 번호가 매번 바뀌어 어디까지 봤는지 헷갈린다). */
   const shownList = list.filter(e => !flip.gone.includes(recoKeyOf(e)));
-  /* 작품 → 그 작품이 든 줄(5개)의 키. 랜덤으로 뽑아 보는 중으로 등록하면 이 줄을 치울지 묻는다 */
-  Discover._recoRowOf = new Map();
-  for (let i = 0; i < list.length; i += 5) {
-    const keys = list.slice(i, i + 5).map(recoKeyOf);
-    keys.forEach(k => Discover._recoRowOf.set(k, keys));
-  }
   /* ---- 들어오면 고르는 화면(2026-10-06 요청) ----
      위에 진행 요약(N개 중 M개 봤어요…) + [랜덤으로 하나 뽑기] · [한 줄씩 보기] + 작은 [전체 목록 보기].
      · 하나 뽑기 = 남은 작품(안 봤고·보는 중 아니고·관심없음 아니고·안 치운 것) 중 하나의 미리보기 창 + [다시 뽑기]

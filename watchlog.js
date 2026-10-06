@@ -2062,7 +2062,7 @@ function saveItem() {
   }
 
   /* 추천에서 랜덤으로 뽑아 등록하는 중이면 그 작품 키 — `closeEdit`이 비우기 전에 받아둔다 */
-  const pickKey = !State.editingId && Discover._pickAdd;
+  const isNew = !State.editingId;   // closeEdit이 editingId를 비우므로 미리 받아둔다
   if (State.editingId) {
     const old = State.items.find(x => x.id === State.editingId);
     /* 시즌이나 작품을 바꿨으면 받아둔 시즌 장면 사진은 남의 것이다 — 비워서 다시 받게 한다 */
@@ -2083,7 +2083,7 @@ function saveItem() {
   closeEdit();
   applyFilters();
   renderDiscover();   // 탐색 탭의 이어보기·추천·위시는 "이미 본 것"을 기준으로 걸러지므로 같이 갱신
-  if (pickKey) askGoneAfterPick(pickKey, State.items[0]);
+  if (isNew) askGoneAfterRecord(State.items[0]);   // 추천에 있던 작품이면 그 줄을 치울지 묻는다
 }
 
 function deleteItem() {
