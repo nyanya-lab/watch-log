@@ -1756,7 +1756,7 @@ function renderQuickRate() {
       <div class="flex items-center gap-2">
         <div class="relative flex-1">
           <i class="fa-solid fa-heart absolute left-3 top-1/2 -translate-y-1/2 text-rose-400"></i>
-          <input type="number" id="qrInput" class="form-input pl-9 text-lg font-semibold" min="0" max="10" step="1"
+          <input type="number" id="qrInput" class="form-input pl-9 text-lg font-semibold" min="0" max="10" step="${QuickRate.single ? "0.1" : "1"}"
             placeholder="0 ~ 10 (소수점 가능)" value="${i.rating || ""}" autocomplete="off">
         </div>
         <span class="text-sm font-semibold text-slate-400">/ 10</span>

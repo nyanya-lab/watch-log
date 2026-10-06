@@ -69,7 +69,10 @@ function heroHtml(w, cls) {
         <h3 class="hm-watch-title">${esc(i.title)}${seriesLabel(i) ? ` <span class="hm-sn">${esc(seriesLabel(i))}</span>` : ""}</h3>
         <div class="hm-meta">${esc(meta.join(" · "))}</div>
         ${live ? `<div class="hm-since">${isRewatching(i) && !isWatching(i) ? "다시 보기" : "보기"} 시작한 지 <b>${days}</b>일째</div>`
-               : (i.rating ? `<div class="hm-since">${hearts(i.rating)}</div>` : "")}
+               /* 다 본 작품이면 내 별점 옆에 TMDB 평점도 보여준다(2026-10-06 요청) — 보는 동안 가린 건
+                  내 점수가 끌려가지 않게 하려던 것이라, 다 보고 나면 가릴 이유가 없다 */
+               : ((i.rating || i.voteAverage) ? `<div class="hm-since">${i.rating ? hearts(i.rating) : ""}${
+                   i.voteAverage ? `<span class="hm-vote"><i class="fa-solid fa-star"></i>${fmtRating(i.voteAverage)}</span>` : ""}</div>` : "")}
         <div class="hm-hero-act">
           ${act}
           <button class="btn hm-ghost" data-open="${esc(i.id)}"><i class="fa-solid fa-circle-info"></i>상세 보기</button>
