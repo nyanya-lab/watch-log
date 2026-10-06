@@ -342,9 +342,6 @@ PC가 다시 올려 살렸다(서버 `_bak_prev`에도 사본이 있었다). 시
   `State.serverStamp`보다 새로우면 **올리지 않고** 알린다. 스트림이 끊겼던 동안의 변경을 놓칠 수 있어서,
   실시간이 있어도 이 확인은 남겨둔다. 확인 자체가 실패하면(오프라인) 막지 않는다.
 - `State.serverStamp` — 마지막으로 알고 있는 서버 시각. 채택·저장할 때마다 갱신한다.
-- **1분마다 확인**(`initVisibilitySync`의 `setInterval`, 2026-10-06): PC처럼 **열어둔 채 새로고침 안 하는** 창은 스트림이
-  조용히 끊겨도 visibility/focus가 안 일어나 옛 데이터를 들고 있었다. `updatedAt.json` 숫자 하나만 받아 비교하고,
-  끊긴 스트림(`readyState === 2`)은 다시 붙인다. **이 기기에 안 올린 변경(`_syncTimer`·`_prefPush`)이 있으면 받지 않는다.**
 
 디버깅용 전역 함수: `testConnection()`, `showStorage()`, `restoreBackup()`
 
