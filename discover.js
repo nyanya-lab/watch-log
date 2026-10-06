@@ -1086,6 +1086,25 @@ function pickRandomReco() {
 }
 window.pickRandomReco = pickRandomReco;
 
+/* 미리보기 창의 [시청 기록 추가] — 랜덤으로 뽑은 작품이면 어떤 작품인지 적어둔다.
+   그 작품을 **보는 중으로** 등록하면 `askGoneAfterPick`이 "그 줄을 치울까요?"를 묻는다(2026-10-06 요청). */
+function dcAddFromModal(tmdbId, mediaType) {
+  Discover._pickAdd = Discover.pickMode ? `${mediaType}:${tmdbId}` : null;
+  $("#dcModal").classList.add("hidden");
+  addFromDiscover(tmdbId, mediaType);
+}
+window.dcAddFromModal = dcAddFromModal;
+
+/* `saveItem`이 새 기록을 저장한 뒤 부른다. pickKey는 저장 전에 받아둔 값(`closeEdit`이 비우기 때문) */
+function askGoneAfterPick(pickKey, item) {
+  if (!pickKey || !item || `${item.mediaType}:${item.tmdbId}` !== pickKey || !watchingNow(item)) return;
+  const row = (Discover._recoRowOf || new Map()).get(pickKey);
+  if (!row || row.every(k => recoFlipState().gone.includes(k))) return;
+  if (!confirm(`「${item.title}」${josa(item.title, "을", "를")} 보는 중으로 적었어요.\n\n이 작품이 있던 줄(5개)을 추천에서 치울까요?`)) return;
+  recoRowAct("gone", row);
+  toast("그 줄을 치웠어요");
+}
+
 function toggleRecoRevealAll() {
   const f = recoFlipState();
   f.all = !f.all;
@@ -1217,6 +1236,12 @@ function renderDcReco() {
      상관없이 같아야 한다(폰은 한 줄을 옆으로 민다). 치운 줄은 **자리째 빠지고 번호는 그대로**다
      (1번 줄을 치우면 2번부터 — 다시 채우면 번호가 매번 바뀌어 어디까지 봤는지 헷갈린다). */
   const shownList = list.filter(e => !flip.gone.includes(recoKeyOf(e)));
+  /* 작품 → 그 작품이 든 줄(5개)의 키. 랜덤으로 뽑아 보는 중으로 등록하면 이 줄을 치울지 묻는다 */
+  Discover._recoRowOf = new Map();
+  for (let i = 0; i < list.length; i += 5) {
+    const keys = list.slice(i, i + 5).map(recoKeyOf);
+    keys.forEach(k => Discover._recoRowOf.set(k, keys));
+  }
   /* ---- 들어오면 고르는 화면(2026-10-06 요청) ----
      위에 진행 요약(N개 중 M개 봤어요…) + [랜덤으로 하나 뽑기] · [한 줄씩 보기] + 작은 [전체 목록 보기].
      · 하나 뽑기 = 남은 작품(안 봤고·보는 중 아니고·관심없음 아니고·안 치운 것) 중 하나의 미리보기 창 + [다시 뽑기]
@@ -2641,7 +2666,7 @@ function renderDcDetail(d, mediaType) {
       ${Discover.pickMode ? `<button onclick="pickRandomReco()" class="px-3 py-2.5 rounded-lg border text-sm font-semibold btn-ghost"
         title="남은 작품 중 다른 걸 뽑아요"><i class="fa-solid fa-dice mr-1"></i>다시 뽑기</button>` : ""}
       <div class="flex-1"></div>
-      <button onclick="document.getElementById('dcModal').classList.add('hidden'); addFromDiscover(${d.tmdbId},'${mediaType}')"
+      <button onclick="dcAddFromModal(${d.tmdbId},'${mediaType}')"
         class="btn btn-primary">
         <i class="fa-solid fa-plus mr-1"></i>시청 기록 추가
       </button>

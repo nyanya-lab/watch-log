@@ -1940,6 +1940,7 @@ function closeEdit() {
   $("#editModal").classList.add("hidden");
   State.editingId = null;
   State.selectedTmdb = null;
+  Discover._pickAdd = null;   // 랜덤 뽑기에서 온 등록은 이 창 한 번으로 끝난다(취소해도)
   // 편집 중에 다른 기기의 변경이 왔다면 미뤄뒀다가 지금 받는다
   if (window.flushPendingPull) flushPendingPull();
 }
@@ -2049,6 +2050,8 @@ function saveItem() {
     if (!ok) { toast("취소했습니다"); return; }
   }
 
+  /* 추천에서 랜덤으로 뽑아 등록하는 중이면 그 작품 키 — `closeEdit`이 비우기 전에 받아둔다 */
+  const pickKey = !State.editingId && Discover._pickAdd;
   if (State.editingId) {
     const old = State.items.find(x => x.id === State.editingId);
     /* 시즌이나 작품을 바꿨으면 받아둔 시즌 장면 사진은 남의 것이다 — 비워서 다시 받게 한다 */
@@ -2069,6 +2072,7 @@ function saveItem() {
   closeEdit();
   applyFilters();
   renderDiscover();   // 탐색 탭의 이어보기·추천·위시는 "이미 본 것"을 기준으로 걸러지므로 같이 갱신
+  if (pickKey) askGoneAfterPick(pickKey, State.items[0]);
 }
 
 function deleteItem() {
