@@ -540,6 +540,14 @@ function voteAskHtml(key, vote, badge) {
     ? `<button class="badge badge-vote vote-ask" data-reveal="${esc(key)}" data-vote="${vote}" data-fmt="badge" title="눌러서 TMDB 평점 보기"><i class="fa-solid fa-star mr-1"></i>?</button>`
     : `<button class="wl-rt wl-rt-tmdb vote-ask" data-reveal="${esc(key)}" data-vote="${vote}" title="눌러서 TMDB 평점 보기"><i class="fa-solid fa-star"></i>?</button>`;
 }
+/* 내 기록의 TMDB 평점을 어떻게 보일지(2026-10-06 요청 — "뭐가 됐던 내가 평점 안 넣었으면 숨겨줘").
+   보는 중 = 아예 안 보임(true) · **내 별점이 없으면 `★ ?`로 가려두고 누르면 보임**(작품 키) · 별점이 있으면 그대로(false).
+   남의 점수가 내 점수를 끌어당기지 않게 하려던 규칙을 "보는 중"에서 "아직 내 점수가 없을 때"로 넓혔다 */
+function myVoteHide(i) {
+  if (watchingNow(i)) return true;
+  if (!i.rating && i.tmdbId) return `${mediaTypeOf(i)}:${i.tmdbId}`;
+  return false;
+}
 function ratingChip(i, hideVote) {
   const mine = i.rating
     ? `<span class="wl-rt wl-rt-mine"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>` : "";
@@ -1164,7 +1172,7 @@ function closeWorksPopup() { $("#worksModal").classList.add("hidden"); }
 function recordCardHtml(i) {
   return `
     <div class="wl-card ${!i.tmdbId ? "wl-pending" : ""}" data-id="${i.id}">
-      ${posterBlock(i.poster, ratingChip(i, watchingNow(i)) +
+      ${posterBlock(i.poster, ratingChip(i, myVoteHide(i)) +
         (seriesLabel(i) ? `<span class="wl-season">${seriesLabel(i)}</span>` : "") +
         (watchingNow(i) ? `<span class="wl-live"><i class="fa-solid fa-circle-play"></i>${
           isWatching(i) ? "보는 중" : "다시 보는 중"}</span>` : ""))}
@@ -1223,7 +1231,9 @@ function diaryRowHtml(i, prevDay) {
     ? `<span class="dy-live"><i class="fa-solid fa-circle-play"></i>${isWatching(i) ? "보는 중" : "다시 보는 중"}</span>`
     : `<div class="dy-scores">${i.rating ? hearts(i.rating)
         : `<button class="dy-rate" data-rate="${esc(i.id)}">별점 남기기</button>`}${
-        i.voteAverage ? `<span class="dy-vote"><i class="fa-solid fa-star"></i>${i.voteAverage}</span>` : ""}</div>`;
+        !i.voteAverage ? "" : !i.rating && i.tmdbId && !VoteReveal.has(myVoteHide(i))
+          ? `<span class="dy-vote">${voteAskHtml(myVoteHide(i), i.voteAverage)}</span>`
+          : `<span class="dy-vote"><i class="fa-solid fa-star"></i>${i.voteAverage}</span>`}</div>`;
   return `<div class="dy-row" data-open="${esc(i.id)}">
     <div class="dy-day">${dt && !same ? `<div class="d">${dt.getDate()}</div><div class="w">${WD_KO[dt.getDay()]}</div>` : ""}</div>
     ${i.poster ? `<img class="dy-thumb" src="${esc(i.poster)}" alt="" loading="lazy">`
@@ -1400,14 +1410,14 @@ function openDetail(id) {
               ${i.collectionId ? `<i class="fa-solid fa-layer-group mr-1"></i>` : ""}${seriesLabel(i)}${i.seriesTotal ? ` <span class="opacity-70 ml-1">/ 총 ${i.seriesTotal}편</span>` : ""}
             </span>` : ""}
             ${i.ott ? `<span class="badge badge-ott"><i class="fa-solid ${i.ott === "영화관" ? "fa-film" : "fa-user-check"} mr-1"></i>${esc(i.ott)}</span>` : ""}
-            ${i.voteAverage ? (watchingNow(i)
+            ${i.voteAverage ? ((watchingNow(i) || !i.rating) && !(!watchingNow(i) && VoteReveal.has(`${mediaTypeOf(i)}:${i.tmdbId}`))
               /* 항상 보이는 것과 **눌러서 보는 것**은 다르다 — 전자는 점수를 끌어당기지만
                  후자는 사용자가 고른 것이다(별점 몰아넣기의 [기억이 안 나요] 버튼과 같은 판단).
                  그래서 숨기되 길은 남긴다. 버튼에 점수를 적지 않는다 — 누르기 전엔 안 보여야 한다.
                  ⚠ 처리는 **위임**으로 한다. `onclick` 속성에 HTML 문자열을 넣으면 따옴표에서 깨진다
                  (`findOtt`를 함수로 뺀 것과 같은 이유). */
               ? `<button class="badge badge-vote dt-vote-show" data-vote="${i.voteAverage}"
-                   title="보는 중에는 내 점수가 끌려가지 않게 가려둡니다">
+                   title="${watchingNow(i) ? "보는 중에는" : "내 별점을 매기기 전에는"} 내 점수가 끌려가지 않게 가려둡니다">
                    <i class="fa-solid fa-eye-slash mr-1"></i>TMDB 평점 보기</button>`
               : `<span class="badge badge-vote"><i class="fa-solid fa-star mr-1"></i>${i.voteAverage}</span>`) : ""}
           </div>
@@ -1784,6 +1794,7 @@ function renderQuickRate() {
     </div>`;
 
   const input = $("#qrInput");
+  input.step = QuickRate.single ? "0.1" : "1";   // [다 봤어요] 한 장짜리는 0.1 단위(2026-10-06 요청)
   input.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();

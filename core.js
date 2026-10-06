@@ -446,7 +446,22 @@ function adoptLists(d) {
   }
   /* 화면 설정도 **있을 때만** — 설정이 생기기 전 저장본이 이 기기의 색을 지우지 않게 */
   if (d.prefs && typeof d.prefs === "object" && !Array.isArray(d.prefs)) {
-    State.prefs = d.prefs;
+    /* 추천의 [치우기]·뒤집은 카드(`recoFlip`)는 **두 기기 것을 합친다**(2026-10-06 — 회사에서 치운 줄이 집에서 그대로였다).
+       설정은 문서째 오가서, 치운 기기가 올리기 전에(3초 몰아 보내기·창 닫기·다른 기기가 먼저 저장) 서버 것을 받으면
+       치운 기록이 덮여 사라졌다. 같은 추천(`gen`)이면 합집합, 이 기기 추천이 더 새것이면 이 기기 것. 합쳐서 서버보다
+       늘었으면 다시 올린다 */
+    const loc = State.prefs && State.prefs.recoFlip, srv = d.prefs.recoFlip;
+    let next = d.prefs, extra = false;
+    if (loc && loc.gen && (!srv || loc.gen >= (srv.gen || ""))) {
+      const same = srv && srv.gen === loc.gen;
+      const uni = (k) => [...new Set([...(same ? srv[k] || [] : []), ...(loc[k] || [])])];
+      const merged = { gen: loc.gen, all: same ? !!(srv.all || loc.all) : !!loc.all,
+                       ids: uni("ids"), shown: uni("shown"), gone: uni("gone") };
+      extra = JSON.stringify(merged) !== JSON.stringify(srv || null);
+      next = { ...d.prefs, recoFlip: merged };
+    }
+    State.prefs = next;
+    if (extra) { clearTimeout(_prefPush); _prefPush = setTimeout(() => saveLocal(), 3000); }
     localStorage.setItem(LS_PREFS, JSON.stringify(State.prefs));
     applyPrefs();
   }

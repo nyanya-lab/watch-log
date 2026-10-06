@@ -1819,7 +1819,7 @@ function dcCardHtml(e) {
      "평점 숨기기" 버튼을 대체). 본 작품은 이미 내 점수가 있으니 그대로 보인다 */
   /* 본 작품이어도 **아직 보는 중**이면 가린다 — 내 기록 카드와 같은 규칙 */
   const hideVote = e.hideVote === true || (st.watched && st.recs.some(watchingNow)) ? true
-    : (st.watched ? false : `${e.mediaType}:${e.tmdbId}`);
+    : (st.watched && st.rating ? false : `${e.mediaType}:${e.tmdbId}`);   // 봤어도 내 별점이 없으면 가린다(2026-10-06)
 
   let flag = e.flag || "";
   if (!flag) {
@@ -2415,7 +2415,7 @@ function renderDcPerson() {
        (2026-09-17 요청: 포스터가 이미 흐려서 따로 흰 바탕을 깔지 않아도 읽힌다). 보는 중이면 TMDB는 가린다.
        안 본 작품은 TMDB만, 눌러야 보인다(`★ ?`) */
     const vote = seen
-      ? ratingChip({ rating: st.rating, voteAverage: f.voteAverage }, st.recs.some(watchingNow))
+      ? ratingChip({ rating: st.rating, voteAverage: f.voteAverage }, st.recs.some(watchingNow) ? true : (st.rating ? false : key))
       : ratingChip({ voteAverage: f.voteAverage }, key);
     /* 버튼이 아니라 div — 안에 가린 평점 버튼(`★ ?`)이 들어가는데 버튼 안에 버튼은 HTML이 깨진다 */
     return `<div role="button" tabindex="0" class="dc-tl-tile ${seen ? "seen" : ""}" ${seen
