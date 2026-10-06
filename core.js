@@ -959,6 +959,14 @@ function initTabs() {
     btn.addEventListener("click", () => {
       /* 설정은 "잠깐 들르는 곳"이다 — 톱니를 한 번 더 누르면 보던 탭으로 돌아간다 */
       if (btn.dataset.tab === "settings" && curTab === "settings") show(backOf.settings || "home");
+      /* 메뉴의 [추천]은 **들어갈 때마다 처음부터**(2026-10-06 요청) — 전에 이어보기·인물·한 줄 보기 중
+         뭘 보고 있었든 추천의 고르는 화면으로 연다. 인물 검색처럼 함수로 여는 길(`showTab`)은 그대로 둔다 */
+      else if (btn.dataset.tab === "discover") {
+        if (typeof enterRecoFresh === "function") enterRecoFresh();
+        scrollPos.discover = 0;
+        if (curTab === "discover") { renderDiscover(); window.scrollTo(0, 0); }
+        else show("discover");
+      }
       else show(btn.dataset.tab);
     });
   });

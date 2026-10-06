@@ -1038,6 +1038,14 @@ function paintRecoRows(entries, flip, onlyRow, headHtml) {
     ? `<div class="dc-rows-foot">치운 작품 ${flip.gone.length}개 · <button class="dc-link" data-ungone>되돌리기</button></div>` : "");
   $("#dcEmpty").classList.add("hidden");
 }
+/* 메뉴의 [추천]을 누를 때마다 부른다(core.js) — 추천 뷰의 고르는 화면부터 */
+function enterRecoFresh() {
+  Discover.view = "reco";
+  Discover.recoMode = "home";
+  Discover.recoRow = null;
+  saveDcPrefs();
+}
+
 /* [랜덤으로 하나 뽑기] — 남은 작품 중 하나의 미리보기 창을 연다. 창 아래에 [다시 뽑기]가 붙는다 */
 function pickRandomReco() {
   const pool = Discover._recoFresh || [];
