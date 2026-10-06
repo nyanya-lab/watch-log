@@ -1466,7 +1466,9 @@ function openDetail(id) {
    내 기록을 겹쳐 그린다 — 탐색 탭의 "이어보기"가 하는 일을 그 작품 안에서 보여주는 셈이다.
 
    `renderWatchInto`와 같은 이유로 늦게 온 응답이 다음 작품 화면을 덮지 않게 순번을 둔다. */
-async function renderPartsInto(box, i) {
+/* `opts.dc` = 탐색 미리보기 창(#dcModal)에서 부를 때(2026-10-06). 안 본 편은 등록 대신 **그 편의 미리보기**로,
+   본 편은 미리보기를 닫고 내 기록 상세로, 지금 보고 있는 편은 테두리로 표시한다(`opts.current`). */
+async function renderPartsInto(box, i, opts = {}) {
   if (!box || !i.tmdbId) return;
   const isMovie = mediaTypeOf(i) === "movie";
   if (!isMovie && !getTmdbKey()) return;      // TV 시즌은 받아와야만 알 수 있다
@@ -1516,7 +1518,9 @@ async function renderPartsInto(box, i) {
       const upcoming = !rec && p.date && p.date > today;
       /* 안 본 편은 눌러서 바로 등록으로 간다 (TV는 시즌까지 미리 골라준다).
          미개봉은 아직 볼 수 없으니 누를 게 없다. */
-      const act = rec ? `openDetail('${rec.id}')`
+      const act = opts.dc
+        ? (rec ? `dcOpenMyRecord('${rec.id}')` : upcoming || p.tmdbId === opts.current ? "" : `openDcDetail(${p.tmdbId},'movie')`)
+        : rec ? `openDetail('${rec.id}')`
         : upcoming ? ""
         : `document.getElementById('detailModal').classList.add('hidden');`
           + `addFromDiscover(${p.tmdbId},'${isMovie ? "movie" : "tv"}'${isMovie ? "" : `,'S${p.no}'`})`;
@@ -1526,7 +1530,7 @@ async function renderPartsInto(box, i) {
         : upcoming ? `<span class="dt-part-mark soon">미개봉</span>`
                    : `<span class="dt-part-mark miss">안 봄</span>`;
       return `
-        <button class="dt-part${rec ? "" : upcoming ? " is-soon" : " is-miss"}"
+        <button class="dt-part${rec ? "" : upcoming ? " is-soon" : " is-miss"}${opts.current && p.tmdbId === opts.current ? " is-cur" : ""}"
                 ${act ? `onclick="${act}"` : "disabled"}>
           <div class="dt-part-img">
             ${p.poster ? `<img src="${esc(p.poster)}" alt="" loading="lazy">`
@@ -1542,7 +1546,7 @@ async function renderPartsInto(box, i) {
     box.innerHTML = `<div class="dt-sec">
       <div class="dt-sec-h">
         <i class="fa-solid fa-layer-group mr-1 text-amber-400"></i>
-        ${esc(title || "이 시리즈")} · 총 ${parts.length}${isMovie ? "편" : "시즌"}
+        ${esc(title || "이 시리즈")} · 총 ${parts.length}${isMovie ? "편" : "시즌"}${opts.dc ? " · 개봉 순" : ""}
         <span class="dt-part-sum">본 것 ${seen} · 안 본 것 ${parts.length - seen - soon}${soon ? ` · 미개봉 ${soon}` : ""}</span>
       </div>
       <div class="dt-parts">${cells}</div>

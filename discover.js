@@ -1038,6 +1038,35 @@ function paintRecoRows(entries, flip, onlyRow, headHtml) {
     ? `<div class="dc-rows-foot">치운 작품 ${flip.gone.length}개 · <button class="dc-link" data-ungone>되돌리기</button></div>` : "");
   $("#dcEmpty").classList.add("hidden");
 }
+/* ---------- 시리즈 영화 표시 (2026-10-06) ----------
+   추천은 시리즈를 **개봉 순** 가장 앞편부터 담는다. 그래서 스타워즈는 "에피소드 4: 새로운 희망"이 1편으로 온다.
+   왜 그 편인지 읽히게 카드에 `시리즈 1/9` 배지를 달고, 제목의 에피소드 번호가 개봉 순서와 다르면 `· EP4`를 붙인다.
+   **이야기 순서는 TMDB에 없다** — 제목에 "에피소드 N / Episode IV"가 적힌 경우만 알 수 있다(엑스맨·혹성탈출 같은
+   프리퀄은 배지만 붙는다). 편 목록은 컬렉션 캐시에서 읽는다(추천을 뽑을 때 받아둔다). 미개봉 편은 세지 않는다. */
+function recoSeriesInfo(tmdbId) {
+  const e = collIndex().get(tmdbId);
+  if (!e) return null;
+  const info = getCollCache()[e.collectionId];
+  if (!info || !info.parts) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const parts = info.parts.filter(p => p.releaseDate && p.releaseDate <= today);
+  const idx = parts.findIndex(p => p.tmdbId === tmdbId);
+  if (idx < 0 || parts.length < 2) return null;
+  return { no: idx + 1, total: parts.length, name: info.name || "" };
+}
+function episodeNoOf(title, orig) {
+  const m1 = String(title || "").match(/에피소드\s*(\d+)/);
+  if (m1) return +m1[1];
+  const m2 = String(orig || "").match(/Episode\s+([IVX]+|\d+)\b/i);
+  if (!m2) return null;
+  if (/^\d+$/.test(m2[1])) return +m2[1];
+  const v = { I: 1, V: 5, X: 10 };
+  return [...m2[1].toUpperCase()].reduce((n, ch, k, a) => n + (v[ch] < (v[a[k + 1]] || 0) ? -v[ch] : v[ch]), 0);
+}
+function seriesNoteText(si, ep) {
+  return `시리즈 ${si.total}편 중 개봉 순 ${si.no}편` + (ep && ep !== si.no ? ` · 이야기 순서로는 에피소드 ${ep}` : "");
+}
+
 /* 메뉴의 [추천]을 누를 때마다 부른다(core.js) — 추천 뷰의 고르는 화면부터 */
 function enterRecoFresh() {
   Discover.view = "reco";
@@ -1164,6 +1193,8 @@ function renderDcReco() {
       /* 뒤집기는 없앴다(2026-10-06 — "강제적인 느낌"). 대신 [랜덤으로 하나 뽑기]·[한 줄씩 보기]를 고른다 */
       facedown: false,
       backMeta: esc([...new Set(genreNamesOf(c.genreIds).flatMap(koGenre))].slice(0, 3).join(" · ")),
+      series: c.mediaType === "movie" ? recoSeriesInfo(c.tmdbId) : null,
+      ep: c.mediaType === "movie" ? episodeNoOf(c.title, c.originalTitle) : null,
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
       /* 버튼은 **아이콘만** 둔다(2026-09-29) — 글자 버튼이 두 줄로 접혀 앞면 카드가 길어지고,
@@ -1786,7 +1817,8 @@ function dcCardHtml(e) {
 
   return `
     <div class="wl-card dc-card${e.dim ? " dc-dim" : ""}" data-act="detail" data-tid="${e.tmdbId}" data-key="${e.mediaType}:${e.tmdbId}">
-      ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }, hideVote) + flag)}
+      ${posterBlock(e.poster, ratingChip({ rating: st.rating, voteAverage: e.voteAverage }, hideVote) + flag
+        + (e.series ? `<span class="dc-series" title="${esc(seriesNoteText(e.series, e.ep))}">시리즈 ${e.series.no}/${e.series.total}${e.ep && e.ep !== e.series.no ? ` · EP${e.ep}` : ""}</span>` : ""))}
       <div class="wl-body">
         <div class="wl-title-row">
           <i class="fa-solid ${e.mediaType === "tv" ? "fa-tv" : "fa-film"} wl-type"
@@ -2588,6 +2620,7 @@ function renderDcDetail(d, mediaType) {
       ${d.overview ? `<p class="text-sm text-slate-600 leading-relaxed">${esc(d.overview)}</p>` : ""}
 
       ${seasonsHtml}
+      ${mediaType === "movie" && d.collectionId ? `<div id="dcSeriesNote" class="dc-series-note hidden"></div><div id="dcParts"></div>` : ""}
       ${castHtml}
       <div id="dcWatch"></div>
     </div>
@@ -2619,6 +2652,17 @@ function renderDcDetail(d, mediaType) {
 
   // 지금 볼 수 있는 곳(대여·구매까지)은 열자마자 받아 아래에 붙인다 — 내 기록 상세와 같은 방식
   renderWatchInto($("#dcWatch"), d.tmdbId, mediaType, d.title);
+
+  /* 시리즈 영화면 개봉 순서 안내 + 시리즈 전체 포스터 줄(내 기록 상세와 같은 줄, 본 편 표시) */
+  if (mediaType === "movie" && d.collectionId) {
+    renderPartsInto($("#dcParts"), { tmdbId: d.tmdbId, mediaType: "movie", collectionId: d.collectionId,
+      collectionName: d.collectionName }, { dc: true, current: d.tmdbId }).then(() => {
+      const si = recoSeriesInfo(d.tmdbId), box = $("#dcSeriesNote");
+      if (!si || !box || Discover._detail?.tmdbId !== d.tmdbId) return;
+      box.innerHTML = `<i class="fa-solid fa-layer-group mr-1"></i>${esc(seriesNoteText(si, episodeNoOf(d.title, d.originalTitle)))}`;
+      box.classList.remove("hidden");
+    });
+  }
 }
 
 function dcModalWish(tmdbId, mediaType) {
