@@ -1473,3 +1473,20 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
   .hm-notice-sub { display: none; }
   .hm-notice-acts { width: 100%; justify-content: flex-end; }
 }
+
+/* ---------- 추천: 들어오면 고르는 화면 (2026-10-06) ---------- */
+.dc-land { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 28px 0 36px; }
+.dc-land-sum { font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.dc-sum b { color: var(--ac-d); font-weight: 800; }
+.dc-land-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 260px)); gap: 14px; width: 100%; justify-content: center; }
+.dc-land-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 16px;
+  border-radius: 14px; background: var(--ac-soft); color: var(--ink); text-align: center; transition: background .15s, transform .15s; }
+.dc-land-btn:hover:not([disabled]) { background: color-mix(in srgb, var(--ac) 22%, #fff); transform: translateY(-2px); }
+.dc-land-btn[disabled] { opacity: .45; cursor: default; }
+.dc-land-btn i { font-size: 26px; color: var(--ac); }
+.dc-land-btn b { font-size: 16px; font-weight: 800; }
+.dc-land-btn span { font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+.dc-mode-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.dc-mode-bar .dc-sum { flex: 1; min-width: 0; }
+.dc-mode-btn { padding: 6px 12px; font-size: 12.5px; }
+@media (max-width: 639px) { .dc-land-btns { grid-template-columns: 1fr; } }

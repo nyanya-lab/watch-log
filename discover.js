@@ -25,7 +25,10 @@ const Discover = {
      흐린 카드를 남겨두는 것(`.dc-dim`)도 같은 이유였다(자리가 밀리면 어디까지 봤는지 놓친다).
      ⚠ 기본값을 바꿀 때 아래 **빨간 점 판정**(`renderRecoFilters`의 `on`)과 [초기화]도 같이 바꿀 것. */
   recoDir: "asc",
-  recoSeed: "",      // 랜덤 정렬의 섞는 번호 — prefs로 동기화돼 모든 기기가 같은 순서를 본다
+  recoSeed: "",
+  recoMode: "home",  // 추천 화면: home(고르기) | row(한 줄씩) | all(전체 목록) — 세션 상태, 탭에 들어올 때마다 home
+  recoRow: null,     // 한 줄씩 보기에서 지금 보여주는 줄 번호(1부터)
+  pickMode: false,   // 미리보기 창이 [랜덤으로 하나 뽑기]로 열렸나 — 창에 [다시 뽑기]를 단다      // 랜덤 정렬의 섞는 번호 — prefs로 동기화돼 모든 기기가 같은 순서를 본다
   reco: null,        // 캐시된 추천 결과
   personKind: "actor",   // 인물 뷰: actor=배우 | director=감독
   personName: "",        // 고른 사람 (빈 값이면 아직 안 골랐다)
@@ -1010,7 +1013,7 @@ function shuffleReco() {
   saveDcPrefs();
   renderDiscover();
 }
-function paintRecoRows(entries, flip) {
+function paintRecoRows(entries, flip, onlyRow, headHtml) {
   Discover._byId = new Map(entries.map(e => [String(e.tmdbId), e]));
   const grid = $("#dcGrid");
   grid.classList.remove("dc-tl-on", "dc-grouped");
@@ -1018,7 +1021,7 @@ function paintRecoRows(entries, flip) {
   const rows = [];
   for (let i = 0; i < entries.length; i += 5)
     rows.push({ no: i / 5 + 1, items: entries.slice(i, i + 5).filter(e => !flip.gone.includes(recoKeyOf(e))) });
-  grid.innerHTML = rows.filter(r => r.items.length).map(({ no, items: r }) => {
+  grid.innerHTML = (headHtml || "") + rows.filter(r => r.items.length && (!onlyRow || r.no === onlyRow)).map(({ no, items: r }) => {
     const keys = r.map(recoKeyOf).join(",");
     const anyDown = r.some(e => e.facedown);
     return `<div class="dc-row">
@@ -1031,10 +1034,21 @@ function paintRecoRows(entries, flip) {
       </div>
       <div class="dc-row-cards">${r.map(dcCardHtml).join("")}</div>
     </div>`;
-  }).join("") + (flip.gone.length
+  }).join("") + (flip.gone.length && !onlyRow
     ? `<div class="dc-rows-foot">치운 작품 ${flip.gone.length}개 · <button class="dc-link" data-ungone>되돌리기</button></div>` : "");
   $("#dcEmpty").classList.add("hidden");
 }
+/* [랜덤으로 하나 뽑기] — 남은 작품 중 하나의 미리보기 창을 연다. 창 아래에 [다시 뽑기]가 붙는다 */
+function pickRandomReco() {
+  const pool = Discover._recoFresh || [];
+  if (!pool.length) { toast("남은 작품이 없어요 — [다시 추천받기]를 눌러보세요"); return; }
+  const cur = Discover._detail && Discover.pickMode ? Discover._detail.tmdbId : null;
+  const cands = pool.length > 1 ? pool.filter(e => e.tmdbId !== cur) : pool;
+  const e = cands[Math.floor(Math.random() * cands.length)];
+  openDcDetail(e.tmdbId, e.mediaType, true);
+}
+window.pickRandomReco = pickRandomReco;
+
 function toggleRecoRevealAll() {
   const f = recoFlipState();
   f.all = !f.all;
@@ -1139,8 +1153,8 @@ function renderDcReco() {
          되돌렸다). 흐려지는 건 포스터·제목뿐이라 `보는 중` 배지와 [내 기록] 버튼은 또렷하다. */
       dim: !!(seenRec(c) || isHidden(c.tmdbId, c.mediaType)),
       /* 뒤집힌 카드 — 흐린 카드는 제외(이미 아는 작품), 전체 공개면 전부 앞면 */
-      facedown: !(seenRec(c) || isHidden(c.tmdbId, c.mediaType)) && !flip.all
-        && !flip.ids.includes(recoKeyOf(c)) && !flip.shown.includes(recoKeyOf(c)),
+      /* 뒤집기는 없앴다(2026-10-06 — "강제적인 느낌"). 대신 [랜덤으로 하나 뽑기]·[한 줄씩 보기]를 고른다 */
+      facedown: false,
       backMeta: esc([...new Set(genreNamesOf(c.genreIds).flatMap(koGenre))].slice(0, 3).join(" · ")),
       /* 정리한 카드는 버튼을 바꾼다 — 봤으면 [내 기록], 관심없음이면 [되돌리기].
          기록은 되돌리기로 지우지 않는다(사용자 데이터를 버튼 하나로 날리지 않는다). */
@@ -1164,7 +1178,59 @@ function renderDcReco() {
      상관없이 같아야 한다(폰은 한 줄을 옆으로 민다). 치운 줄은 **자리째 빠지고 번호는 그대로**다
      (1번 줄을 치우면 2번부터 — 다시 채우면 번호가 매번 바뀌어 어디까지 봤는지 헷갈린다). */
   const shownList = list.filter(e => !flip.gone.includes(recoKeyOf(e)));
-  if (data && shownList.length) paintRecoRows(list, flip);
+  /* ---- 들어오면 고르는 화면(2026-10-06 요청) ----
+     위에 진행 요약(N개 중 M개 봤어요…) + [랜덤으로 하나 뽑기] · [한 줄씩 보기] + 작은 [전체 목록 보기].
+     · 하나 뽑기 = 남은 작품(안 봤고·보는 중 아니고·관심없음 아니고·안 치운 것) 중 하나의 미리보기 창 + [다시 뽑기]
+     · 한 줄씩 = 남은 줄 중 랜덤 한 줄(5개). [다른 줄] · [치우기]. 치운 줄은 [다시 추천받기]·[되돌리기] 전엔 안 나온다
+     · 전체 목록 = 예전처럼 5개씩 줄로 전부(치운 줄 빼고) */
+  const cnt = { seen: 0, live: 0, hid: 0 };
+  list.forEach(e => {
+    const rec = seenRec(e._raw);
+    if (rec && watchingNow(rec)) cnt.live++;
+    else if (rec) cnt.seen++;
+    else if (isHidden(e.tmdbId, e.mediaType)) cnt.hid++;
+  });
+  const fresh = shownList.filter(e => !e.dim);
+  Discover._recoFresh = fresh;
+  const sumHtml = `<span class="dc-sum">${list.length}개 중 <b>${cnt.seen}</b>개 봤어요`
+    + (cnt.live ? ` · <b>${cnt.live}</b>개 보는 중` : "")
+    + (cnt.hid ? ` · <b>${cnt.hid}</b>개 관심없어요` : "")
+    + ` · 남은 <b>${fresh.length}</b>개</span>`;
+  if (data && list.length && Discover.recoMode === "home") {
+    Discover._byId = new Map(list.map(e => [String(e.tmdbId), e]));
+    $("#dcGrid").classList.remove("dc-tl-on", "dc-grouped");
+    $("#dcGrid").innerHTML = `<div class="dc-land">
+      <div class="dc-land-sum">${sumHtml}</div>
+      <div class="dc-land-btns">
+        <button class="dc-land-btn" data-act="pick" ${fresh.length ? "" : "disabled"}>
+          <i class="fa-solid fa-dice"></i><b>랜덤으로 하나 뽑기</b><span>남은 작품 중 하나를 골라 보여줘요</span></button>
+        <button class="dc-land-btn" data-act="mode-row" ${shownList.length ? "" : "disabled"}>
+          <i class="fa-solid fa-grip-lines"></i><b>한 줄씩 보기</b><span>5개씩, 줄을 랜덤으로 보여줘요</span></button>
+      </div>
+      <button class="dc-link" data-act="mode-all">전체 목록 보기 (${shownList.length}개)</button>
+      ${flip.gone.length ? `<div class="dc-rows-foot">치운 작품 ${flip.gone.length}개 · <button class="dc-link" data-ungone>되돌리기</button></div>` : ""}
+    </div>`;
+    $("#dcEmpty").classList.add("hidden");
+  } else if (data && shownList.length && Discover.recoMode === "row") {
+    /* 줄은 치우기 전 전체 목록으로 나눈다(번호가 안 바뀌게). 남은 작품이 있는 줄을 먼저 고른다 */
+    const rowNos = [];
+    for (let i = 0; i < list.length; i += 5) {
+      const items = list.slice(i, i + 5).filter(e => !flip.gone.includes(recoKeyOf(e)));
+      if (items.length) rowNos.push({ no: i / 5 + 1, fresh: items.some(e => !e.dim) });
+    }
+    const pool = rowNos.some(r => r.fresh) ? rowNos.filter(r => r.fresh) : rowNos;
+    if (!pool.some(r => r.no === Discover.recoRow))
+      Discover.recoRow = pool[Math.floor(Math.random() * pool.length)].no;
+    paintRecoRows(list, flip, Discover.recoRow, `<div class="dc-mode-bar">
+      <button class="dc-link" data-act="mode-home"><i class="fa-solid fa-arrow-left mr-1"></i>처음으로</button>
+      ${sumHtml}
+      <button class="btn dc-mode-btn" data-act="row-next" ${pool.length > 1 ? "" : "disabled"}><i class="fa-solid fa-shuffle mr-1"></i>다른 줄</button>
+    </div>`);
+  } else if (data && shownList.length) {
+    paintRecoRows(list, flip, null, `<div class="dc-mode-bar">
+      <button class="dc-link" data-act="mode-home"><i class="fa-solid fa-arrow-left mr-1"></i>처음으로</button>
+      ${sumHtml}</div>`);
+  }
   else paintDcCards(list, `
     <i class="fa-solid fa-wand-magic-sparkles text-4xl mb-3"></i>
     <p class="font-medium">아직 추천이 없어요</p>
@@ -1174,20 +1240,12 @@ function renderDcReco() {
     $("#dcGrid").innerHTML = `<div class="dc-rows-foot">줄을 전부 치웠어요 · <button class="dc-link" data-ungone>되돌리기</button> · 또는 [다시 추천받기]</div>`;
   }
   const nDim = list.filter(e => e.dim).length;
-  const flipTxt = !data ? "" : flip.all ? " · 전체 공개" : ` · 뒤집기 ${flip.ids.length}/${RECO_FLIP_MAX}`;
-  $("#dcCount").textContent = `${list.length}개${nDim ? ` · 정리 ${nDim}` : ""}${flipTxt}`;
+  $("#dcCount").textContent = `${list.length}개${nDim ? ` · 정리 ${nDim}` : ""}`;
   const sh = $("#dcRecoShuffleBtn");
   if (sh) {
     sh.classList.toggle("hidden", !data);
     sh.classList.toggle("on", Discover.recoSort === "rand");
     sh.title = Discover.recoSort === "rand" ? "다시 섞기" : "랜덤 순서로 섞기";
-  }
-  const rv = $("#dcRecoRevealBtn");
-  if (rv) {
-    rv.classList.toggle("hidden", !data);
-    rv.innerHTML = `<i class="fa-solid ${flip.all ? "fa-eye-slash" : "fa-eye"}"></i>`;
-    rv.title = flip.all ? "다시 가리기 (뒤집은 카드만 남기기)" : "전체 공개 — 모든 카드를 앞면으로";
-    rv.classList.toggle("on", flip.all);
   }
 }
 
@@ -2388,7 +2446,8 @@ function dcHide(tmdbId) {
 }
 
 /* ---------- TMDB 상세 미리보기 ---------- */
-async function openDcDetail(tmdbId, mediaType) {
+async function openDcDetail(tmdbId, mediaType, picked) {
+  Discover.pickMode = !!picked;
   const modal = $("#dcModal");
   const box = $("#dcModalContent");
   box.innerHTML = `<div class="p-10 text-center text-slate-400 font-medium">
@@ -2538,6 +2597,8 @@ function renderDcDetail(d, mediaType) {
         title="${isHidden(d.tmdbId, mediaType) ? "관심없음 해제" : "관심없음 — 추천에서 빼기"}">
         <i class="fa-solid fa-ban"></i>
       </button>
+      ${Discover.pickMode ? `<button onclick="pickRandomReco()" class="px-3 py-2.5 rounded-lg border text-sm font-semibold btn-ghost"
+        title="남은 작품 중 다른 걸 뽑아요"><i class="fa-solid fa-dice mr-1"></i>다시 뽑기</button>` : ""}
       <div class="flex-1"></div>
       <button onclick="document.getElementById('dcModal').classList.add('hidden'); addFromDiscover(${d.tmdbId},'${mediaType}')"
         class="btn btn-primary">
@@ -2606,6 +2667,7 @@ function initDiscover() {
   $$(".dc-nav").forEach(btn => {
     btn.addEventListener("click", () => {
       Discover.view = btn.dataset.view;
+      if (Discover.view === "reco") { Discover.recoMode = "home"; Discover.recoRow = null; }
       saveDcPrefs();
       renderDiscover();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2765,7 +2827,18 @@ function initDiscover() {
     const entry = Discover._byId.get(String(tid));
 
     if (act === "flip") { flipRecoCard(btn.dataset.key); return; }
+    if (act === "pick") { pickRandomReco(); return; }
+    if (act === "mode-home" || act === "mode-row" || act === "mode-all") {
+      Discover.recoMode = act.slice(5); Discover.recoRow = null;
+      renderDiscover(); window.scrollTo({ top: 0, behavior: "smooth" }); return;
+    }
+    if (act === "row-next") {
+      const prev = Discover.recoRow; Discover.recoRow = null;
+      for (let k = 0; k < 6; k++) { renderDiscover(); if (Discover.recoRow !== prev) break; }
+      return;
+    }
     if (act === "rowshow" || act === "rowgone") {
+      if (act === "rowgone") Discover.recoRow = null;   // 한 줄씩 보기면 다른 줄로 넘어간다
       recoRowAct(act === "rowshow" ? "show" : "gone", btn.dataset.keys.split(","));
       if (act === "rowgone") toast("이 줄을 치웠어요");
       return;
