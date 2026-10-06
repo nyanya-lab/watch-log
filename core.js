@@ -314,6 +314,114 @@ function wouldWipeServer(d) {
   return !State.items.length && !!d && Array.isArray(d.items) && d.items.length > 0;
 }
 
+/* ============================================
+   합치기 (2026-10-06)
+   예전엔 문서를 통째로 주고받아서, 두 기기가 엇갈리면 한쪽 변경이 사라졌다:
+   ① 올리기 전에 다른 기기 것을 받으면 이 기기 변경이 덮였다(추천 [치우기]가 집에서 그대로였던 사고)
+   ② 올리려는데 다른 기기가 먼저 저장했으면 "먼저 저장했어요"로 멈췄고, 곧 받아오면서 이 기기 변경이 사라졌다.
+   그래서 **마지막으로 서버와 맞췄던 상태(`base`)**를 기억해 두고, 엇갈리면 항목별로 합친다(3-way):
+   · 이 기기에서 안 바뀐 항목 → 서버 것 / 서버에서 안 바뀐 항목 → 이 기기 것
+   · 둘 다 바뀐 기록 → 서버 것 위에 **이 기기에서 바뀐 칸만** 얹는다
+   · 한쪽은 지우고 한쪽은 고쳤으면 → 고친 쪽을 남긴다(지워서 잃는 쪽보다 낫다)
+   기록·보고싶어요·관심없음은 id로, 설정(`prefs`)은 키로 합친다. 캐시는 원래 합쳐진다(`adoptCache`).
+   `base`가 없으면(이 기능 이전·첫 동기화) 예전처럼 동작한다 — 짐작으로 합치지 않는다.
+   ⚠ 합친 결과가 이 기기 기록의 절반도 안 되면 합치지 않는다(빈 서버·일부 지워진 서버를 "지운 것"으로 믿으면 사고다). */
+const LS_BASE = "watchlog_sync_base";
+function snapshotNow() {
+  return { items: State.items || [], wishes: State.wishes || [], hides: State.hides || [], prefs: State.prefs || {} };
+}
+function saveBase(doc) {
+  try {
+    localStorage.setItem(LS_BASE, JSON.stringify({
+      items: Array.isArray(doc.items) ? doc.items : [], wishes: Array.isArray(doc.wishes) ? doc.wishes : [],
+      hides: Array.isArray(doc.hides) ? doc.hides : [], prefs: doc.prefs && typeof doc.prefs === "object" ? doc.prefs : {}
+    }));
+  } catch { /* 저장 공간이 모자라면 base 없이(예전처럼) 돈다 */ }
+}
+function loadBase() { try { return JSON.parse(localStorage.getItem(LS_BASE) || "null"); } catch { return null; } }
+/* 비교용 정규화 — 서버(Firebase)는 키를 정렬해 돌려주고 null·빈 배열을 지운다. 그 차이로 "바뀌었다"고 보면 안 된다 */
+function canon(x) {
+  if (x === null || x === undefined) return undefined;
+  if (Array.isArray(x)) { const a = x.map(canon); return a.length ? a : undefined; }
+  if (typeof x === "object") {
+    const o = {};
+    Object.keys(x).sort().forEach(k => { const v = canon(x[k]); if (v !== undefined) o[k] = v; });
+    return Object.keys(o).length ? o : undefined;
+  }
+  return x;
+}
+const sameVal = (a, b) => JSON.stringify(canon(a)) === JSON.stringify(canon(b));
+function mergeById(B, L, S, key) {
+  const m = (arr) => new Map((arr || []).filter(Boolean).map(x => [key(x), x]));
+  const bm = m(B), lm = m(L), sm = m(S);
+  const pick = (k) => {
+    const b = bm.get(k), l = lm.get(k), sv = sm.get(k);
+    const lc = !sameVal(l, b), sc = !sameVal(sv, b);
+    if (!lc) return sv;
+    if (!sc) return l;
+    if (l && sv) {                                        // 둘 다 고쳤다 → 서버 것 위에 이 기기에서 바뀐 칸만
+      const out = { ...sv };
+      Object.keys({ ...l, ...(b || {}) }).forEach(f => { if (!sameVal(l[f], b ? b[f] : undefined)) out[f] = l[f]; });
+      return out;
+    }
+    return l || sv;                                       // 한쪽은 지우고 한쪽은 고쳤다 → 고친 쪽
+  };
+  const out = [], seen = new Set();
+  (L || []).forEach(x => { const k = key(x); if (!sm.has(k) && !bm.has(k)) { out.push(x); seen.add(k); } });  // 이 기기에서 새로 만든 것
+  [...(S || []), ...(L || [])].forEach(x => {
+    const k = key(x); if (seen.has(k)) return; seen.add(k);
+    const r = pick(k); if (r) out.push(r);
+  });
+  return out;
+}
+function mergePrefs(B, L, S) {
+  B = B || {}; L = L || {}; S = S || {};
+  const out = { ...S };
+  Object.keys({ ...L, ...B }).forEach(k => {
+    if (sameVal(L[k], B[k])) return;
+    if (L[k] === undefined) delete out[k]; else out[k] = L[k];
+  });
+  /* 추천 [치우기]·뒤집기는 양쪽 다 바꿨으면 합친다(같은 추천일 때) */
+  const lf = L.recoFlip, sf = S.recoFlip, bf = B.recoFlip;
+  if (lf && sf && lf.gen === sf.gen && !sameVal(lf, bf) && !sameVal(sf, bf)) {
+    const uni = (k) => [...new Set([...(sf[k] || []), ...(lf[k] || [])])];
+    out.recoFlip = { gen: lf.gen, all: !!(lf.all || sf.all), ids: uni("ids"), shown: uni("shown"), gone: uni("gone") };
+  }
+  return out;
+}
+const wishKey = (x) => x.id || `${x.mediaType}:${x.tmdbId}`;
+/* 서버 문서 d와 이 기기를 합친다. "merged" = 합쳐서 State에 얹었다(올려야 한다) / "same" = 이 기기엔 바뀐 게 없다 /
+   "nobase" = 기준이 없어 못 합친다 / "suspicious" = 합치면 기록이 너무 줄어 합치지 않았다 */
+function mergeIntoLocal(d) {
+  const base = loadBase();
+  if (!base || !d || !Array.isArray(d.items)) return "nobase";
+  const mine = snapshotNow();
+  if (sameVal(mine, base)) return "same";
+  /* 서버 쪽에서 한꺼번에 많이 사라졌으면(빈 서버·일부만 남은 서버) 합치지 않는다 — "다른 기기에서 지웠다"고
+     믿으면 사고다. 기준: 이 기기에선 그대로인데 서버에서 없어진 기록이 3개 이상 + 기준의 20% 이상, 또는 결과가 절반 미만 */
+  const srvIds = new Set(d.items.map(x => x.id));
+  const mineById = new Map(mine.items.map(x => [x.id, x]));
+  const goneOnServer = (base.items || []).filter(b => !srvIds.has(b.id) && sameVal(mineById.get(b.id), b)).length;
+  if (goneOnServer >= 3 && goneOnServer >= (base.items || []).length * 0.2) return "suspicious";
+  const items = mergeById(base.items, mine.items, d.items, x => x.id);
+  if (mine.items.length && items.length < mine.items.length * 0.5) return "suspicious";
+  State.items = items;
+  State.wishes = mergeById(base.wishes, mine.wishes, Array.isArray(d.wishes) ? d.wishes : base.wishes, wishKey);
+  State.hides = mergeById(base.hides, mine.hides, Array.isArray(d.hides) ? d.hides : base.hides, wishKey);
+  State.prefs = mergePrefs(base.prefs, mine.prefs, d.prefs && typeof d.prefs === "object" ? d.prefs : base.prefs);
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(State.items));
+    localStorage.setItem(LS_WISH, JSON.stringify(State.wishes));
+    localStorage.setItem(LS_HIDE, JSON.stringify(State.hides));
+    localStorage.setItem(LS_PREFS, JSON.stringify(State.prefs));
+  } catch { /* 저장 공간 문제면 이번 판만 화면에 */ }
+  adoptCache(d.cache);
+  applyPrefs();
+  State.serverStamp = d.updatedAt || "";
+  saveBase(d);                       // 지금 공통 조상은 서버 문서다 — 이 기기 변경은 곧 올라간다
+  return "merged";
+}
+
 async function autoPush() {
   _syncTimer = null;
   if (State.syncing) return;
@@ -321,9 +429,25 @@ async function autoPush() {
   if (!url) { setSyncIcon("local"); return; }   // 비밀번호 없음 → 로컬 전용
 
   if (await serverChangedBehindUs()) {
-    setSyncIcon("error");
-    toast("다른 기기에서 먼저 저장했어요. 구름 아이콘을 눌러 확인하세요", "error");
-    return;
+    /* 다른 기기가 먼저 저장했다 → 서버 것과 **합쳐서** 올린다(2026-10-06). 기준(base)이 없거나
+       합치면 기록이 너무 줄면 예전처럼 멈춘다 */
+    const r = mergeIntoLocal(_lastServerSeen);
+    if (r === "same") {
+      // 이 기기엔 바뀐 게 없다(캐시만 바뀐 경우 등) — 서버 것을 받고 끝낸다
+      await pullFromServer(true);
+      if (typeof applyFilters === "function") applyFilters();
+      if (window.renderDiscover) renderDiscover();
+      return;
+    }
+    if (r !== "merged") {
+      setSyncIcon("error");
+      toast("다른 기기에서 먼저 저장했어요. 구름 아이콘을 눌러 확인하세요", "error");
+      return;
+    }
+    localStorage.setItem(LS_MODIFIED, new Date().toISOString());
+    if (typeof applyFilters === "function") applyFilters();
+    if (window.renderDiscover) renderDiscover();
+    toast("다른 기기의 변경과 합쳐서 저장했어요");
   }
   /* 빈 기기가 기록 있는 서버를 덮는 일은 **자동으로는 절대** 하지 않는다 (2026-09-23 사고) */
   if (wouldWipeServer(_lastServerSeen)) {
@@ -336,20 +460,22 @@ async function autoPush() {
   setSyncIcon("saving");
   await rotateServerBackup(_lastServerSeen);      // 덮어쓰기 전 사본을 남긴다
   try {
+    const doc = {
+      items: State.items,
+      wishes: State.wishes,
+      hides: State.hides,
+      prefs: State.prefs || {},
+      updatedAt: localStorage.getItem(LS_MODIFIED) || new Date().toISOString(),
+      count: State.items.length,
+      cache: collectCache()
+    };
     const res = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: State.items,
-        wishes: State.wishes,
-        hides: State.hides,
-        prefs: State.prefs || {},
-        updatedAt: localStorage.getItem(LS_MODIFIED) || new Date().toISOString(),
-        count: State.items.length,
-        cache: collectCache()
-      })
+      body: JSON.stringify(doc)
     });
     if (!res.ok) throw new Error(describeHttp(res.status));
+    saveBase(doc);                                  // 이제 서버와 맞췄다
     State.serverStamp = localStorage.getItem(LS_MODIFIED) || "";
     setSyncIcon("saved");
     State.lastError = "";
@@ -389,25 +515,33 @@ async function pushToServer() {
     );
     if (!ok) { setSyncIcon("idle"); return false; }
   }
+  /* 다른 기기가 먼저 저장했으면 덮지 말고 합쳐서 올린다(2026-10-06) */
+  if (cur && cur.updatedAt && cur.updatedAt > (State.serverStamp || localStorage.getItem(LS_MODIFIED) || "")
+      && mergeIntoLocal(cur) === "merged") {
+    if (typeof applyFilters === "function") applyFilters();
+    if (window.renderDiscover) renderDiscover();
+  }
   State.syncing = true;
   setSyncIcon("saving");
   try { await rotateServerBackup(cur); } catch { /* 백업 실패가 저장을 막지 않는다 */ }
   const stamp = new Date().toISOString();
   try {
+    const doc = {
+      items: State.items,
+      wishes: State.wishes,
+      hides: State.hides,
+      prefs: State.prefs || {},
+      updatedAt: stamp,
+      count: State.items.length,
+      cache: collectCache()
+    };
     const res = await fetch(url, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: State.items,
-        wishes: State.wishes,
-        hides: State.hides,
-        prefs: State.prefs || {},
-        updatedAt: stamp,
-        count: State.items.length,
-        cache: collectCache()
-      })
+      body: JSON.stringify(doc)
     });
     if (!res.ok) throw new Error(describeHttp(res.status));
+    saveBase(doc);
     localStorage.setItem(LS_MODIFIED, stamp);
     State.serverStamp = stamp;
     setSyncIcon("saved");
@@ -537,11 +671,18 @@ async function pullFromServer(silent) {
       toast(`서버가 비어 있어 받지 않았어요 (이 기기 ${State.items.length}개 유지)`, "error");
       return false;
     }
+    /* 이 기기에 아직 안 올린 변경이 있으면 통째로 받지 말고 **합친다**(2026-10-06) — 받은 뒤 합친 걸 올린다 */
+    if (mergeIntoLocal(d) === "merged") {
+      saveLocal();
+      if (!silent) toast(`서버 것과 이 기기에서 바꾼 것을 합쳤어요 (${State.items.length}개)`, "success");
+      return true;
+    }
     State.items = d.items;
     adoptLists(d);
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_MODIFIED, d.updatedAt || new Date().toISOString());
     State.serverStamp = d.updatedAt || "";
+    saveBase(d);
     setSyncIcon("saved");
     if (!silent) toast(`서버에서 불러옴 (${State.items.length}개)`, "success");
     return true;
@@ -601,6 +742,7 @@ async function syncOnBoot() {
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod || new Date().toISOString());
       State.serverStamp = serverMod || "";
+      saveBase(d);
       applyFilters();
       if (window.renderDiscover) renderDiscover();
       setSyncIcon("saved");
@@ -627,6 +769,14 @@ async function syncOnBoot() {
 
     // 서버가 더 최신
     if (serverMod > localMod) {
+      /* 이 기기에 안 올린 변경이 있었으면(창을 닫아 못 올린 경우 등) 합쳐서 올린다(2026-10-06) */
+      if (mergeIntoLocal(d) === "merged") {
+        saveLocal();
+        applyFilters();
+        if (window.renderDiscover) renderDiscover();
+        toast("이 기기에서 바꾼 것과 서버 것을 합쳤어요");
+        return;
+      }
       // 안전장치: 서버 데이터가 로컬보다 현저히 적으면 물어봄
       if (localCount > 0 && serverCount < localCount * 0.5) {
         const ok = confirm(
@@ -641,6 +791,7 @@ async function syncOnBoot() {
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod);
       State.serverStamp = serverMod;
+      saveBase(d);
       applyFilters();
       if (window.renderDiscover) renderDiscover();
       setSyncIcon("saved");
@@ -651,6 +802,8 @@ async function syncOnBoot() {
     // 로컬이 더 최신 — 단, 시드는 절대 올리지 않는다
     if (localMod > serverMod && !isSeedData()) { await autoPush(); return; }
 
+    // 같다 — 처음 켠 기기면 지금을 합치기 기준으로 삼는다
+    if (!loadBase()) saveBase(d);
     setSyncIcon("saved");
   } catch (e) {
     console.error("부팅 동기화 실패", e);
@@ -668,6 +821,7 @@ async function syncOnBoot() {
    이게 없을 때의 문제: 서버를 페이지 열 때 한 번만 읽어서, 폰이 열려 있는 동안 PC에서 고치면
    폰은 모른다. 그 상태로 폰에서 뭘 하나 고치면 폰의 옛 문서 전체가 PC 변경분을 덮어썼다. */
 let _es = null;
+let _esLast = 0;   // 실시간 연결에서 마지막으로 뭔가 받은 시각 — 서버가 30초쯤마다 keep-alive를 보낸다
 let _pullPending = false;
 
 function realtimeUrl() {
@@ -682,8 +836,10 @@ function startRealtime() {
   if (!url || typeof EventSource === "undefined") return;
   try {
     _es = new EventSource(url);
+    _esLast = Date.now();
     _es.addEventListener("put", onRemoteStamp);
     _es.addEventListener("patch", onRemoteStamp);
+    _es.addEventListener("keep-alive", () => { _esLast = Date.now(); });
     _es.onerror = () => { /* 끊기면 브라우저가 자동 재연결. 탭 복귀 시에도 한 번 확인한다 */ };
   } catch (e) {
     console.warn("실시간 동기화를 켜지 못했습니다", e);
@@ -696,6 +852,7 @@ function stopRealtime() {
 
 /* 서버의 updatedAt이 바뀌었을 때 */
 function onRemoteStamp(e) {
+  _esLast = Date.now();
   let stamp = null;
   try { stamp = (JSON.parse(e.data || "{}") || {}).data; } catch { return; }
   if (!stamp) return;
@@ -740,6 +897,23 @@ function initVisibilitySync() {
   };
   document.addEventListener("visibilitychange", check);
   window.addEventListener("focus", check);
+
+  /* **창을 내리거나 닫을 때 남은 저장을 바로 보낸다**(2026-10-06) — 2~3초 모았다 보내는 사이에 앱을 내리면
+     그 기기에만 남았다(추천 [치우기]가 다른 기기에 안 따라온 경우) */
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "hidden" || !hasSyncPassword()) return;
+    let pending = !!_syncTimer;
+    if (_prefPush) { clearTimeout(_prefPush); _prefPush = null; saveLocal(true); pending = true; }
+    if (pending) { clearTimeout(_syncTimer); _syncTimer = null; autoPush(); }
+  });
+
+  /* **끊긴 실시간 연결 알아채기**(2026-10-06). 서버는 연결이 살아 있으면 30초쯤마다 keep-alive를 보낸다.
+     이 기기 안에서 시계만 본다 — 서버에 묻지 않는다. 2분 넘게 아무것도 안 왔으면 연결만 다시 붙인다
+     (다시 붙으면 서버가 지금 시각을 보내주고, 바뀐 게 있을 때만 받아온다). 창이 보일 때만. */
+  setInterval(() => {
+    if (!hasSyncPassword() || document.visibilityState !== "visible") return;
+    if (!_es || _es.readyState === 2 || Date.now() - _esLast > 120000) startRealtime();
+  }, 30000);
 }
 
 /* 저장 대기 중 페이지 닫기 방지 */
