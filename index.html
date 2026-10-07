@@ -785,20 +785,20 @@
   </div>
 </div>
 
-<!-- ===== 오래 쉬었을 때 새로고침 묻기 (initIdleRefresh) — 다른 창보다 위에 뜨도록 맨 뒤에 둔다 ===== -->
-<div id="idleModal" class="modal-back hidden">
+<!-- ===== 새 버전이 나왔을 때 새로고침 묻기 (initUpdateCheck) — 다른 창보다 위에 뜨도록 맨 뒤에 둔다 ===== -->
+<div id="updateModal" class="modal-back hidden">
   <div class="modal-card max-w-sm">
     <div class="p-6 text-center">
       <i class="fa-solid fa-rotate text-3xl ac-text"></i>
-      <h3 class="text-slate-800 text-lg mt-3">1시간 넘게 쉬었어요</h3>
+      <h3 class="text-slate-800 text-lg mt-3">새 버전이 나왔어요</h3>
       <p class="text-sm text-slate-500 font-medium mt-2 leading-relaxed">
-        다른 기기에서 바뀐 기록과 새 버전을 받아오려면<br>새로고침해 주세요.
+        새로고침하면 바뀐 기능이 적용돼요.<br>내 기록은 그대로예요.
       </p>
     </div>
     <div class="modal-foot">
       <div class="flex-1"></div>
-      <button id="idleKeepBtn" class="btn btn-ghost">그냥 쓰기</button>
-      <button id="idleReloadBtn" class="btn btn-primary"><i class="fa-solid fa-rotate mr-1"></i>새로고침</button>
+      <button id="updateLaterBtn" class="btn btn-ghost">나중에</button>
+      <button id="updateReloadBtn" class="btn btn-primary"><i class="fa-solid fa-rotate mr-1"></i>새로고침</button>
     </div>
   </div>
 </div>
@@ -821,7 +821,7 @@
     }
   })();
 </script>
-<script src="core.js?v=20261007b"></script>
+<script src="core.js?v=20261007c"></script>
 <script src="tmdb.js?v=20261001"></script>
 <script src="watchlog.js?v=20261007"></script>
 <script src="discover.js?v=20261007"></script>

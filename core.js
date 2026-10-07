@@ -916,34 +916,54 @@ function initVisibilitySync() {
   }, 30000);
 }
 
-/* ---------- 오래 쉬었으면 새로고침 묻기 (2026-10-07 요청) ----------
-   아무 조회·클릭 없이 **1시간**이 지나면 그 순간 창을 띄운다. [새로고침] = 로고와 같은 강력 새로고침
-   (`hardReload` — 새 버전 코드 + 서버 최신 기록) / [그냥 쓰기]·Escape·바깥 = 닫고 다시 1시간을 센다.
-   · "조회"는 누르기·키 입력·스크롤·휠로 센다(보기만 하며 스크롤해도 쉰 게 아니다).
-   · 등록·수정 창이 열려 있으면 띄우지 않는다 — 새로고침하면 적던 내용이 날아간다. 닫으면 다음 확인에서 뜬다.
-   · 탭이 가려져 있으면 브라우저가 타이머를 늦추므로, 다시 보일 때도 한 번 확인한다. */
-const IDLE_MS = 60 * 60 * 1000;
-let _lastAct = Date.now();
-function closeIdleModal() {
-  $("#idleModal").classList.add("hidden");
-  _lastAct = Date.now();
+/* ---------- 새 버전이 나왔으면 새로고침 묻기 (2026-10-07 요청) ----------
+   열려 있는 화면은 앱을 열 때 받은 코드를 계속 쓰므로, 배포해도 **스스로는 모른다**(PC를 며칠 켜두면 옛 코드로 돈다).
+   그래서 **창으로 돌아올 때** index.html만 한 번 받아 코드 파일 번호(`core.js?v=…`·`style.css?v=…`)를 지금 도는 것과 견준다.
+   다르면 `#updateModal` — [새로고침] = 로고와 같은 `hardReload` / [나중에]·Escape·바깥 = 그 버전은 다시 안 묻는다.
+   · 처음엔 "1시간 쉬면 묻기"였는데 영화 한 편(2시간)만 봐도 뜨고, 기록은 실시간·합치기로 이미 따라오므로
+     정말 필요한 건 새 코드뿐이라 이걸로 바꿨다(사용자 선택).
+   · 확인은 돌아올 때(`visibilitychange`·`focus`)만, **5분에 한 번까지** — 주기적으로 서버에 묻지 않는다.
+   · GitHub Pages가 파일을 최대 10분쯤 붙잡아 두어 배포 직후엔 몇 분 늦게 알아챌 수 있다.
+   · 등록·수정 창이 열려 있으면 안 띄우고, 닫은 뒤 돌아올 때 띄운다(새로고침하면 적던 게 날아간다).
+   · 무엇이 실패하든(오프라인·file://) 조용히 넘어간다 — 이 기능 때문에 앱이 멈추면 안 된다. */
+function codeVersionOf(text) {
+  return [...String(text).matchAll(/([\w-]+\.(?:js|css))\?v=([\w.-]+)/g)]
+    .map(m => m[1] + "=" + m[2]).sort().join("|");
 }
-function initIdleRefresh() {
-  const bump = () => { _lastAct = Date.now(); };
-  ["pointerdown", "keydown", "wheel", "touchstart"].forEach(t => document.addEventListener(t, bump, { capture: true, passive: true }));
-  window.addEventListener("scroll", bump, { passive: true });
-  const check = () => {
-    const m = $("#idleModal");
+function runningVersion() {
+  return codeVersionOf([...document.querySelectorAll("script[src], link[href]")]
+    .map(el => el.getAttribute("src") || el.getAttribute("href")).join(" "));
+}
+let _verChecked = 0, _verNew = "", _verSkip = "";
+async function checkNewVersion() {
+  try {
+    const m = $("#updateModal");
     if (!m || !m.classList.contains("hidden")) return;
-    if (Date.now() - _lastAct < IDLE_MS) return;
-    if (!$("#editModal").classList.contains("hidden")) return;
+    if (!_verNew) {
+      if (Date.now() - _verChecked < 5 * 60 * 1000) return;
+      _verChecked = Date.now();
+      const res = await fetch(location.pathname + "?vc=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return;
+      const latest = codeVersionOf(await res.text());
+      if (!latest || latest === runningVersion() || latest === _verSkip) return;
+      _verNew = latest;
+    }
+    if (!$("#editModal").classList.contains("hidden")) return;   // 적는 중이면 다음에
     m.classList.remove("hidden");
-  };
-  setInterval(check, 30000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") check(); });
-  $("#idleReloadBtn").addEventListener("click", () => hardReload());
-  $("#idleKeepBtn").addEventListener("click", closeIdleModal);
-  onBackdropClose("#idleModal", closeIdleModal);
+  } catch { /* 확인 실패는 조용히 넘어간다 */ }
+}
+function closeUpdateModal() {
+  $("#updateModal").classList.add("hidden");
+  _verSkip = _verNew;   // 이 버전은 다시 안 묻는다 (더 새 버전이 나오면 다시 묻는다)
+  _verNew = "";
+}
+function initUpdateCheck() {
+  if (!$("#updateModal") || !$("#updateReloadBtn") || !$("#updateLaterBtn")) return;
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkNewVersion(); });
+  window.addEventListener("focus", checkNewVersion);
+  $("#updateReloadBtn").addEventListener("click", () => hardReload());
+  $("#updateLaterBtn").addEventListener("click", closeUpdateModal);
+  onBackdropClose("#updateModal", closeUpdateModal);
 }
 
 /* 저장 대기 중 페이지 닫기 방지 */
@@ -1119,7 +1139,7 @@ function onBackdropClose(sel, close) {
    등록/수정 모달은 State도 정리해야 하므로 closeEdit()을 쓴다. */
 function initEscapeKey() {
   const layers = [
-    { sel: "#idleModal", close: () => closeIdleModal() },
+    { sel: "#updateModal", close: () => closeUpdateModal() },
     { sel: "#quickRateModal", close: () => closeQuickRate() },
     { sel: "#dcModal" },
     { sel: "#detailModal" },
@@ -1218,7 +1238,7 @@ function bootApp() {
   initTabs();
   initEscapeKey();
   initVisibilitySync();
-  initIdleRefresh();
+  initUpdateCheck();
   initWatchlog();
   initTmdb();
   initDiscover();
