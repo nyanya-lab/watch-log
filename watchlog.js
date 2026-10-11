@@ -79,6 +79,51 @@ function needsKoName(i) {
   return (i.cast || []).some(c => bad(c.name, c.id));
 }
 
+/* ---------- 사람 구분 (2026-10-12) ----------
+   이름이 같은 **다른 사람**이 있다(박지훈 둘 — 약한영웅·왕과 사는 남자 / 미드나이트·괴물. 2026-10-12 기준 11쌍).
+   예전엔 이름으로 모아서 배우 배지·통계 TOP10·결산·인물 칩이 둘을 한 사람으로 셌다. 이제 **TMDB 번호로** 묶는다.
+   번호가 없는 옛 항목은 그 이름을 가진 번호가 **딱 하나**면 그 사람으로 치고, 없거나 둘 이상이면 이름으로 따로 센다
+   (모르는 걸 아무 쪽에나 붙이면 다시 섞인다). 번호는 [배우·감독 번호 채우기](`runFillPersonIds`)가 채운다.
+   키 모양: 번호가 있으면 `id:123`, 없으면 `nm:이름`. */
+function personIdIndex() {
+  const m = new Map();
+  const add = (n, id) => { if (!n || !id) return; if (!m.has(n)) m.set(n, new Set()); m.get(n).add(id); };
+  State.items.forEach(i => { add(i.director, i.directorId); (i.cast || []).forEach(c => add(c.name, c.id)); });
+  return m;
+}
+function personKeyOf(name, id, idx) {
+  if (id) return "id:" + id;
+  const s = (idx || personIdIndex()).get(name);
+  return s && s.size === 1 ? "id:" + [...s][0] : "nm:" + name;
+}
+const isPersonKey = (k) => /^(id|nm):/.test(String(k || ""));
+/* 기록에 나온 사람들 — kind: "actor" | "director" | 없으면 둘 다 */
+function peopleIn(i, idx, kind) {
+  const out = [];
+  if (kind !== "actor" && i.director) out.push({ name: i.director, id: i.directorId || null, key: personKeyOf(i.director, i.directorId, idx) });
+  if (kind !== "director") (i.cast || []).forEach(c => { if (c.name) out.push({ name: c.name, id: c.id || null, key: personKeyOf(c.name, c.id, idx) }); });
+  return out;
+}
+function itemHasPerson(i, key, idx) {
+  if (!key) return true;
+  if (!isPersonKey(key)) key = personKeyOf(key, null, idx);   // 이름만 넘어온 옛 호출
+  return peopleIn(i, idx).some(p => p.key === key);
+}
+/* 사람별 개수 — [{key, name, id, n}] 많은 순. 같은 기록에 한 사람이 두 번(배우+감독) 나와도 한 번만 센다 */
+function countPeople(list, kind, idx) {
+  const m = new Map();
+  list.forEach(i => {
+    const seen = new Set();
+    peopleIn(i, idx, kind).forEach(p => {
+      if (seen.has(p.key)) return; seen.add(p.key);
+      const cur = m.get(p.key) || { key: p.key, name: p.name, id: p.key.startsWith("id:") ? +p.key.slice(3) : null, n: 0 };
+      cur.n++;
+      m.set(p.key, cur);
+    });
+  });
+  return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "ko"));
+}
+
 /* 제목이 다른데 tmdbId가 같은 항목 = 자동 매칭 오류 의심.
    (속편이 1편 정보를 물고 오면 포스터·장르·평점이 전부 1편 것이 된다)
    시즌은 원래 같은 tmdbId를 공유하므로, 제목이 서로 다른 경우만 잡는다. */
@@ -948,9 +993,9 @@ function filterBySeries(key) {
 window.filterBySeries = filterBySeries;
 
 /* 배우·감독 배지 클릭 → 그 사람 작품만 조회 */
-function filterByPerson(name) {
+function filterByPerson(name, id) {
   $("#detailModal").classList.add("hidden");
-  jumpToList({ person: name });
+  jumpToList({ person: personKeyOf(name, id || null) });   // 번호로 묶는다 — 동명이인이 섞이지 않게
   toast(`${name} 작품 보는 중`);
 }
 window.filterByPerson = filterByPerson;
@@ -959,6 +1004,8 @@ window.filterByPerson = filterByPerson;
 function applyFilters() {
   const F = Filters;
   State._dupIds = dupTmdbIdSet();     // 매 조회마다 한 번만 계산
+  State._personIdx = personIdIndex();  // 사람 번호 — 이름이 같은 다른 사람을 가른다
+  renderPersonIdInfo();                // 설정 탭 [배우·감독 번호 채우기] 대상 수
   State._personKo = getPersonCache(); // 이름 판별용 캐시도 한 번만 읽는다
   let list = State.items.filter(i => {
     if (F.pendingOnly && i.tmdbId) return false;
@@ -979,7 +1026,7 @@ function applyFilters() {
     if (myR < F.rMin || myR > F.rMax) return false;
     const tmR = i.voteAverage || 0;
     if (tmR < F.vMin || tmR > F.vMax) return false;
-    if (F.person && !(i.director === F.person || (i.cast || []).some(c => c.name === F.person))) return false;
+    if (F.person && !itemHasPerson(i, F.person, State._personIdx)) return false;
     return true;
   });
 
@@ -1356,21 +1403,21 @@ function openDetail(id) {
   ].filter(Boolean).join(" · ");
 
   /* 배우·감독 배지는 클릭하면 그 사람 작품만 조회된다 */
-  const personBadge = (name, cls, title) =>
+  const personBadge = (name, cls, title, id) =>
     `<span class="badge ${cls} badge-link" title="${esc(title || "")}클릭하면 이 사람 작품만 봅니다"
-       onclick="filterByPerson('${esc(name).replace(/'/g, "\\'")}')">${esc(name)}</span>`;
+       onclick="filterByPerson('${esc(name).replace(/'/g, "\\'")}', ${+id || 0})">${esc(name)}</span>`;
 
   const directorHtml = i.director
     ? `<div class="text-xs font-medium text-slate-500 mt-2 flex items-center gap-1.5 flex-wrap">
          <i class="fa-solid fa-clapperboard text-slate-400"></i>감독
-         ${personBadge(i.director, "badge-genre")}
+         ${personBadge(i.director, "badge-genre", "", i.directorId)}
        </div>` : "";
 
   const castHtml = (i.cast || []).length
     ? `<div class="dt-sec">
          <div class="dt-sec-h"><i class="fa-solid fa-users mr-1 text-pink-400"></i>출연진</div>
          <div class="flex flex-wrap gap-1.5">
-           ${i.cast.map(c => personBadge(c.name, "badge-cast", c.character ? c.character + " · " : "")).join("")}
+           ${i.cast.map(c => personBadge(c.name, "badge-cast", c.character ? c.character + " · " : "", c.id)).join("")}
          </div>
          ${directorHtml}
        </div>`
@@ -1893,7 +1940,7 @@ function openEdit(id) {
         tmdbId: i.tmdbId, mediaType: i.mediaType || null,
         poster: i.poster, backdrop: i.backdrop, genres: i.genres || [],
         overview: i.overview || "", releaseDate: i.releaseDate, releaseYear: i.releaseYear,
-        cast: i.cast || [], director: i.director || "", runtime: i.runtime,
+        cast: i.cast || [], director: i.director || "", directorId: i.directorId || null, runtime: i.runtime,
         totalEpisodes: i.totalEpisodes, totalSeasons: i.totalSeasons,
         cert: i.cert, voteAverage: i.voteAverage, companies: i.companies || [],
         originalTitle: i.originalTitle, otts: i.otts || [],
@@ -2032,7 +2079,7 @@ function saveItem() {
       poster: t.poster, backdrop: t.backdrop,
       genres: t.genres || [], overview: t.overview || "",
       releaseDate: t.releaseDate, releaseYear: t.releaseYear,
-      cast: t.cast || [], director: t.director || "",
+      cast: t.cast || [], director: t.director || "", directorId: t.directorId || null,
       runtime: t.runtime, totalEpisodes: t.totalEpisodes, totalSeasons: t.totalSeasons,
       cert: t.cert, voteAverage: t.voteAverage, companies: t.companies || [],
       originalTitle: t.originalTitle, otts: t.otts || [],
@@ -2164,6 +2211,7 @@ function initSettings() {
 
   $("#refreshAllBtn").addEventListener("click", runRefreshAll);
   $("#enrichBtn").addEventListener("click", runEnrichAll);
+  $("#personIdBtn").addEventListener("click", runFillPersonIds);
   renderUpdInfo();
 
   $("#exportBtn").addEventListener("click", () => {
@@ -2985,5 +3033,70 @@ async function runFixNames(list) {
   status.textContent = `이름 한글화 완료 — ${changed}곳 변경 (사람 ${looked}명 조회${fail ? `, 실패 ${fail}` : ""})`;
   status.className = "text-sm mt-3 font-medium text-emerald-600";
   toast(`배우·감독 이름 ${changed}곳을 한글로 바꿨습니다`, "success");
+}
+
+/* ---------- 배우·감독 번호 채우기 (2026-10-12) ----------
+   사람을 번호로 묶으려면(`personKeyOf`) 번호가 있어야 한다. 번호가 빠진 기록만(2026-10-12 기준 66개 — 대부분 감독이다:
+   `saveItem`이 `directorId`를 저장하지 않고 있었다) TMDB 크레딧을 다시 받아 **번호만** 채운다. 이름·배역은 안 바꾼다.
+   · `sameWork`로 같은 작품인지 확인된 것만 — 짐작한 mediaType으로 남의 작품 크레딧을 받으면 남의 번호가 붙는다.
+   · 이름이 맞는 사람만 붙인다. 저장된 이름이 한글로 바뀌어 있으면 한글 표기 캐시(번호 → 한글 이름)로 맞춘다.
+   · 못 맞춘 사람은 그대로 두고 개수만 알린다(번호 없이 이름으로 따로 센다). */
+function personIdTargets() {
+  return State.items.filter(i => i.tmdbId && ((i.cast || []).some(c => c.name && !c.id) || (i.director && !i.directorId)));
+}
+function renderPersonIdInfo() {
+  const row = $("#personIdRow");
+  if (!row) return;
+  const n = personIdTargets().length;
+  row.classList.toggle("hidden", !n);
+  $("#personIdCount").textContent = n ? `번호가 빠진 기록 ${n}개` : "";
+}
+async function runFillPersonIds() {
+  if (_enriching) { toast("이미 진행 중입니다"); return; }
+  if (!getTmdbKey()) { toast("TMDB API 키를 먼저 저장하세요", "error"); return; }
+  const targets = personIdTargets();
+  if (!targets.length) { toast("채울 번호가 없습니다", "success"); return; }
+  if (!confirm(`${targets.length}개 기록의 배우·감독 번호를 TMDB에서 받아 채웁니다.\n이름·배역은 바꾸지 않습니다.`)) return;
+
+  _enriching = true;
+  const status = $("#enrichStatus"), bar = $("#enrichBar"), fill = $("#enrichBarFill");
+  bar.classList.remove("hidden");
+  const cache = getPersonCache();
+  const samePerson = (stored, tmdbName, id) => stored === tmdbName || (!!id && cache[id] === stored);
+  let filled = 0, missed = 0, skipped = 0, fail = 0;
+
+  for (let n = 0; n < targets.length; n++) {
+    const i = targets[n];
+    status.textContent = `${n + 1} / ${targets.length} — ${i.title}`;
+    status.className = "text-sm mt-3 font-medium text-slate-600";
+    fill.style.width = ((n + 1) / targets.length * 100).toFixed(1) + "%";
+    try {
+      const d = await tmdbDetail(i.tmdbId, mediaTypeOf(i));
+      if (!d || !sameWork(i, d)) { skipped++; }
+      else {
+        (i.cast || []).forEach(c => {
+          if (!c.name || c.id) return;
+          const m = (d.cast || []).find(x => samePerson(c.name, x.name, x.id));
+          if (m) { c.id = m.id; filled++; } else missed++;
+        });
+        if (i.director && !i.directorId) {
+          if (d.directorId && samePerson(i.director, d.director, d.directorId)) { i.directorId = d.directorId; filled++; }
+          else missed++;
+        }
+      }
+    } catch { fail++; }
+    await new Promise(r => setTimeout(r, 240));
+    if (n % 10 === 9) saveLocal(true);
+  }
+
+  saveLocal();
+  applyFilters();
+  renderDiscover();
+  _enriching = false;
+  const msg = `번호 ${filled}개 채움` + (missed ? ` · 못 맞춘 사람 ${missed}명` : "")
+    + (skipped ? ` · 작품 확인 안 돼 건너뜀 ${skipped}개` : "") + (fail ? ` · 실패 ${fail}개` : "");
+  status.textContent = "배우·감독 번호 채우기 완료 — " + msg;
+  status.className = "text-sm mt-3 font-medium text-emerald-600";
+  toast(msg, "success");
 }
 

@@ -812,12 +812,13 @@ function applyDcPrefs() {
      키가 있을 때만 — 아니면 조회할 이유도 없고 키 없는 기기에서는 토스트만 뜬다.
      기다리지 않는다(받아지면 `pickPerson`이 다시 그린다). */
   const name = typeof p.personName === "string" ? p.personName : Discover.personName;
-  if (name !== Discover.personName) {
+  const pid = p.personId !== undefined ? (p.personId || null) : Discover.personId;
+  if (name !== Discover.personName || pid !== Discover.personId) {   // 이름이 같아도 번호가 다르면 다른 사람
     Discover.personName = name;
-    Discover.personId = p.personId || null;
+    Discover.personId = pid;
     Discover.filmo = [];
     if (name && Discover.view === "person" && typeof getTmdbKey === "function" && getTmdbKey())
-      pickPerson(name);
+      pickPerson(name, pid);
   }
 }
 
@@ -2288,20 +2289,9 @@ const _filmoCache = new Map();      // personId → 작품 목록 (새로고침�
 
 /* 내 기록에 나온 사람들을 많이 나온 순으로.
    id는 기록에 저장된 것을 먼저 쓴다 — 이름 한글화(`runFixNames`)를 돌렸으면 채워져 있다. */
+/* 사람은 **번호로** 묶는다(2026-10-12) — 이름으로 묶으면 동명이인(박지훈 둘)이 한 칩이 된다. `countPeople`(watchlog.js) */
 function personRank(kind) {
-  const map = new Map();
-  const add = (name, id) => {
-    if (!name) return;
-    const cur = map.get(name) || { name, id: null, n: 0 };
-    cur.n++;
-    if (!cur.id && id) cur.id = id;
-    map.set(name, cur);
-  };
-  State.items.forEach(i => {
-    if (kind === "director") add(i.director, i.directorId);
-    else (i.cast || []).forEach(c => add(c.name, c.id));
-  });
-  return [...map.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, "ko"));
+  return countPeople(State.items, kind === "director" ? "director" : "actor", personIdIndex());
 }
 
 /* 이름만 아는 사람의 id 찾기.
@@ -2334,12 +2324,17 @@ async function openPersonFilmo(id, name, kind) {
   }
 }
 
-async function pickPerson(name) {
+/* 칩은 사람 키(`id:123`)로, 다른 기기에서 넘어온 설정은 이름 + 번호로 부른다 */
+async function pickPerson(nameOrKey, knownId) {
   if (!getTmdbKey()) { toast("설정 탭에서 TMDB API 키를 먼저 저장하세요", "error"); return; }
-  const p = personRank(Discover.personKind).find(x => x.name === name);
+  const rank = personRank(Discover.personKind);
+  const p = rank.find(x => x.key === nameOrKey)
+    || (knownId ? rank.find(x => x.id === knownId) || { name: nameOrKey, id: knownId } : rank.find(x => x.name === nameOrKey));
   if (!p) return;
+  const name = p.name;
 
   Discover.personName = name;
+  Discover.personId = p.id || null;   // 칩 켜짐을 번호로 가른다 — 받는 동안 옛 사람 칩이 켜져 있지 않게
   Discover.filmo = [];
   Discover.filmoLoading = true;
   renderDiscover();
@@ -2376,8 +2371,8 @@ function renderDcPerson() {
         <i class="fa-solid ${k[2]} mr-1"></i>${k[1]}</button>`).join("");
     /* 많이 본 순 상위 24명. 전부 늘어놓으면 1300명이라 바가 화면을 다 먹는다 */
     $("#dcPersonChips").innerHTML = people.length
-      ? people.map(p => `<button class="fchip ${Discover.personName === p.name ? "on" : ""}"
-          data-pname="${esc(p.name)}">${esc(p.name)}<span class="dc-num">${p.n}</span></button>`).join("")
+      ? people.map(p => `<button class="fchip ${(p.id && Discover.personId ? p.id === Discover.personId : Discover.personName === p.name) ? "on" : ""}"
+          data-pkey="${esc(p.key)}">${esc(p.name)}<span class="dc-num">${p.n}</span></button>`).join("")
       : `<span class="text-xs font-semibold text-slate-500">TMDB 정보를 채우면 여기에 사람이 모입니다</span>`;
   }
 
@@ -2820,8 +2815,8 @@ function initDiscover() {
         renderDiscover();
         return;
       }
-      const who = e.target.closest("[data-pname]");
-      if (who) pickPerson(who.dataset.pname);
+      const who = e.target.closest("[data-pkey]");
+      if (who) pickPerson(who.dataset.pkey);
     });
   }
   /* 필터·정렬은 팝업으로 (바에 다 펼치면 결과보다 바가 길어진다) */

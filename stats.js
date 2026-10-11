@@ -82,8 +82,10 @@ function renderStats() {
   });
   const byGenre = countBy(items.flatMap(i => visibleGenres(i.genres)), g => g);
   const byYear = countBy(items.filter(i => i.startDate), i => i.startDate.slice(0, 4));
-  const byActor = countBy(items.flatMap(i => (i.cast || []).map(c => c.name)), n => n);
-  const byDirector = countBy(items.map(i => i.director).filter(Boolean), d => d);
+  /* 배우·감독은 **TMDB 번호로** 센다(2026-10-12) — 이름으로 세면 동명이인(박지훈 둘)이 한 막대가 된다 */
+  const pIdx = personIdIndex();
+  const actorTop = countPeople(items, "actor", pIdx).slice(0, 10);
+  const dirTop = countPeople(items, "director", pIdx).slice(0, 10);
 
   // 월별(1~12월) — 처음 본 날 + 마지막 시청 시작월 집계
   const byMonth = {};
@@ -185,13 +187,13 @@ function renderStats() {
       <div class="stat-grid2">
         <div>
           <h3 class="stat-h"><i class="fa-solid fa-user" style="color:#d4537e"></i>많이 본 배우 TOP 10</h3>
-          ${Object.keys(byActor).length
+          ${actorTop.length
             ? `<div style="height:300px"><canvas id="chartActor"></canvas></div>`
             : `<p class="stat-note text-center">TMDB 정보를 채우면 출연진 통계가 표시됩니다</p>`}
         </div>
         <div>
           <h3 class="stat-h"><i class="fa-solid fa-clapperboard" style="color:#64748b"></i>많이 본 감독 TOP 10</h3>
-          ${Object.keys(byDirector).length
+          ${dirTop.length
             ? `<div style="height:300px"><canvas id="chartDirector"></canvas></div>`
             : `<p class="stat-note text-center">TMDB 정보를 채우면 감독 통계가 표시됩니다</p>`}
         </div>
@@ -407,28 +409,28 @@ function renderStats() {
     options: { ...commonOpts, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
-  // 배우 TOP 10
-  const aTop = topN(byActor, 10);
-  if ($("#chartActor") && aTop.labels.length) {
-    // '기타' 집계는 배우 차트에서 제외
-    const aLabels = aTop.labels.filter(l => l !== "기타");
-    const aValues = aLabels.map(l => byActor[l]);
+  /* 막대를 누르면 **그 막대의 사람 번호**로 조회한다 — 이름(라벨)으로 찾으면 동명이인 중 아무나 걸린다 */
+  const clickPerson = (top) => (evt, els) => {
+    if (!els.length || typeof jumpToList !== "function") return;
+    const p = top[els[0].index];
+    if (p) jumpToList({ person: p.key });
+  };
+
+  // 배우 TOP 10 ('기타'는 안 그린다)
+  if ($("#chartActor") && actorTop.length) {
     _charts.push(new Chart($("#chartActor"), {
       type: "bar",
-      data: { labels: aLabels, datasets: [{ data: aValues, backgroundColor: chartPalette(4)[3], borderRadius: 6 }] },
-      options: { ...commonOpts, onClick: clickToFilter(l => ({ person: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+      data: { labels: actorTop.map(p => p.name), datasets: [{ data: actorTop.map(p => p.n), backgroundColor: chartPalette(4)[3], borderRadius: 6 }] },
+      options: { ...commonOpts, onClick: clickPerson(actorTop), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     }));
   }
 
   // 감독 TOP 10
-  const dTop = topN(byDirector, 10);
-  if ($("#chartDirector") && dTop.labels.length) {
-    const dLabels = dTop.labels.filter(l => l !== "기타");
-    const dValues = dLabels.map(l => byDirector[l]);
+  if ($("#chartDirector") && dirTop.length) {
     _charts.push(new Chart($("#chartDirector"), {
       type: "bar",
-      data: { labels: dLabels, datasets: [{ data: dValues, backgroundColor: chartPalette(5)[4], borderRadius: 6 }] },
-      options: { ...commonOpts, onClick: clickToFilter(l => ({ person: l })), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+      data: { labels: dirTop.map(p => p.name), datasets: [{ data: dirTop.map(p => p.n), backgroundColor: chartPalette(5)[4], borderRadius: 6 }] },
+      options: { ...commonOpts, onClick: clickPerson(dirTop), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
     }));
   }
 
@@ -454,13 +456,14 @@ function renderStats() {
         if (jump && typeof showWorksPopup === "function") {
           const patch = JSON.parse(jump.dataset.jump);
           Object.keys(patch).forEach(k => { if (!patch[k]) delete patch[k]; });
+          const idxNow = personIdIndex();   // 위임 핸들러는 한 번만 붙으므로 그때그때 만든다
           const list = State.items.filter(i =>
             (!patch.year || (i.startDate || "").slice(0, 4) === String(patch.year)) &&
             (!patch.genre || visibleGenres(i.genres).includes(patch.genre)) &&
             (!patch.ott || ottList(i).includes(patch.ott)) &&
-            (!patch.person || i.director === patch.person || (i.cast || []).some(c => c.name === patch.person))
+            (!patch.person || itemHasPerson(i, patch.person, idxNow))
           ).sort((a, b) => recDate(b).localeCompare(recDate(a)));
-          const what = patch.genre || patch.person || patch.ott || "";
+          const what = patch.genre || (patch.person ? jump.dataset.pname : "") || patch.ott || "";
           showWorksPopup(what ? `${what}` : `${patch.year}년`, patch.year ? `${patch.year}년` : "전체 기간", list, patch);
           return;
         }
@@ -530,8 +533,10 @@ function renderYearReview(year) {
     return e ? { name: e[0], n: e[1] } : null;
   };
   const topGenre = first(countBy(list.flatMap(i => visibleGenres(i.genres)), g => g));
-  const topActor = first(countBy(list.flatMap(i => (i.cast || []).map(c => c.name)), n => n));
-  const topDir = first(countBy(list.map(i => i.director).filter(Boolean), d => d));
+  /* 사람은 번호로 센다(동명이인) — 칩에는 이름, 누르면 번호로 조회 */
+  const pIdx = personIdIndex();
+  const topActor = countPeople(list, "actor", pIdx)[0] || null;
+  const topDir = countPeople(list, "director", pIdx)[0] || null;
   const ottCount = {};
   list.forEach(i => ottList(i).forEach(o => { ottCount[o] = (ottCount[o] || 0) + 1; }));
   const topOtt = first(ottCount);
@@ -555,7 +560,7 @@ function renderYearReview(year) {
   /* 칩을 누르면 그 조건으로 목록을 조회한다 — 연도를 함께 걸어야 결산에 적힌 개수와 맞는다.
      전체일 땐 Y가 빈 문자열이라 위임 핸들러가 year를 지운다(연도 없이 조회) */
   const pick = (icon, label, v, patch) => v
-    ? `<button class="yr-pick" data-jump='${esc(JSON.stringify(patch))}'>
+    ? `<button class="yr-pick" data-jump='${esc(JSON.stringify(patch))}' data-pname="${esc(v.name)}">
          <span class="ic"><i class="fa-solid ${icon}"></i></span>
          <span class="tx"><span class="l">${label}</span><b>${esc(v.name)}</b></span>
          <span class="n">${v.n}<small>편</small></span>
@@ -610,8 +615,8 @@ function renderYearReview(year) {
           <div class="yr-h"><i class="fa-solid fa-ranking-star"></i>가장 많이 본</div>
           <div class="yr-picks">
             ${pick("fa-masks-theater", "장르", topGenre, { year: Y, genre: topGenre && topGenre.name })}
-            ${pick("fa-user", "배우", topActor, { year: Y, person: topActor && topActor.name })}
-            ${pick("fa-clapperboard", "감독", topDir, { year: Y, person: topDir && topDir.name })}
+            ${pick("fa-user", "배우", topActor, { year: Y, person: topActor && topActor.key })}
+            ${pick("fa-clapperboard", "감독", topDir, { year: Y, person: topDir && topDir.key })}
             ${pick("fa-tv", "OTT", topOtt, { year: Y, ott: topOtt && topOtt.name })}
           </div>
         </div>` : ""}

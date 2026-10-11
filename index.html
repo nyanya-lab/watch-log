@@ -342,13 +342,21 @@
             </button>
             <span id="updEnrich" class="text-xs font-medium text-slate-400"></span>
           </div>
+          <!-- 번호가 빠진 기록이 있을 때만 보인다 (runFillPersonIds) -->
+          <div id="personIdRow" class="flex items-center gap-3 flex-wrap hidden">
+            <button id="personIdBtn" class="btn btn-ghost shrink-0">
+              <i class="fa-solid fa-id-badge mr-1"></i>배우·감독 번호 채우기
+            </button>
+            <span id="personIdCount" class="text-xs font-medium text-slate-400"></span>
+          </div>
         </div>
         <p class="text-xs text-slate-400 mt-2">
           <b>최신 정보로 갱신</b> — 시간이 지나면 바뀌는 값만 다시 받아옵니다:
           OTT · TMDB 평점 · 시즌/화수 · 시리즈 정보(해리포터·반지의제왕처럼 제목이 다른 시리즈 묶기, 몇 번째 편인지).
           제목·포스터·줄거리·장르·출연진과 내 기록(별점·본 날짜·한줄평)은 <b>건드리지 않습니다.</b><br>
           <b>미등록 항목 채우기</b> — TMDB에 아직 연결되지 않은 기록만 제목으로 찾아 채웁니다.
-          이미 연결된 기록은 대상이 아닙니다(매칭이 바뀌지 않도록).</p>
+          이미 연결된 기록은 대상이 아닙니다(매칭이 바뀌지 않도록).<br>
+          <b>배우·감독 번호 채우기</b> — 이름이 같은 다른 사람을 가르려고 사람마다 TMDB 번호를 받아 둡니다. 이름은 바꾸지 않습니다.</p>
         <div id="enrichStatus" class="text-sm mt-3 font-medium"></div>
         <div id="enrichBar" class="hidden mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
           <div id="enrichBarFill" class="h-full ac-bg transition-all" style="width:0%"></div>
@@ -823,9 +831,9 @@
 </script>
 <script src="core.js?v=20261007c"></script>
 <script src="tmdb.js?v=20261001"></script>
-<script src="watchlog.js?v=20261011"></script>
-<script src="discover.js?v=20261007"></script>
-<script src="stats.js?v=20260923b"></script>
+<script src="watchlog.js?v=20261012"></script>
+<script src="discover.js?v=20261012"></script>
+<script src="stats.js?v=20261012"></script>
 <script src="home.js?v=20261006b"></script>
 <script src="search.js?v=20260923b"></script>
 </body>
