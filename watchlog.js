@@ -1790,7 +1790,11 @@ function renderQuickRate() {
         건너뛰기<i class="fa-solid fa-arrow-right ml-1"></i>
       </button>
       <div class="flex-1"></div>
-      <span class="text-xs font-semibold text-slate-400">넣은 별점 ${QuickRate.done}개</span>
+      ${QuickRate.single ? "" : `<span class="text-xs font-semibold text-slate-400">넣은 별점 ${QuickRate.done}개</span>`}
+      <!-- 키보드 Enter 없이도 저장할 수 있게(폰 숫자 자판엔 Enter가 애매하다, 2026-10-11 요청) -->
+      <button id="qrSave" class="btn btn-sm btn-primary">
+        <i class="fa-solid fa-heart mr-1"></i>${QuickRate.single ? "등록하기" : "등록하고 다음"}
+      </button>
     </div>`;
 
   const input = $("#qrInput");
@@ -1808,6 +1812,12 @@ function renderQuickRate() {
   });
 
   $("#qrSkip").addEventListener("click", () => { QuickRate.idx++; renderQuickRate(); });
+  /* 버튼은 빈 칸이면 건너뛰지 않고 알려준다 — "등록하기"를 눌렀는데 조용히 넘어가면 저장된 줄 안다 */
+  $("#qrSave").addEventListener("click", () => {
+    const v = parseFloat(input.value);
+    if (!(isFinite(v) && v > 0)) { toast("별점을 입력하세요 (0.1 ~ 10)", "error"); input.focus(); return; }
+    quickRateSubmit();
+  });
   $("#qrPrev").addEventListener("click", () => { QuickRate.idx = Math.max(0, QuickRate.idx - 1); renderQuickRate(); });
 
   input.focus();
