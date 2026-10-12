@@ -525,7 +525,6 @@ function renderYearReview(year) {
     const rt = i.runtime || 0;
     return s + (rt ? (i.type === "영화" ? rt : rt * (epCount(i) || 1)) : 0);
   }, 0);
-  const days = Object.keys(watchDays(year)).length;
 
   /* 1위만 뽑는다 — 결산은 훑어보는 자리라 목록이 아니라 한 줄이어야 한다 */
   const first = (obj) => {
@@ -601,7 +600,6 @@ function renderYearReview(year) {
     <div class="yr-in">
       <div class="yr-tiles">
         ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편")}
-        ${tile("fa-calendar-check", "본 날", days, "일")}
         ${tile("fa-hourglass-half", "예상 시청시간", Math.round(min / 60).toLocaleString(), "시간")}
         ${tile("fa-heart", "평균 별점", yrRated.length ? (yrRated.reduce((s, i) => s + +i.rating, 0) / yrRated.length).toFixed(1) : "-", "")}
       </div>
@@ -673,7 +671,9 @@ function watchDays(year) {
       const end = new Date((e || s) + "T00:00:00");
       let guard = 0;
       while (cur <= end && guard++ < 400) {
-        const key = cur.toISOString().slice(0, 10);
+        /* ⚠ `toISOString`은 세계 표준시라 한국 자정이 **전날**로 적혔다 — 히트맵이 하루씩 앞당겨 칠해졌다(2026-10-12).
+           이 기기 시간대로 적는다(히트맵 칸 키와 같은 모양) */
+        const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
         if (year == null || key.startsWith(String(year))) counts[key] = (counts[key] || 0) + 1;
         cur.setDate(cur.getDate() + 1);
       }
