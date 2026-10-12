@@ -677,6 +677,8 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 
 /* 달마다 막대 — CSS만으로. 가장 많은 칸만 포인트 색, 나머지는 옅은 포인트 색 */
 /* OTT별 가로 막대 — 달마다 막대와 같은 색 규칙(1위만 포인트 색) */
+.yr-cols2 { display: grid; grid-template-columns: 1fr; gap: 0 28px; }
+@media (min-width: 640px) { .yr-cols2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .yr-otts { display: flex; flex-direction: column; gap: 4px; }
 .yr-ott { display: grid; grid-template-columns: 84px minmax(0, 1fr) 30px; align-items: center; gap: 10px; padding: 3px 0; text-align: left; }
 .yr-ott .o { font-size: 12.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

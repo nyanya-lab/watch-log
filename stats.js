@@ -513,26 +513,31 @@ function renderYearReview(year) {
     const e = Object.entries(obj).sort((a, b) => b[1] - a[1])[0];
     return e ? { name: e[0], n: e[1] } : null;
   };
-  const topGenre = first(countBy(list.flatMap(i => visibleGenres(i.genres)), g => g));
   /* 사람은 번호로 센다(동명이인) — 칩에는 이름, 누르면 번호로 조회 */
   const pIdx = personIdIndex();
   const topActor = countPeople(list, "actor", pIdx)[0] || null;
   const topDir = countPeople(list, "director", pIdx)[0] || null;
   const ottCount = {};
   list.forEach(i => ottList(i).forEach(o => { ottCount[o] = (ottCount[o] || 0) + 1; }));
-  const topOtt = first(ottCount);
-  /* OTT별 막대(2026-10-12 요청) — "가장 많이 본" 아래에 상위 6곳. 기록엔 "어디서 봤는지"가 없어서
-     **그 작품을 볼 수 있는 곳**(`ottList`)으로 센다 — 두 곳에 있으면 양쪽에 하나씩. 그래서 머리에 기준을 밝힌다.
-     누르면 칩과 같이 그 해·그 OTT 작품 팝업. 한 곳뿐이면 막대가 뜻이 없어 안 그린다 */
-  const ottRank = Object.entries(ottCount).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).slice(0, 6);
-  const ottMax = ottRank.length ? ottRank[0][1] : 1;
-  const ottHtml = ottRank.length > 1 ? `
-          <div class="yr-h"><i class="fa-solid fa-tv"></i>OTT별<span class="yr-h-sub">볼 수 있는 곳 기준</span></div>
-          <div class="yr-otts">${ottRank.map(([o, n], k) => `
-            <button class="yr-ott ${k === 0 ? "hot" : ""}" data-jump='${esc(JSON.stringify({ year: Y, ott: o }))}' title="${esc(o)} · ${n}편">
-              <span class="o">${esc(o)}</span><span class="b"><i style="width:${Math.round(n / ottMax * 100)}%"></i></span><span class="c">${n}</span>
+  /* OTT별·장르별 가로 막대(2026-10-12 요청) — 그 해 상위 6개씩 나란히. "가장 많이 본"의 OTT·장르 칸은 이걸로 대신해 뺐다.
+     · OTT는 기록에 "어디서 봤는지"가 없어서 **그 작품을 볼 수 있는 곳**(`ottList`)으로 센다 — 두 곳이면 양쪽에 하나씩.
+     · 장르도 한 작품에 여러 개라 각각 센다. 그래서 둘 다 머리에 기준을 밝힌다.
+     · 누르면 그 해·그 값의 작품 팝업(위임 핸들러가 `data-jump`를 본다). 한 개뿐이면 막대가 뜻이 없어 안 그린다 */
+  const barList = (icon, title, sub, counts, key) => {
+    const rank = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).slice(0, 6);
+    if (rank.length < 2) return "";
+    const max = rank[0][1];
+    return `<div>
+          <div class="yr-h"><i class="fa-solid ${icon}"></i>${title}<span class="yr-h-sub">${sub}</span></div>
+          <div class="yr-otts">${rank.map(([v, n], k) => `
+            <button class="yr-ott ${k === 0 ? "hot" : ""}" data-jump='${esc(JSON.stringify({ year: Y, [key]: v }))}' title="${esc(v)} · ${n}편">
+              <span class="o">${esc(v)}</span><span class="b"><i style="width:${Math.round(n / max * 100)}%"></i></span><span class="c">${n}</span>
             </button>`).join("")}
-          </div>` : "";
+          </div>
+        </div>`;
+  };
+  const ottBars = barList("fa-tv", "OTT별", "볼 수 있는 곳 기준", ottCount, "ott");
+  const genreBars = barList("fa-masks-theater", "장르별", "여러 장르면 각각", countBy(list.flatMap(i => visibleGenres(i.genres)), g => g), "genre");
 
   /* 흐름 막대 — 그 해면 1~12월, 전체면 해마다. 가장 많은 칸만 포인트 색 */
   const flow = all
@@ -609,14 +614,13 @@ function renderYearReview(year) {
         <div class="yr-posters">${best.map(poster).join("")}</div>` : ""}
 
       <div class="yr-cols">
-        ${(topGenre || topActor || topDir || topOtt) ? `<div>
-          <div class="yr-h"><i class="fa-solid fa-ranking-star"></i>가장 많이 본</div>
+        ${(topActor || topDir || firstWork) ? `<div>
+          ${(topActor || topDir) ? `<div class="yr-h"><i class="fa-solid fa-ranking-star"></i>가장 많이 본</div>
           <div class="yr-picks">
-            ${pick("fa-masks-theater", "장르", topGenre, { year: Y, genre: topGenre && topGenre.name })}
             ${pick("fa-user", "배우", topActor, { year: Y, person: topActor && topActor.key })}
             ${pick("fa-clapperboard", "감독", topDir, { year: Y, person: topDir && topDir.key })}
-            ${pick("fa-tv", "OTT", topOtt, { year: Y, ott: topOtt && topOtt.name })}
-          </div>${ottHtml}
+          </div>` : ""}
+          ${firstWork ? `<div class="yr-edges">${edge("첫 작품", firstWork)}${firstWork !== lastWork ? edge("마지막 작품", lastWork) : ""}</div>` : ""}
         </div>` : ""}
         <div>
           <div class="yr-h"><i class="fa-solid fa-chart-column"></i>${all ? "해마다" : "달마다"}${
@@ -628,9 +632,9 @@ function renderYearReview(year) {
               <span class="x">${f.label}</span>
             </${f.jump ? "button" : "div"}>`).join("")}
           </div>
-          ${firstWork ? `<div class="yr-edges">${edge("첫 작품", firstWork)}${firstWork !== lastWork ? edge("마지막 작품", lastWork) : ""}</div>` : ""}
         </div>
       </div>
+      ${(ottBars || genreBars) ? `<div class="yr-cols2">${ottBars}${genreBars}</div>` : ""}
     </div>`;
 }
 
