@@ -676,6 +676,16 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .yr-pick .n small { font-family: var(--font-body); font-size: 11px; font-weight: 700; color: var(--ink-3); margin-left: 1px; }
 
 /* 달마다 막대 — CSS만으로. 가장 많은 칸만 포인트 색, 나머지는 옅은 포인트 색 */
+/* OTT별 가로 막대 — 달마다 막대와 같은 색 규칙(1위만 포인트 색) */
+.yr-otts { display: flex; flex-direction: column; gap: 4px; }
+.yr-ott { display: grid; grid-template-columns: 84px minmax(0, 1fr) 30px; align-items: center; gap: 10px; padding: 3px 0; text-align: left; }
+.yr-ott .o { font-size: 12.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yr-ott .b { height: 10px; border-radius: 5px; background: var(--sink); overflow: hidden; }
+.yr-ott .b i { display: block; height: 100%; min-width: 4px; border-radius: 5px; background: color-mix(in srgb, var(--ac) 28%, #fff); }
+.yr-ott.hot .b i { background: var(--ac); }
+.yr-ott.hot .c { color: var(--ac-d); }
+.yr-ott .c { font-family: var(--font-num); font-size: 17px; line-height: 1; color: var(--ink-2); text-align: right; }
+.yr-ott:hover .b i { background: var(--ac-d); }
 .yr-flow { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 5px; align-items: end; height: 118px; }
 .yr-flow.years { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
 .yr-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }

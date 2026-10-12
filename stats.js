@@ -521,6 +521,18 @@ function renderYearReview(year) {
   const ottCount = {};
   list.forEach(i => ottList(i).forEach(o => { ottCount[o] = (ottCount[o] || 0) + 1; }));
   const topOtt = first(ottCount);
+  /* OTT별 막대(2026-10-12 요청) — "가장 많이 본" 아래에 상위 6곳. 기록엔 "어디서 봤는지"가 없어서
+     **그 작품을 볼 수 있는 곳**(`ottList`)으로 센다 — 두 곳에 있으면 양쪽에 하나씩. 그래서 머리에 기준을 밝힌다.
+     누르면 칩과 같이 그 해·그 OTT 작품 팝업. 한 곳뿐이면 막대가 뜻이 없어 안 그린다 */
+  const ottRank = Object.entries(ottCount).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko")).slice(0, 6);
+  const ottMax = ottRank.length ? ottRank[0][1] : 1;
+  const ottHtml = ottRank.length > 1 ? `
+          <div class="yr-h"><i class="fa-solid fa-tv"></i>OTT별<span class="yr-h-sub">볼 수 있는 곳 기준</span></div>
+          <div class="yr-otts">${ottRank.map(([o, n], k) => `
+            <button class="yr-ott ${k === 0 ? "hot" : ""}" data-jump='${esc(JSON.stringify({ year: Y, ott: o }))}' title="${esc(o)} · ${n}편">
+              <span class="o">${esc(o)}</span><span class="b"><i style="width:${Math.round(n / ottMax * 100)}%"></i></span><span class="c">${n}</span>
+            </button>`).join("")}
+          </div>` : "";
 
   /* 흐름 막대 — 그 해면 1~12월, 전체면 해마다. 가장 많은 칸만 포인트 색 */
   const flow = all
@@ -604,7 +616,7 @@ function renderYearReview(year) {
             ${pick("fa-user", "배우", topActor, { year: Y, person: topActor && topActor.key })}
             ${pick("fa-clapperboard", "감독", topDir, { year: Y, person: topDir && topDir.key })}
             ${pick("fa-tv", "OTT", topOtt, { year: Y, ott: topOtt && topOtt.name })}
-          </div>
+          </div>${ottHtml}
         </div>` : ""}
         <div>
           <div class="yr-h"><i class="fa-solid fa-chart-column"></i>${all ? "해마다" : "달마다"}${
