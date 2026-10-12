@@ -1082,13 +1082,6 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 .wi-link a { color: var(--ac); }
 .wi-link a:hover { text-decoration: underline; }
 
-/* ===== 히트맵 ===== — 포인트 색의 농도로 */
-.heat-cell { width: 12px; height: 12px; border-radius: 2px; background: var(--sink); }
-.heat-1 { background: color-mix(in srgb, var(--ac) 22%, #fff); }
-.heat-2 { background: color-mix(in srgb, var(--ac) 45%, #fff); }
-.heat-3 { background: color-mix(in srgb, var(--ac) 72%, #fff); }
-.heat-4 { background: var(--ac); }
-
 /* 스크롤바 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }

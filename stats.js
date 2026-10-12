@@ -232,16 +232,6 @@ function renderStats() {
       <div style="height:220px"><canvas id="chartMonth"></canvas></div>
     </section>
 
-    <!-- 히트맵 -->
-    <section class="stat-sec">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="stat-h" style="margin-bottom:0"><i class="fa-solid fa-calendar-days"></i>시청 히트맵</h3>
-        <select id="heatYear" class="filter-select">
-          ${years.slice().reverse().map(y => `<option value="${y}" ${y == currentYear ? "selected" : ""}>${y}년</option>`).join("")}
-        </select>
-      </div>
-      <div id="heatmapArea" class="overflow-x-auto"></div>
-    </section>
   `;
 
   /* --- 차트 그리기 --- */
@@ -472,14 +462,6 @@ function renderStats() {
       });
     }
   }
-
-  // 히트맵
-  const heatSel = $("#heatYear");
-  if (heatSel) {
-    const draw = () => renderHeatmap(parseInt(heatSel.value));
-    heatSel.addEventListener("change", draw);
-    draw();
-  }
 }
 
 /* ---------- 연간 결산 ----------
@@ -657,92 +639,4 @@ function topN(obj, n) {
   /* '기타'에 어떤 값들이 묶였는지 함께 돌려준다 — 그래야 그 조각을 눌렀을 때
      목록에서 조회할 수 있다(다중 선택 필터는 배열을 받는다). 없으면 눌러도 아무 일 없다. */
   return { labels, values, rest: rest.map(x => x[0]) };
-}
-
-/* 그 해에 시청한 날짜별 편수 (year가 null이면 모든 해). 히트맵과 연간 결산이 함께 쓴다 —
-   "며칠이나 봤나"는 시작~종료 범위를 날짜로 펼쳐야 나오는 값이라 따로 세지 않는다. */
-function watchDays(year) {
-  const counts = {};
-  State.items.forEach(i => {
-    const ranges = [[i.startDate, i.endDate], [i.lastWatchStart, i.lastWatchEnd]];
-    ranges.forEach(([s, e]) => {
-      if (!s) return;
-      let cur = new Date(s + "T00:00:00");
-      const end = new Date((e || s) + "T00:00:00");
-      let guard = 0;
-      while (cur <= end && guard++ < 400) {
-        /* ⚠ `toISOString`은 세계 표준시라 한국 자정이 **전날**로 적혔다 — 히트맵이 하루씩 앞당겨 칠해졌다(2026-10-12).
-           이 기기 시간대로 적는다(히트맵 칸 키와 같은 모양) */
-        const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
-        if (year == null || key.startsWith(String(year))) counts[key] = (counts[key] || 0) + 1;
-        cur.setDate(cur.getDate() + 1);
-      }
-    });
-  });
-  return counts;
-}
-
-/* ---------- 히트맵 ---------- */
-function renderHeatmap(year) {
-  const counts = watchDays(year);
-
-  const jan1 = new Date(year, 0, 1);
-  const dec31 = new Date(year, 11, 31);
-  const startOffset = jan1.getDay();
-  const totalDays = Math.round((dec31 - jan1) / 86400000) + 1;
-  const weeks = Math.ceil((startOffset + totalDays) / 7);
-
-  const level = (c) => c === 0 ? 0 : c === 1 ? 1 : c <= 2 ? 2 : c <= 4 ? 3 : 4;
-  const monthLabels = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
-
-  let cols = "";
-  let monthRow = "";
-  let lastMonth = -1;
-
-  for (let w = 0; w < weeks; w++) {
-    let firstDayOfWeek = null;
-    let cells = "";
-    for (let d = 0; d < 7; d++) {
-      const dayIdx = w * 7 + d - startOffset;
-      if (dayIdx < 0 || dayIdx >= totalDays) {
-        cells += `<div class="w-3 h-3"></div>`;
-        continue;
-      }
-      const date = new Date(year, 0, 1 + dayIdx);
-      const key = `${year}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
-      const c = counts[key] || 0;
-      if (firstDayOfWeek === null) firstDayOfWeek = date;
-      cells += `<div class="heat-cell ${c ? "heat-" + level(c) : ""}" title="${key} — ${c}편"></div>`;
-    }
-    cols += `<div class="flex flex-col gap-[3px]">${cells}</div>`;
-
-    const m = firstDayOfWeek ? firstDayOfWeek.getMonth() : lastMonth;
-    if (m !== lastMonth && firstDayOfWeek && firstDayOfWeek.getDate() <= 7) {
-      monthRow += `<div class="w-3 text-[10px] font-semibold text-slate-400 relative"><span class="absolute left-0 whitespace-nowrap">${monthLabels[m]}</span></div>`;
-      lastMonth = m;
-    } else {
-      monthRow += `<div class="w-3"></div>`;
-    }
-  }
-
-  const total = Object.values(counts).reduce((s, c) => s + c, 0);
-  const activeDays = Object.keys(counts).length;
-
-  $("#heatmapArea").innerHTML = `
-    <div class="min-w-max">
-      <div class="flex gap-[3px] mb-1 h-4">${monthRow}</div>
-      <div class="flex gap-[3px]">${cols}</div>
-      <div class="flex items-center justify-between mt-3 text-xs font-medium text-slate-500">
-        <span>${year}년 · 시청한 날 ${activeDays}일 · 총 ${total}편</span>
-        <span class="flex items-center gap-1">
-          적음
-          <span class="heat-cell"></span>
-          <span class="heat-cell heat-1"></span>
-          <span class="heat-cell heat-2"></span>
-          <span class="heat-cell heat-3"></span>
-          <span class="heat-cell heat-4"></span>
-          많음
-        </span>
-      </div>
-    </div>`;
 }
