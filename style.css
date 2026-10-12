@@ -627,8 +627,9 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .yr-diff.up, .yr-diff.down { color: #fff; }
 
 .yr-in { padding: 20px 24px 24px; }
-/* 타일 3개(처음 본 작품 · 예상 시청시간 · 평균 별점) — "본 날"은 뺐다(2026-10-12). 폰에서도 한 줄 */
-.yr-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+/* 타일 4개(처음 본 작품 · 그 해에 나온 작품 · 예상 시청시간 · 평균 별점) — "본 날" 자리에 "나온 작품"(2026-10-12). 폰 2×2 */
+.yr-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 640px) { .yr-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 .yr-tile { background: var(--sink); border-radius: 14px; padding: 13px 15px 12px; }
 .yr-tile .l { font-size: 12px; font-weight: 700; color: var(--ink-3); }
@@ -636,14 +637,7 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 .yr-tile .l i.fa-heart { color: var(--heart-ic); }   /* 내 별점 하트는 포인트 색과 무관하게 고정 */
 .yr-tile .n { font-family: var(--font-num); font-size: 38px; line-height: 1; margin-top: 6px; color: var(--ink); }
 .yr-tile .n small { font-family: var(--font-body); font-size: 12px; font-weight: 700; color: var(--ink-3); margin-left: 3px; }
-/* 폰은 칸이 좁아(98px) "예상 시청시간"·"254 시간"이 두 줄로 접혔다 — 아이콘을 빼고 글자를 한 줄로 */
-@media (max-width: 639px) {
-  .yr-tiles { gap: 8px; }
-  .yr-tile { padding: 11px 10px 10px; }
-  .yr-tile .l { font-size: 11.5px; white-space: nowrap; }
-  .yr-tile .l i { display: none; }
-  .yr-tile .n { font-size: 32px; white-space: nowrap; }
-}
+
 .yr-h { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 800; color: var(--ink); margin: 24px 0 10px; }
 .yr-h i { color: var(--ac); font-size: 13px; }
 .yr-h-sub { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ink-3); }
