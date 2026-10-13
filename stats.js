@@ -457,6 +457,26 @@ function renderStats() {
           showWorksPopup(what ? `${what}` : `${patch.year}년`, patch.year ? `${patch.year}년` : "전체 기간", list, patch);
           return;
         }
+        /* 한국 작품 비율 칸 → 한국 / 외국을 나눠 한 팝업에(2026-10-13 요청). 나라를 모르는 기록은 따로 묶어 끝에.
+           "외국"은 목록 필터로 못 옮겨서(국가 필터에 "한국 아님"이 없다) [기록 탭에서 보기]는 없다 */
+        /* 처음 본 작품 칸 → 그 해 작품 전부(최근 본 순). 목록 필터와 같은 조건(연도 = startDate)이라 [기록 탭에서 보기]도 단다 */
+        if (e.target.closest("[data-firsts]") && typeof showWorksPopup === "function") {
+          const yl = State.items.filter(i => _yrPick == null || (i.startDate || "").slice(0, 4) === String(_yrPick))
+            .sort((a, b) => recDate(b).localeCompare(recDate(a)));
+          showWorksPopup(_yrPick == null ? "본 작품" : "처음 본 작품", _yrPick == null ? "전체 기간" : `${_yrPick}년`, yl,
+            _yrPick == null ? {} : { year: String(_yrPick) });
+          return;
+        }
+        if (e.target.closest("[data-kofg]") && typeof showWorksPopup === "function") {
+          const yl = State.items.filter(i => _yrPick == null || (i.startDate || "").slice(0, 4) === String(_yrPick))
+            .sort((a, b) => recDate(b).localeCompare(recDate(a)));
+          showWorksPopup("한국 · 외국 작품", _yrPick == null ? "전체 기간" : `${_yrPick}년`, [
+            { title: "한국", items: yl.filter(i => i.country === "한국") },
+            { title: "외국", items: yl.filter(i => i.country && i.country !== "한국") },
+            { title: "나라 정보 없음", items: yl.filter(i => !i.country) }
+          ], null);
+          return;
+        }
         const open = e.target.closest("[data-open]");
         if (open && typeof openDetail === "function") openDetail(open.dataset.open);
       });
@@ -586,10 +606,11 @@ function renderYearReview(year) {
   const koN = list.filter(i => i.country === "한국").length;
   const fgN = list.filter(i => i.country && i.country !== "한국").length;
   const koPct = koN + fgN ? Math.round(koN / (koN + fgN) * 100) : "-";   // %는 단위라 "시간"·"편"처럼 작게 붙인다
-  const tile = (icon, label, n, unit) => `<div class="yr-tile">
+  /* attrs를 주면 누를 수 있는 칸(button)이 된다 — 한국 작품 비율만 */
+  const tile = (icon, label, n, unit, attrs) => `<${attrs ? `button ${attrs}` : "div"} class="yr-tile">
       <div class="l"><i class="fa-solid ${icon}"></i>${label}</div>
       <div class="n">${n}${unit ? `<small>${unit}</small>` : ""}</div>
-    </div>`;
+    </${attrs ? "button" : "div"}>`;
 
   box.innerHTML = `
     <div class="yr-band">
@@ -603,8 +624,8 @@ function renderYearReview(year) {
 
     <div class="yr-in">
       <div class="yr-tiles">
-        ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편")}
-        ${tile("fa-earth-asia", "한국 작품 비율", koPct, koN + fgN ? `% (${koN} · ${fgN})` : "")}
+        ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편", list.length ? `data-firsts title="눌러서 작품 보기"` : "")}
+        ${tile("fa-earth-asia", "한국 작품 비율", koPct, koN + fgN ? `% (${koN} · ${fgN})` : "", koN + fgN ? `data-kofg title="눌러서 한국 · 외국 작품 보기"` : "")}
         ${tile("fa-hourglass-half", "예상 시청시간", Math.round(min / 60).toLocaleString(), "시간")}
         ${tile("fa-heart", "평균 별점", yrRated.length ? (yrRated.reduce((s, i) => s + +i.rating, 0) / yrRated.length).toFixed(1) : "-", "")}
       </div>

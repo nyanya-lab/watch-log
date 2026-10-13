@@ -1202,12 +1202,18 @@ function renderHeaderCount() {
    목록 탭으로 넘어갔다 돌아오는 게 번거롭다는 요청. 카드를 누르면 상세가 **이 팝업 위에** 뜬다
    (`#worksModal`이 `#detailModal`보다 DOM 앞에 있어서). `patch`를 주면 [기록 탭에서 보기]로 목록 필터도 걸 수 있다. */
 let _worksPatch = null;
+/* `list` 대신 묶음 배열 `[{title, items}]`을 주면 묶음마다 머리를 달아 나눠 보여준다(한국 / 외국, 2026-10-13) */
 function showWorksPopup(title, sub, list, patch) {
   _worksPatch = patch || null;
+  const groups = list.length && list[0] && Array.isArray(list[0].items) ? list.filter(g => g.items.length) : null;
+  const total = groups ? groups.reduce((s, g) => s + g.items.length, 0) : list.length;
   $("#worksTitle").textContent = title;
-  $("#worksSub").textContent = `${sub ? sub + " · " : ""}${list.length}편`;
-  $("#worksGrid").innerHTML = list.length ? list.map(recordCardHtml).join("")
-    : `<p class="col-span-full text-center py-10 text-slate-400 font-medium">작품이 없어요</p>`;
+  $("#worksSub").textContent = `${sub ? sub + " · " : ""}${total}편`;
+  $("#worksGrid").innerHTML = !total
+    ? `<p class="col-span-full text-center py-10 text-slate-400 font-medium">작품이 없어요</p>`
+    : groups
+      ? groups.map(g => `<div class="works-gh col-span-full">${esc(g.title)}<span>${g.items.length}편</span></div>${g.items.map(recordCardHtml).join("")}`).join("")
+      : list.map(recordCardHtml).join("");
   $("#worksJump").classList.toggle("hidden", !_worksPatch);
   $("#worksModal").classList.remove("hidden");
   $("#worksModal .modal-card").scrollTop = 0;

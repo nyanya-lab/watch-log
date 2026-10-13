@@ -632,6 +632,8 @@ button.badge:hover { opacity: .85; transform: translateY(-1px); }
 @media (min-width: 640px) { .yr-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
 .yr-tile { background: var(--sink); border-radius: 14px; padding: 13px 15px 12px; }
+button.yr-tile { text-align: left; width: 100%; }
+button.yr-tile:hover { background: var(--sink-2); }
 .yr-tile .l { font-size: 12px; font-weight: 700; color: var(--ink-3); }
 .yr-tile .l i { color: var(--ac); margin-right: 6px; font-size: 11px; }
 .yr-tile .l i.fa-heart { color: var(--heart-ic); }   /* 내 별점 하트는 포인트 색과 무관하게 고정 */
@@ -1506,3 +1508,8 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 .dc-series-note { margin-top: 14px; padding: 8px 12px; border-radius: 8px; background: var(--ac-soft);
   color: var(--ac-d); font-size: 13px; font-weight: 700; }
 .dt-part.is-cur .dt-part-img { outline: 2px solid var(--ac); outline-offset: 2px; }
+
+/* 작품 모아보기 팝업의 묶음 머리 (한국 / 외국) */
+.works-gh { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 800; color: var(--ink);
+  padding-bottom: 6px; border-bottom: 1px solid var(--line); margin-top: 6px; }
+.works-gh span { font-size: 12px; font-weight: 700; color: var(--ink-3); }
