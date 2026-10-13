@@ -585,7 +585,7 @@ function renderYearReview(year) {
      나라를 모르는 기록은 양쪽 다 안 센다(외국으로 치면 비율이 거짓이 된다) */
   const koN = list.filter(i => i.country === "한국").length;
   const fgN = list.filter(i => i.country && i.country !== "한국").length;
-  const koPct = koN + fgN ? Math.round(koN / (koN + fgN) * 100) + "%" : "-";
+  const koPct = koN + fgN ? Math.round(koN / (koN + fgN) * 100) : "-";   // %는 단위라 "시간"·"편"처럼 작게 붙인다
   const tile = (icon, label, n, unit) => `<div class="yr-tile">
       <div class="l"><i class="fa-solid ${icon}"></i>${label}</div>
       <div class="n">${n}${unit ? `<small>${unit}</small>` : ""}</div>
@@ -604,7 +604,7 @@ function renderYearReview(year) {
     <div class="yr-in">
       <div class="yr-tiles">
         ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편")}
-        ${tile("fa-earth-asia", "한국 작품 비율", koPct, koN + fgN ? `(${koN} · ${fgN})` : "")}
+        ${tile("fa-earth-asia", "한국 작품 비율", koPct, koN + fgN ? `% (${koN} · ${fgN})` : "")}
         ${tile("fa-hourglass-half", "예상 시청시간", Math.round(min / 60).toLocaleString(), "시간")}
         ${tile("fa-heart", "평균 별점", yrRated.length ? (yrRated.reduce((s, i) => s + +i.rating, 0) / yrRated.length).toFixed(1) : "-", "")}
       </div>
