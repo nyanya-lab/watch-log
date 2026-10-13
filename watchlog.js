@@ -266,6 +266,10 @@ function initWatchlog() {
     const c = e.target.closest(".wl-card[data-id]");
     if (c) openDetail(c.dataset.id);
   });
+  $("#worksTabs").addEventListener("click", e => {
+    const t = e.target.closest("[data-wtab]");
+    if (t) pickWorksTab(+t.dataset.wtab);
+  });
   $("#worksJump").addEventListener("click", () => {
     if (!_worksPatch) return;
     closeWorksPopup();
@@ -1202,18 +1206,32 @@ function renderHeaderCount() {
    목록 탭으로 넘어갔다 돌아오는 게 번거롭다는 요청. 카드를 누르면 상세가 **이 팝업 위에** 뜬다
    (`#worksModal`이 `#detailModal`보다 DOM 앞에 있어서). `patch`를 주면 [기록 탭에서 보기]로 목록 필터도 걸 수 있다. */
 let _worksPatch = null;
-/* `list` 대신 묶음 배열 `[{title, items}]`을 주면 묶음마다 머리를 달아 나눠 보여준다(한국 / 외국, 2026-10-13) */
+/* `list` 대신 묶음 배열 `[{title, items}]`을 주면 **탭**(`전체 · 한국 · 외국`)으로 나눠 보여준다(2026-10-13 요청 —
+   처음엔 묶음 머리로 한 화면에 나눴다가 탭으로 바꿨다). 빈 묶음은 탭을 안 만든다. 전체는 최근 본 순으로 다시 섞는다 */
+let _worksTabs = null;
+function paintWorksGrid(list) {
+  $("#worksGrid").innerHTML = list.length ? list.map(recordCardHtml).join("")
+    : `<p class="col-span-full text-center py-10 text-slate-400 font-medium">작품이 없어요</p>`;
+}
+function pickWorksTab(n) {
+  if (!_worksTabs || !_worksTabs[n]) return;
+  $$("#worksTabs [data-wtab]").forEach(b => b.classList.toggle("on", +b.dataset.wtab === n));
+  paintWorksGrid(_worksTabs[n].items);
+}
 function showWorksPopup(title, sub, list, patch) {
   _worksPatch = patch || null;
   const groups = list.length && list[0] && Array.isArray(list[0].items) ? list.filter(g => g.items.length) : null;
   const total = groups ? groups.reduce((s, g) => s + g.items.length, 0) : list.length;
   $("#worksTitle").textContent = title;
   $("#worksSub").textContent = `${sub ? sub + " · " : ""}${total}편`;
-  $("#worksGrid").innerHTML = !total
-    ? `<p class="col-span-full text-center py-10 text-slate-400 font-medium">작품이 없어요</p>`
-    : groups
-      ? groups.map(g => `<div class="works-gh col-span-full">${esc(g.title)}<span>${g.items.length}편</span></div>${g.items.map(recordCardHtml).join("")}`).join("")
-      : list.map(recordCardHtml).join("");
+  _worksTabs = groups && total ? [
+    { title: "전체", items: groups.flatMap(g => g.items).sort((a, b) => recDate(b).localeCompare(recDate(a))) }, ...groups] : null;
+  $("#worksTabs").classList.toggle("hidden", !_worksTabs);
+  if (_worksTabs) {
+    $("#worksTabs").innerHTML = _worksTabs.map((t, n) =>
+      `<button class="fchip" data-wtab="${n}">${esc(t.title)}<span class="dc-num">${t.items.length}</span></button>`).join("");
+    pickWorksTab(0);
+  } else paintWorksGrid(list);
   $("#worksJump").classList.toggle("hidden", !_worksPatch);
   $("#worksModal").classList.remove("hidden");
   $("#worksModal .modal-card").scrollTop = 0;
