@@ -581,11 +581,11 @@ function renderYearReview(year) {
          <span class="tx"><span class="l">${label}</span><b>${esc(i.title)}</b><span class="d">${esc((i.startDate || "").replaceAll("-", "."))}</span></span>
        </button>` : "";
 
-  /* 둘째 칸 = **그 해에 나온 작품**(2026-10-12 요청 — "본 날" 자리). 신작을 얼마나 따라갔나.
-     시즌 기록은 `releaseYear`가 그 시즌 방영 연도라 새 시즌도 들어간다. 전체면 "나온 해에 바로 본" 작품 수 */
-  const fresh = all
-    ? { label: "나온 해에 본 작품", n: list.filter(i => i.releaseYear && i.releaseYear === (i.startDate || "").slice(0, 4)).length }
-    : { label: `${String(year) === String(new Date().getFullYear()) ? "올해" : Y + "년에"} 나온 작품`, n: list.filter(i => i.releaseYear === Y).length };
+  /* 둘째 칸 = **한국 작품 비율**(2026-10-13 요청 — "본 날" → "올해 나온 작품" → 이것). `55%(27 · 22)` = 한국 · 외국 편수.
+     나라를 모르는 기록은 양쪽 다 안 센다(외국으로 치면 비율이 거짓이 된다) */
+  const koN = list.filter(i => i.country === "한국").length;
+  const fgN = list.filter(i => i.country && i.country !== "한국").length;
+  const koPct = koN + fgN ? Math.round(koN / (koN + fgN) * 100) + "%" : "-";
   const tile = (icon, label, n, unit) => `<div class="yr-tile">
       <div class="l"><i class="fa-solid ${icon}"></i>${label}</div>
       <div class="n">${n}${unit ? `<small>${unit}</small>` : ""}</div>
@@ -604,7 +604,7 @@ function renderYearReview(year) {
     <div class="yr-in">
       <div class="yr-tiles">
         ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편")}
-        ${tile("fa-fire", fresh.label, fresh.n, "편")}
+        ${tile("fa-earth-asia", "한국 작품 비율", koPct, koN + fgN ? `(${koN} · ${fgN})` : "")}
         ${tile("fa-hourglass-half", "예상 시청시간", Math.round(min / 60).toLocaleString(), "시간")}
         ${tile("fa-heart", "평균 별점", yrRated.length ? (yrRated.reduce((s, i) => s + +i.rating, 0) / yrRated.length).toFixed(1) : "-", "")}
       </div>
