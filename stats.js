@@ -467,6 +467,17 @@ function renderStats() {
             _yrPick == null ? {} : { year: String(_yrPick) });
           return;
         }
+        /* 평균 별점 칸 → 그 해 별점 매긴 작품을 **별점 높은 순**(같으면 최근 본 순, 2026-10-13 요청).
+           [기록 탭에서 보기]는 같은 조건(연도 + 별점 있는 것 + 내 별점 정렬)으로 넘긴다 */
+        const rated = e.target.closest("[data-rated]");
+        if (rated && typeof showWorksPopup === "function") {
+          const yl = State.items.filter(i => i.rating && (_yrPick == null || (i.startDate || "").slice(0, 4) === String(_yrPick)))
+            .sort((a, b) => b.rating - a.rating || recDate(b).localeCompare(recDate(a)));
+          const avg = (yl.reduce((s, i) => s + +i.rating, 0) / yl.length).toFixed(1);
+          showWorksPopup(`평균 별점 ${avg}`, _yrPick == null ? "전체 기간 · 별점 높은 순" : `${_yrPick}년 · 별점 높은 순`, yl,
+            Object.assign(_yrPick == null ? {} : { year: String(_yrPick) }, { rMin: 0.1, sort: "rating", sortDir: "desc" }));
+          return;
+        }
         if (e.target.closest("[data-kofg]") && typeof showWorksPopup === "function") {
           const yl = State.items.filter(i => _yrPick == null || (i.startDate || "").slice(0, 4) === String(_yrPick))
             .sort((a, b) => recDate(b).localeCompare(recDate(a)));
@@ -627,7 +638,7 @@ function renderYearReview(year) {
         ${tile("fa-film", all ? "본 작품" : "처음 본 작품", list.length, "편", list.length ? `data-firsts title="눌러서 작품 보기"` : "")}
         ${tile("fa-earth-asia", "한국 작품 비율", koPct, koN + fgN ? `% (${koN} · ${fgN})` : "", koN + fgN ? `data-kofg title="눌러서 한국 · 외국 작품 보기"` : "")}
         ${tile("fa-hourglass-half", "예상 시청시간", Math.round(min / 60).toLocaleString(), "시간")}
-        ${tile("fa-heart", "평균 별점", yrRated.length ? (yrRated.reduce((s, i) => s + +i.rating, 0) / yrRated.length).toFixed(1) : "-", "")}
+        ${tile("fa-heart", "평균 별점", yrRated.length ? (yrRated.reduce((s, i) => s + +i.rating, 0) / yrRated.length).toFixed(1) : "-", "", yrRated.length ? `data-rated title="눌러서 별점 높은 순으로 보기"` : "")}
       </div>
 
       ${best.length ? `
