@@ -622,7 +622,9 @@ function adoptLists(d) {
       const uni = (k) => [...new Set([...(same ? srv[k] || [] : []), ...(loc[k] || [])])];
       const merged = { gen: loc.gen, all: same ? !!(srv.all || loc.all) : !!loc.all,
                        ids: uni("ids"), shown: uni("shown"), gone: uni("gone") };
-      extra = JSON.stringify(merged) !== JSON.stringify(srv || null);
+      /* ⚠ 글자 그대로 견주면 안 된다 — 서버는 빈 배열(`shown: []`)을 지우고 키를 정렬해 돌려줘서 늘 "다르다"가 됐고,
+         받을 때마다 다시 올려 **두 기기가 번갈아 "받아왔습니다"를 끝없이 주고받았다**(2026-10-14) */
+      extra = !sameVal(merged, srv || null);
       next = { ...d.prefs, recoFlip: merged };
     }
     State.prefs = next;
