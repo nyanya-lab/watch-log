@@ -2377,9 +2377,11 @@ async function runRestoreBackup() {
   } catch { /* 깨진 백업은 없는 셈 친다 */ }
 
   try {
-    const NAME = { prev: "서버 · 1시간 전쯤", daily: "서버 · 하루 전" };
+    const NAME = { prev: "서버 백업 · 1시간마다", daily: "서버 백업 · 하루마다" };
     (await fetchBackups()).forEach(b =>
-      points.push({ label: NAME[b.kind] || b.kind, items: b.data.items, at: b.data.savedAt || "" }));
+      /* 시각은 **그 내용이 저장된 때**(`updatedAt`)를 보여준다 — 백업으로 옮긴 때(`savedAt`)를 보여주면
+         옛 내용이 방금 것처럼 보인다(2026-10-14) */
+      points.push({ label: NAME[b.kind] || b.kind, items: b.data.items, at: b.data.updatedAt || b.data.savedAt || "" }));
   } catch { /* 서버 백업을 못 받아도 기기 백업으로는 되돌릴 수 있다 */ }
 
   if (btn) btn.disabled = false;

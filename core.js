@@ -282,10 +282,19 @@ async function rotateServerBackup(current) {
   const now = Date.now();
   const at = bakStamps();
   for (const kind of Object.keys(BAK_KINDS)) {
-    const last = Date.parse(at[kind] || "") || 0;
-    if (now - last < BAK_KINDS[kind]) continue;     // 아직 주기가 안 됐다
+    if (now - (Date.parse(at[kind] || "") || 0) < BAK_KINDS[kind]) continue;   // 이 기기가 최근에 굴렸다
     const url = getBackupUrl(kind);
     if (!url) continue;
+    /* ⚠ 주기는 **서버에 있는 백업 자체의 시각**으로 본다(2026-10-14). 예전엔 이 기기 기록만 봐서, 기기가 셋이면
+       각자 "하루 지났다"며 굴려 `하루 전` 백업이 1시간 전 것이 됐다 — 폰이 옛 기록을 올린 날 백업 둘이 다 옛것이었다.
+       백업 시각을 못 읽으면 굴리지 않는다(모르고 덮는 것보다 낫다) */
+    let last = 0;
+    try {
+      const r = await fetch(url.replace(/\.json$/, "/savedAt.json") + "?t=" + now);
+      if (!r.ok) continue;
+      last = Date.parse((await r.json()) || "") || 0;
+    } catch { continue; }
+    if (now - last < BAK_KINDS[kind]) { at[kind] = new Date(last).toISOString(); continue; }
     try {
       await fetch(url, {
         method: "PUT",
