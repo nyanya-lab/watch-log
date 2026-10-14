@@ -26,6 +26,15 @@ const LS_MODIFIED = "watchlog_modified";
 const LS_BACKUP = "watchlog_items_backup";
 const LS_BACKUP_AT = "watchlog_items_backup_at";   // 그 백업이 언제 것인지
 const LOCAL_BACKUP_MIN = 10 * 60 * 1000;           // 기기 백업 갱신 주기 (10분)
+/* 마지막으로 맞춘 서버 시각(`State.serverStamp`)을 **기기에 남긴다**(2026-10-14 사고).
+   예전엔 메모리에만 있어서 부팅 직후엔 비어 있었고, 그럴 땐 `watchlog_modified`(이 기기 수정 시각)로 대신 견줬다.
+   그런데 그 시각은 **이 기기에서 뭘 하나 저장만 해도 "지금"이 된다** — 오래 안 연 폰이 부팅 중에
+   시즌 수 확인(`verifyAiredSeasons`) 같은 걸로 저장하자 "서버가 바뀐 적 없다"로 잡혀 옛 기록을 서버에 올렸다. */
+const LS_SRV_STAMP = "watchlog_server_stamp";
+/* 서버 것을 받아 **이 기기 기록을 갈아끼우기 직전** 상태(기록·보고싶어요·관심없음·설정 통째로).
+   다른 기기가 옛 데이터를 올리면 받는 기기마다 성한 기록이 덮이는데, 10분 백업은 그 뒤 저장 한 번에 덮인다.
+   [백업에서 되돌리기]에 "서버에서 받기 직전"으로 뜬다. */
+const LS_REPLACED = "watchlog_replaced";
 /* 시드를 넣던 코드는 없앴지만(2026-08-07) 이 표시는 남긴다 —
    **예전에 시드가 들어간 채로 남아 있는 기기**가 그걸 서버로 올리지 않도록 계속 막아야 한다.
    새로 붙는 일은 없고, `saveLocal()`이 한 번 돌면 지워진다. */
@@ -180,7 +189,18 @@ function loadLocal() {
   try {
     State.prefs = JSON.parse(localStorage.getItem(LS_PREFS) || "{}") || {};
   } catch { State.prefs = {}; }
+  State.serverStamp = localStorage.getItem(LS_SRV_STAMP) || "";
   applyPrefs();
+}
+function setServerStamp(s) {
+  State.serverStamp = s || "";
+  try { localStorage.setItem(LS_SRV_STAMP, State.serverStamp); } catch {}
+}
+/* 서버 것으로 갈아끼우기 직전에 부른다 — 이 기기 기록이 서버와 다를 때만 남긴다 */
+function keepReplaced(d) {
+  if (!State.items.length || !d || sameVal(State.items, d.items)) return;
+  try { localStorage.setItem(LS_REPLACED, JSON.stringify({ at: new Date().toISOString(), ...snapshotNow() })); }
+  catch { /* 저장 공간이 모자라면 못 남긴다 — 10분 백업은 그대로 있다 */ }
 }
 
 /* ---------- 화면 설정: 포인트 색 ----------
@@ -304,8 +324,10 @@ async function serverChangedBehindUs() {
     /* 덮어쓰기 직전의 서버 내용 — 백업을 굴리는 데 그대로 쓴다 (조회를 한 번 더 하지 않으려고) */
     _lastServerSeen = d;
     if (!d || !d.updatedAt) return false;
-    const known = State.serverStamp || localStorage.getItem(LS_MODIFIED) || "";
-    return d.updatedAt > known;
+    /* **이 기기 수정 시각과 견주지 않는다**(2026-10-14 사고 — 위 `LS_SRV_STAMP` 참고).
+       마지막으로 맞춘 서버 시각을 모르면 "바뀌었다"로 본다 — 합치거나 멈추지, 덮어쓰지 않는다 */
+    if (!State.serverStamp) return Array.isArray(d.items) && d.items.length > 0;
+    return d.updatedAt !== State.serverStamp;
   } catch { return false; }   // 확인 실패는 막지 않는다 (오프라인에서도 저장은 되어야 함)
 }
 let _lastServerSeen = null;
@@ -417,7 +439,7 @@ function mergeIntoLocal(d) {
   } catch { /* 저장 공간 문제면 이번 판만 화면에 */ }
   adoptCache(d.cache);
   applyPrefs();
-  State.serverStamp = d.updatedAt || "";
+  setServerStamp(d.updatedAt);
   saveBase(d);                       // 지금 공통 조상은 서버 문서다 — 이 기기 변경은 곧 올라간다
   return "merged";
 }
@@ -476,7 +498,7 @@ async function autoPush() {
     });
     if (!res.ok) throw new Error(describeHttp(res.status));
     saveBase(doc);                                  // 이제 서버와 맞췄다
-    State.serverStamp = localStorage.getItem(LS_MODIFIED) || "";
+    setServerStamp(doc.updatedAt);                  // 올리는 사이 또 저장됐어도 서버에 있는 건 이 시각이다
     setSyncIcon("saved");
     State.lastError = "";
   } catch (e) {
@@ -516,7 +538,7 @@ async function pushToServer() {
     if (!ok) { setSyncIcon("idle"); return false; }
   }
   /* 다른 기기가 먼저 저장했으면 덮지 말고 합쳐서 올린다(2026-10-06) */
-  if (cur && cur.updatedAt && cur.updatedAt > (State.serverStamp || localStorage.getItem(LS_MODIFIED) || "")
+  if (cur && cur.updatedAt && cur.updatedAt !== State.serverStamp
       && mergeIntoLocal(cur) === "merged") {
     if (typeof applyFilters === "function") applyFilters();
     if (window.renderDiscover) renderDiscover();
@@ -543,7 +565,7 @@ async function pushToServer() {
     if (!res.ok) throw new Error(describeHttp(res.status));
     saveBase(doc);
     localStorage.setItem(LS_MODIFIED, stamp);
-    State.serverStamp = stamp;
+    setServerStamp(stamp);
     setSyncIcon("saved");
     State.lastError = "";
     toast(`서버에 저장 완료 (${State.items.length}개)`, "success");
@@ -677,11 +699,12 @@ async function pullFromServer(silent) {
       if (!silent) toast(`서버 것과 이 기기에서 바꾼 것을 합쳤어요 (${State.items.length}개)`, "success");
       return true;
     }
+    keepReplaced(d);
     State.items = d.items;
     adoptLists(d);
     localStorage.setItem(LS_KEY, JSON.stringify(State.items));
     localStorage.setItem(LS_MODIFIED, d.updatedAt || new Date().toISOString());
-    State.serverStamp = d.updatedAt || "";
+    setServerStamp(d.updatedAt);
     saveBase(d);
     setSyncIcon("saved");
     if (!silent) toast(`서버에서 불러옴 (${State.items.length}개)`, "success");
@@ -741,7 +764,7 @@ async function syncOnBoot() {
       adoptLists(d);
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod || new Date().toISOString());
-      State.serverStamp = serverMod || "";
+      setServerStamp(serverMod);
       saveBase(d);
       applyFilters();
       if (window.renderDiscover) renderDiscover();
@@ -758,7 +781,7 @@ async function syncOnBoot() {
       adoptLists(d);
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod || new Date().toISOString());
-      State.serverStamp = serverMod || "";
+      setServerStamp(serverMod);
       markSeed(false);
       applyFilters();
       if (window.renderDiscover) renderDiscover();
@@ -767,8 +790,11 @@ async function syncOnBoot() {
       return;
     }
 
-    // 서버가 더 최신
-    if (serverMod > localMod) {
+    /* 서버가 바뀌었다 = **마지막으로 맞춘 뒤로 서버 시각이 달라졌다**(2026-10-14).
+       예전엔 `serverMod > localMod`로 봤는데, 이 기기 수정 시각은 부팅 중 저장 한 번에 "지금"이 되어
+       오래 안 연 폰이 "내가 더 최신"으로 잡혀 옛 기록을 서버에 올렸다. 맞춘 시각을 모르면 바뀐 걸로 본다. */
+    const serverMoved = !State.serverStamp || serverMod !== State.serverStamp;
+    if (serverMoved && serverMod !== localMod) {
       /* 이 기기에 안 올린 변경이 있었으면(창을 닫아 못 올린 경우 등) 합쳐서 올린다(2026-10-06) */
       if (mergeIntoLocal(d) === "merged") {
         saveLocal();
@@ -786,11 +812,12 @@ async function syncOnBoot() {
         );
         if (!ok) { await autoPush(); return; }
       }
+      keepReplaced(d);
       State.items = d.items;
       adoptLists(d);
       localStorage.setItem(LS_KEY, JSON.stringify(State.items));
       localStorage.setItem(LS_MODIFIED, serverMod);
-      State.serverStamp = serverMod;
+      setServerStamp(serverMod);
       saveBase(d);
       applyFilters();
       if (window.renderDiscover) renderDiscover();
@@ -799,10 +826,11 @@ async function syncOnBoot() {
       return;
     }
 
-    // 로컬이 더 최신 — 단, 시드는 절대 올리지 않는다
-    if (localMod > serverMod && !isSeedData()) { await autoPush(); return; }
+    // 서버는 그대로고 이 기기에서 바뀐 게 있다 — 단, 시드는 절대 올리지 않는다
+    if (localMod !== serverMod && !isSeedData()) { await autoPush(); return; }
 
     // 같다 — 처음 켠 기기면 지금을 합치기 기준으로 삼는다
+    setServerStamp(serverMod);
     if (!loadBase()) saveBase(d);
     setSyncIcon("saved");
   } catch (e) {
@@ -857,9 +885,11 @@ function onRemoteStamp(e) {
   try { stamp = (JSON.parse(e.data || "{}") || {}).data; } catch { return; }
   if (!stamp) return;
 
-  // 내가 방금 올린 것이거나 이미 최신이면 받을 필요 없다 (에코 방지)
+  /* 내가 방금 올린 것이거나 이미 받은 것이면 받을 필요 없다 (에코 방지).
+     ⚠ "이 기기 수정 시각보다 옛것이면 무시"로 하면 안 된다 — 이 기기에서 저장만 해도 그 시각이 "지금"이 돼서
+     다른 기기의 변경을 못 받는다(2026-10-14 사고) */
   const localMod = localStorage.getItem(LS_MODIFIED) || "";
-  if (stamp <= localMod) return;
+  if (stamp === State.serverStamp || stamp === localMod) return;
 
   // 편집 중이면 폼이 날아가므로 미뤘다가 닫힐 때 받는다
   const editing = $("#editModal") && !$("#editModal").classList.contains("hidden");
@@ -892,7 +922,7 @@ function initVisibilitySync() {
     try {
       const d = await fetchServer();
       const localMod = localStorage.getItem(LS_MODIFIED) || "";
-      if (d && d.updatedAt && d.updatedAt > localMod) await applyRemoteUpdate();
+      if (d && d.updatedAt && d.updatedAt !== State.serverStamp && d.updatedAt !== localMod) await applyRemoteUpdate();
     } catch { /* 네트워크가 없으면 조용히 넘어간다 */ }
   };
   document.addEventListener("visibilitychange", check);

@@ -2366,6 +2366,15 @@ async function runRestoreBackup() {
       });
     }
   } catch { /* 깨진 백업은 없는 셈 친다 */ }
+  /* 서버 것을 받아 갈아끼우기 직전(2026-10-14) — 다른 기기가 옛 데이터를 올렸을 때 성한 사본이 여기 남는다.
+     기록만이 아니라 보고싶어요·관심없음·설정까지 통째로 되돌린다 */
+  try {
+    const r = JSON.parse(localStorage.getItem(LS_REPLACED) || "null");
+    if (r && Array.isArray(r.items) && r.items.length) {
+      points.push({ label: "이 기기 · 서버에서 받기 직전", items: r.items, at: r.at || "",
+                    lists: { wishes: r.wishes, hides: r.hides, prefs: r.prefs } });
+    }
+  } catch { /* 깨진 백업은 없는 셈 친다 */ }
 
   try {
     const NAME = { prev: "서버 · 1시간 전쯤", daily: "서버 · 하루 전" };
@@ -2378,8 +2387,12 @@ async function runRestoreBackup() {
 
   /* 개수만으로는 어느 쪽이 나은지 알 수 없다 — 별점·한줄평도 같이 보여준다 */
   const cnt = (arr, f) => arr.filter(f).length;
+  /* 개수가 같아도 어느 쪽이 더 최근 것인지 보이게 마지막으로 본 날·등록한 날을 붙인다 */
+  const lastOf = (items, f) => items.map(f).filter(Boolean).sort().pop() || "";
   const desc = (items) =>
-    `기록 ${items.length} · 별점 ${cnt(items, i => i.rating)} · 한줄평 ${cnt(items, i => i.review)}`;
+    `기록 ${items.length} · 별점 ${cnt(items, i => i.rating)} · 한줄평 ${cnt(items, i => i.review)}` +
+    ` · 마지막 본 날 ${fmtDate(lastOf(items, i => i.lastWatchStart || i.startDate)) || "없음"}` +
+    ` · 마지막 등록 ${fmtDate(lastOf(items, i => (i.createdAt || "").slice(0, 10))) || "없음"}`;
 
   $("#restoreNow").innerHTML = `<b>지금</b> — ${esc(desc(State.items))}`;
   $("#restoreList").innerHTML = points.map((p, n) => `
@@ -2408,6 +2421,11 @@ function applyRestorePoint(idx) {
 
   $("#restoreModal").classList.add("hidden");
   State.items = pick.items;
+  if (pick.lists) {
+    if (Array.isArray(pick.lists.wishes)) State.wishes = pick.lists.wishes;
+    if (Array.isArray(pick.lists.hides)) State.hides = pick.lists.hides;
+    if (pick.lists.prefs && typeof pick.lists.prefs === "object") { State.prefs = pick.lists.prefs; applyPrefs(); }
+  }
   saveLocal();
   applyFilters();
   renderDiscover();
