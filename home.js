@@ -140,7 +140,7 @@ function renderHome() {
   const all = State.items.filter(recDate).sort((a, b) => recDate(b).localeCompare(recDate(a)));
   const today = localToday();
   const y = today.slice(0, 4), ym = today.slice(0, 7);
-  const thisYear = State.items.filter(i => (i.startDate || "").startsWith(y));
+  const thisYear = State.items.filter(i => watchYear(i) === y);
   const thisMonth = all.filter(i => recDate(i).startsWith(ym));
 
   const ws = watchingItems();

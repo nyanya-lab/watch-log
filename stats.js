@@ -81,16 +81,17 @@ function renderStats() {
     list.forEach(o => { byOtt[o] = (byOtt[o] || 0) + 1; });
   });
   const byGenre = countBy(items.flatMap(i => visibleGenres(i.genres)), g => g);
-  const byYear = countBy(items.filter(i => i.startDate), i => i.startDate.slice(0, 4));
+  const byYear = countBy(items.filter(watchYear), watchYear);
   /* 배우·감독은 **TMDB 번호로** 센다(2026-10-12) — 이름으로 세면 동명이인(박지훈 둘)이 한 막대가 된다 */
   const pIdx = personIdIndex();
   const actorTop = countPeople(items, "actor", pIdx).slice(0, 10);
   const dirTop = countPeople(items, "director", pIdx).slice(0, 10);
 
-  // 월별(1~12월) — 처음 본 날 + 마지막 시청 시작월 집계
+  // 월별(1~12월) — 처음 본 것 + 다시 본 것을 각각 다 본 달로 집계
   const byMonth = {};
   items.forEach(i => {
-    [i.startDate, i.lastWatchStart].forEach(d => {
+    // 다 본 달 기준(2026-10-15) — 다이어리·최근 본 순과 같다. 보는 중이면 시작한 달
+    [i.endDate || i.startDate, i.lastWatchStart && (i.lastWatchEnd || i.lastWatchStart)].forEach(d => {
       if (d) { const m = +d.slice(5, 7); if (m) byMonth[m] = (byMonth[m] || 0) + 1; }
     });
   });
@@ -120,7 +121,7 @@ function renderStats() {
   const years = Object.keys(byYear).sort();
   const currentYear = new Date().getFullYear();
   const thisYearCount = items.filter(i =>
-    (i.startDate || "").slice(0, 4) == currentYear ||
+    watchYear(i) == currentYear ||
     (i.lastWatchStart || "").slice(0, 4) == currentYear).length;
 
   // 예상 시청시간: 영화=상영시간, TV=회당×총화수 (있을 때만)
@@ -441,14 +442,14 @@ function renderStats() {
       });
       body.addEventListener("click", e => {
         /* 가장 많이 본(장르·배우·감독·OTT)·해마다 막대 → **탭을 옮기지 않고 팝업**으로 포스터를 띄운다(2026-09-17 요청).
-           목록 필터와 같은 조건으로 거르고(연도 = startDate), 팝업의 [기록 탭에서 보기]로 같은 patch를 넘긴다 */
+           목록 필터와 같은 조건으로 거르고(연도 = `watchYear`), 팝업의 [기록 탭에서 보기]로 같은 patch를 넘긴다 */
         const jump = e.target.closest("[data-jump]");
         if (jump && typeof showWorksPopup === "function") {
           const patch = JSON.parse(jump.dataset.jump);
           Object.keys(patch).forEach(k => { if (!patch[k]) delete patch[k]; });
           const idxNow = personIdIndex();   // 위임 핸들러는 한 번만 붙으므로 그때그때 만든다
           const list = State.items.filter(i =>
-            (!patch.year || (i.startDate || "").slice(0, 4) === String(patch.year)) &&
+            (!patch.year || watchYear(i) === String(patch.year)) &&
             (!patch.genre || visibleGenres(i.genres).includes(patch.genre)) &&
             (!patch.ott || ottList(i).includes(patch.ott)) &&
             (!patch.person || itemHasPerson(i, patch.person, idxNow))
@@ -459,9 +460,9 @@ function renderStats() {
         }
         /* 한국 작품 비율 칸 → 한국 / 외국을 나눠 한 팝업에(2026-10-13 요청). 나라를 모르는 기록은 따로 묶어 끝에.
            "외국"은 목록 필터로 못 옮겨서(국가 필터에 "한국 아님"이 없다) [기록 탭에서 보기]는 없다 */
-        /* 처음 본 작품 칸 → 그 해 작품 전부(최근 본 순). 목록 필터와 같은 조건(연도 = startDate)이라 [기록 탭에서 보기]도 단다 */
+        /* 처음 본 작품 칸 → 그 해 작품 전부(최근 본 순). 목록 필터와 같은 조건(연도 = `watchYear`)이라 [기록 탭에서 보기]도 단다 */
         if (e.target.closest("[data-firsts]") && typeof showWorksPopup === "function") {
-          const yl = State.items.filter(i => _yrPick == null || (i.startDate || "").slice(0, 4) === String(_yrPick))
+          const yl = State.items.filter(i => _yrPick == null || watchYear(i) === String(_yrPick))
             .sort((a, b) => recDate(b).localeCompare(recDate(a)));
           showWorksPopup(_yrPick == null ? "본 작품" : "처음 본 작품", _yrPick == null ? "전체 기간" : `${_yrPick}년`, yl,
             _yrPick == null ? {} : { year: String(_yrPick) });
@@ -471,7 +472,7 @@ function renderStats() {
            [기록 탭에서 보기]는 같은 조건(연도 + 별점 있는 것 + 내 별점 정렬)으로 넘긴다 */
         const rated = e.target.closest("[data-rated]");
         if (rated && typeof showWorksPopup === "function") {
-          const yl = State.items.filter(i => i.rating && (_yrPick == null || (i.startDate || "").slice(0, 4) === String(_yrPick)))
+          const yl = State.items.filter(i => i.rating && (_yrPick == null || watchYear(i) === String(_yrPick)))
             .sort((a, b) => b.rating - a.rating || recDate(b).localeCompare(recDate(a)));
           const avg = (yl.reduce((s, i) => s + +i.rating, 0) / yl.length).toFixed(1);
           showWorksPopup(`평균 별점 ${avg}`, _yrPick == null ? "전체 기간 · 별점 높은 순" : `${_yrPick}년 · 별점 높은 순`, yl,
@@ -479,7 +480,7 @@ function renderStats() {
           return;
         }
         if (e.target.closest("[data-kofg]") && typeof showWorksPopup === "function") {
-          const yl = State.items.filter(i => _yrPick == null || (i.startDate || "").slice(0, 4) === String(_yrPick))
+          const yl = State.items.filter(i => _yrPick == null || watchYear(i) === String(_yrPick))
             .sort((a, b) => recDate(b).localeCompare(recDate(a)));
           showWorksPopup("한국 · 외국 작품", _yrPick == null ? "전체 기간" : `${_yrPick}년`, [
             { title: "한국", items: yl.filter(i => i.country === "한국") },
@@ -498,8 +499,8 @@ function renderStats() {
 /* ---------- 연간 결산 ----------
    그 해를 한 장으로 훑는 자리. 차트가 아니라 **숫자와 포스터**로 보여준다.
 
-   ⚠ 기준은 **처음 본 날(`startDate`)** 하나로 통일한다. 재시청까지 함께 세면
-   "그 해에 본 것"으로는 맞지만 목록 탭 연도 필터(`startDate`만 본다)와 어긋나서,
+   ⚠ 기준은 **처음 본 기간이 더 많이 걸친 해(`watchYear`)** 하나로 통일한다(2026-10-15, 예전엔 시작일).
+   목록 탭 연도 필터도 같은 함수를 쓴다. 재시청까지 함께 세면 "그 해에 본 것"으로는 맞지만 필터와 어긋나서,
    결산에서 `액션 12편`을 누르면 목록에 11개가 나오는 일이 생긴다.
    재시청은 그래서 **따로 센다**(그 해에 다시 본 작품 수). */
 function renderYearReview(year) {
@@ -512,11 +513,11 @@ function renderYearReview(year) {
   const all = year == null;
   const Y = all ? "" : String(year);
   const inY = (d) => all ? !!d : (d || "").slice(0, 4) === Y;
-  const list = all ? State.items.slice() : State.items.filter(i => inY(i.startDate));
+  const list = all ? State.items.slice() : State.items.filter(i => inY(watchMid(i)));
   const rewatch = State.items.filter(i => inY(i.lastWatchStart));
 
   /* 연도 고르기는 머리 띠 안에 있다 — 다시 그릴 때마다 새로 만들어지므로 change는 renderStats가 위임으로 받는다 */
-  const years = [...new Set(State.items.map(i => (i.startDate || "").slice(0, 4)).filter(Boolean))].sort().reverse();
+  const years = [...new Set(State.items.map(i => watchYear(i)).filter(Boolean))].sort().reverse();
   const select = `<select id="yrYear" class="yr-select" aria-label="결산 연도">
       <option value="all" ${all ? "selected" : ""}>전체</option>
       ${years.map(y => `<option value="${y}" ${y === Y ? "selected" : ""}>${y}년</option>`).join("")}
@@ -531,7 +532,7 @@ function renderYearReview(year) {
     return;
   }
 
-  const prev = all ? 0 : State.items.filter(i => (i.startDate || "").slice(0, 4) === String(year - 1)).length;
+  const prev = all ? 0 : State.items.filter(i => watchYear(i) === String(year - 1)).length;
   const diff = list.length - prev;
 
   const min = list.reduce((s, i) => {
@@ -572,10 +573,10 @@ function renderYearReview(year) {
 
   /* 흐름 막대 — 그 해면 1~12월, 전체면 해마다. 가장 많은 칸만 포인트 색 */
   const flow = all
-    ? years.slice().reverse().map(y => ({ k: y, label: `'${y.slice(2)}`, n: list.filter(i => (i.startDate || "").startsWith(y)).length, jump: { year: y } }))
+    ? years.slice().reverse().map(y => ({ k: y, label: `'${y.slice(2)}`, n: list.filter(i => watchYear(i) === y).length, jump: { year: y } }))
     : Array.from({ length: 12 }, (_, m) => ({
         k: m + 1, label: String(m + 1),
-        n: list.filter(i => +(i.startDate || "").slice(5, 7) === m + 1).length
+        n: list.filter(i => +watchMid(i).slice(5, 7) === m + 1).length
       }));
   const flowMax = Math.max(1, ...flow.map(f => f.n));
   const hot = flow.reduce((a, b) => (b.n > a.n ? b : a), flow[0]);
@@ -583,7 +584,7 @@ function renderYearReview(year) {
   /* 타일 넷째 칸은 "다시 본 작품" 대신 **평균 별점**(2026-09-17 요청) — 그 해에 처음 본 작품 중 별점 매긴 것 */
   const yrRated = list.filter(i => i.rating);
   const best = list.filter(i => i.rating).sort((a, b) => b.rating - a.rating).slice(0, 7);   // 7장 — 한 줄을 꽉 채운다(2026-09-17)
-  const sorted = list.filter(i => i.startDate).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  const sorted = list.filter(watchMid).sort((a, b) => watchMid(a).localeCompare(watchMid(b)));
   const firstWork = sorted[0], lastWork = sorted[sorted.length - 1];
 
   /* 칩을 누르면 그 조건으로 목록을 조회한다 — 연도를 함께 걸어야 결산에 적힌 개수와 맞는다.

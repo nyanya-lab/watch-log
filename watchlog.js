@@ -53,8 +53,29 @@ function epCount(i) { return +i.seasonEpisodes || +i.totalEpisodes || 0; }
    (보는 중에 TMDB 평점을 가리는 것과 같은 이유). 다 보고 체크를 풀면 다시 들어온다. */
 function needsRating(i) { return !i.rating && !watchingNow(i); }
 
-/* 기록의 "본 날" — 다시 봤으면 그 날짜. 다이어리·홈이 같은 기준을 쓴다 */
-function recDate(i) { return i.lastWatchStart || i.startDate || ""; }
+/* 기록의 "본 날" — **다 본 날(종료일)** 기준(2026-10-15 요청). 다시 봤으면 그 날짜.
+   한 달 걸쳐 본 드라마가 시작한 달에 묻히지 않게. 종료일이 없는 옛 기록은 시작일.
+   **아직 보는 중이면 오늘** — "최근 본 순"의 맨 위에 온다. 다이어리·홈·정렬·팝업이 전부 이 함수 하나를 쓴다. */
+function recDate(i) {
+  if (watchingNow(i)) return localToday();
+  if (i.lastWatchStart) return i.lastWatchEnd || i.lastWatchStart;
+  return i.endDate || i.startDate || "";
+}
+
+/* 그 기록이 "어느 해에 본 것"인지 — 해를 넘겨 봤으면 **더 오래 본 해**(2026-10-15 요청).
+   처음 본 기간(시작~종료)의 **가운데 날**로 정한다(12/20~1/3이면 12월 쪽이 길어 그 해). 딱 반이면 시작한 해.
+   보는 중이면 종료일 대신 오늘. 연간 결산·연도 필터·연도별 막대·"올해 N편째"가 이걸 쓴다.
+   재시청은 따로 센다(`lastWatchStart`). */
+function watchMid(i) {
+  const s = i.startDate;
+  if (!s) return "";
+  const e = i.endDate || (isWatching(i) ? localToday() : s);
+  if (e <= s) return s;
+  const a = Date.parse(s + "T00:00:00Z"), b = Date.parse(e + "T00:00:00Z");
+  if (!isFinite(a) || !isFinite(b)) return s;
+  return new Date(Math.floor((a + b) / 2 / 86400000) * 86400000).toISOString().slice(0, 10);
+}
+function watchYear(i) { return watchMid(i).slice(0, 4); }
 
 /* 시즌이 2개 이상인 작품인데 season이 비어 있는 항목 (기록 누락) */
 function needsSeason(i) {
@@ -851,7 +872,7 @@ function buildFilterOptions() {
   const ysel = $("#filterYear");
   if (ysel) {
     ysel.innerHTML = `<option value="">전체</option>` +
-      uniq(State.items.map(i => (i.startDate || "").slice(0, 4))).reverse()
+      uniq(State.items.map(watchYear)).reverse()
         .map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
     ysel.value = Filters.year;
   }
@@ -1023,7 +1044,7 @@ function applyFilters() {
     if (F.type.length && !F.type.includes(i.type)) return false;
     if (F.country.length && !F.country.includes(i.country)) return false;
     if (F.ott.length && !ottList(i).some(o => F.ott.includes(o))) return false;
-    if (F.year && (i.startDate || "").slice(0, 4) !== F.year) return false;
+    if (F.year && watchYear(i) !== F.year) return false;
     if (F.genre.length && !visibleGenres(i.genres).some(g => F.genre.includes(g))) return false;
     /* 별점 범위. 안 매긴 기록은 0으로 쳐서 기본 범위(0~10)에는 그대로 들어온다 */
     const myR = i.rating || 0;
@@ -1038,7 +1059,7 @@ function applyFilters() {
      `0000-00-00`으로 두면 날짜 없는 기록이 전부 목록 맨 끝에 몰린다.
      **데이터에는 쓰지 않는다.** startDate에 개봉일을 넣으면 히트맵·월별 통계·올해 시청이
      "본 적 없는 해"에 잡히고, 어느 게 진짜 기억인지 구분할 수 없게 된다. */
-  const dkey = (i) => i.lastWatchStart || i.startDate || i.releaseDate ||
+  const dkey = (i) => recDate(i) || i.releaseDate ||
                       (i.releaseYear ? i.releaseYear + "-01-01" : "0000-00-00");
   const CMP = {
     date: (a, b) => dkey(a).localeCompare(dkey(b)),
@@ -1293,7 +1314,7 @@ const MON_EN = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "
 const WD_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
 function diaryRowHtml(i, prevDay) {
-  const d = recDate(i);
+  const d = watchingNow(i) ? "" : recDate(i);
   const same = !!d && prevDay === d;
   const dt = d ? new Date(d + "T00:00:00") : null;
   const ott = ottList(i)[0] || "";
@@ -1748,7 +1769,7 @@ const QuickRate = { queue: [], idx: 0, done: 0 };
 
 /* 최근 본 것부터 — 기억이 선명한 순서 */
 function quickRateTargets() {
-  const dkey = (i) => i.lastWatchStart || i.startDate || "";
+  const dkey = recDate;
   return State.items.filter(needsRating).sort((a, b) => dkey(b).localeCompare(dkey(a)));
 }
 

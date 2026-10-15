@@ -267,7 +267,7 @@ function continueList() {
     byId.get(i.tmdbId).push(i);
   });
 
-  const dkey = (x) => x.lastWatchStart || x.startDate || "";
+  const dkey = recDate;
   const out = [];
   byId.forEach((recs, tmdbId) => {
     const st = myStatus(tmdbId);
@@ -1344,7 +1344,7 @@ function renderDcReco() {
 function movieContinueList() {
   const cache = getCollCache();
   const today = new Date().toISOString().slice(0, 10);
-  const dkey = (x) => x.lastWatchStart || x.startDate || "";
+  const dkey = recDate;
 
   const byColl = new Map();
   State.items.forEach(i => {
@@ -2001,7 +2001,7 @@ function renderDcNext() {
     const seen = st.seenSeasons.map(n => `S${n}`).join("·");
     const miss = st.missing.map(n => `S${n}`).join("·");
     return {
-      _sort: c.item.lastWatchStart || c.item.startDate || "",
+      _sort: recDate(c.item),
       tmdbId: c.tmdbId,
       mediaType: c.mediaType,
       title: c.item.title,
