@@ -384,13 +384,13 @@
 
       <div class="panel">
         <h3 class="text-slate-800 mb-1"><i class="fa-solid fa-cloud mr-2 ac-text"></i>Firebase 동기화</h3>
-        <p class="text-sm text-slate-500 mb-3">평소에는 자동 저장됩니다. 아래는 강제 저장·복구용입니다.</p>
+        <p class="text-sm text-slate-500 mb-3">고친 칸이 바로 서버에 올라가고, 다른 기기에서 고친 것도 바로 들어옵니다. 아래는 연결이 이상할 때만 쓰세요.</p>
         <div class="flex flex-wrap gap-2">
           <button id="pushBtn" class="btn btn-primary">
-            <i class="fa-solid fa-cloud-arrow-up mr-1"></i>서버에 저장
+            <i class="fa-solid fa-cloud-arrow-up mr-1"></i>지금 올리기
           </button>
-          <button id="pullBtn" class="btn btn-ghost">
-            <i class="fa-solid fa-cloud-arrow-down mr-1"></i>서버에서 불러오기
+          <button id="reconnectBtn" class="btn btn-ghost">
+            <i class="fa-solid fa-plug mr-1"></i>다시 연결
           </button>
         </div>
         <div id="syncStatus" class="text-sm mt-2 font-medium"></div>
@@ -830,9 +830,9 @@
     }
   })();
 </script>
-<script src="core.js?v=20261014c"></script>
+<script src="core.js?v=20261016"></script>
 <script src="tmdb.js?v=20261001"></script>
-<script src="watchlog.js?v=20261015"></script>
+<script src="watchlog.js?v=20261016"></script>
 <script src="discover.js?v=20261015"></script>
 <script src="stats.js?v=20261015"></script>
 <script src="home.js?v=20261015"></script>

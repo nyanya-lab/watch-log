@@ -247,7 +247,7 @@ function maintCounts() {
    `location.reload(true)`는 이제 무시되므로 두 단계로 한다:
    ① `cache: "reload"`로 index.html을 **HTTP 캐시를 건너뛰고** 다시 받아 캐시를 갱신하고
    ② 그다음 평범하게 reload한다. 새 index.html의 `?v=`가 바뀌어 있으면 js·css도 따라 새로 받는다.
-   저장 대기 중이던 변경은 이미 localStorage에 있고, 다음 부팅의 `syncOnBoot`이 올려준다. */
+   아직 못 보낸 변경은 이 기기 그림자와 견줘 다음에 켤 때 보낸다(core.js "저장"). */
 async function hardReload() {
   toast("새로 받아오는 중...");
   try {
@@ -2237,22 +2237,9 @@ function initSettings() {
   onBackdropClose("#syncPwModal", closeSyncPwModal);
   $("#syncPwInput").addEventListener("keydown", e => { if (e.key === "Enter") saveSyncPw(); });
 
-  $("#pushBtn").addEventListener("click", async () => {
-    $("#syncStatus").textContent = "저장 중...";
-    $("#syncStatus").className = "text-sm mt-2 font-medium text-slate-500";
-    const ok = await pushToServer();
-    $("#syncStatus").textContent = ok ? "서버 저장 완료" : "저장 실패";
-    $("#syncStatus").className = "text-sm mt-2 font-medium " + (ok ? "text-emerald-600" : "text-red-600");
-  });
-
-  $("#pullBtn").addEventListener("click", async () => {
-    if (!confirm("서버 데이터로 덮어씁니다. 계속할까요?")) return;
-    $("#syncStatus").textContent = "불러오는 중...";
-    const ok = await pullFromServer();
-    if (ok) applyFilters();
-    $("#syncStatus").textContent = ok ? "불러오기 완료" : "불러오기 실패";
-    $("#syncStatus").className = "text-sm mt-2 font-medium " + (ok ? "text-emerald-600" : "text-red-600");
-  });
+  /* 평소엔 고친 칸이 바로 올라가고 다른 기기 것도 바로 들어온다 — 아래 둘은 연결이 이상할 때만 */
+  $("#pushBtn").addEventListener("click", () => pushToServer());
+  $("#reconnectBtn").addEventListener("click", () => manualPull());
 
   $("#refreshAllBtn").addEventListener("click", runRefreshAll);
   $("#enrichBtn").addEventListener("click", runEnrichAll);
@@ -2398,7 +2385,8 @@ async function runRestoreBackup() {
   } catch { /* 깨진 백업은 없는 셈 친다 */ }
 
   try {
-    const NAME = { prev: "서버 백업 · 1시간마다", daily: "서버 백업 · 하루마다" };
+    const NAME = { prev: "서버 백업 · 1시간마다", daily: "서버 백업 · 하루마다",
+                   undo: "서버 · 되돌리기 직전", old: "서버 · 저장 방식 바꾸기 전 (2026-10-16)" };
     (await fetchBackups()).forEach(b =>
       /* 시각은 **그 내용이 저장된 때**(`updatedAt`)를 보여준다 — 백업으로 옮긴 때(`savedAt`)를 보여주면
          옛 내용이 방금 것처럼 보인다(2026-10-14) */
@@ -2443,6 +2431,7 @@ function applyRestorePoint(idx) {
   }
 
   $("#restoreModal").classList.add("hidden");
+  saveUndoBackup();          // 되돌리기를 되돌릴 수 있게 지금 서버 상태를 남긴다(욱진보드와 같다)
   State.items = pick.items;
   if (pick.lists) {
     if (Array.isArray(pick.lists.wishes)) State.wishes = pick.lists.wishes;
