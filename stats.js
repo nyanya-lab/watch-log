@@ -236,12 +236,18 @@ function renderStats() {
   `;
 
   /* --- 차트 그리기 --- */
-  // 차트 요소 클릭 → 해당 조건으로 목록 조회
+  /* 차트 요소 클릭 → **그 조건의 작품을 팝업으로**(2026-10-18 요청 — 예전엔 기록 탭으로 넘어갔다).
+     팝업의 [기록 탭에서 보기]가 같은 조건으로 기록 탭을 연다. 조건은 목록 필터와 같다(`itemsForPatch`) */
+  const showPatch = (title, patch) => {
+    if (!patch || typeof showWorksPopup !== "function") return;
+    const list = itemsForPatch(patch);
+    if (!list.length) { toast("조회할 항목이 없습니다"); return; }
+    showWorksPopup(title, "전체 기간", list, patch);
+  };
   const clickToFilter = (patchFn) => (evt, els, chart) => {
     if (!els.length) return;
     const label = chart.data.labels[els[0].index];
-    const patch = patchFn(label);
-    if (patch && typeof jumpToList === "function") jumpToList(patch);
+    showPatch(String(label), patchFn(label));
   };
   /* '기타' 조각 = 순위 밖 값들의 합. 그 값들을 통째로 걸면 조각 크기와 목록 개수가 맞는다 */
   const restPatch = (key, t) => (t.rest.length ? { [key]: t.rest } : null);
@@ -298,7 +304,7 @@ function renderStats() {
   _charts.push(new Chart($("#chartCountry"), {
     type: "bar",
     data: { labels: cTop.labels, datasets: [{ data: cTop.values, backgroundColor: cTop.labels.map(l => (l === "기타" || l === "미상") ? CHART_NONE : chartPalette(2)[1]), borderRadius: 6 }] },
-    options: { ...commonOpts, onClick: clickToFilter(l => l === "미상" ? null : l === "기타" ? restPatch("country", cTop) : { country: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    options: { ...commonOpts, onClick: clickToFilter(l => l === "기타" ? restPatch("country", cTop) : { country: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   // OTT
@@ -306,8 +312,8 @@ function renderStats() {
   _charts.push(new Chart($("#chartOtt"), {
     type: "bar",
     data: { labels: oTop.labels, datasets: [{ data: oTop.values, backgroundColor: oTop.labels.map(l => (l === "기타" || l === "정보 없음") ? CHART_NONE : chartPalette(3)[2]), borderRadius: 6 }] },
-    /* "정보 없음"은 필터로 걸 값이 없어 눌러도 아무 일 없게 둔다. "기타"는 묶인 OTT들을 그대로 건다 */
-    options: { ...commonOpts, onClick: clickToFilter(l => l === "정보 없음" ? null : l === "기타" ? restPatch("ott", oTop) : { ott: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
+    /* "정보 없음" = 볼 수 있는 곳이 없는 기록(필터 값 `OTT_NONE`). "기타"는 묶인 OTT들을 그대로 건다 */
+    options: { ...commonOpts, onClick: clickToFilter(l => l === "기타" ? restPatch("ott", oTop) : { ott: l }), indexAxis: "y", plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
 
   /* 별점 분포 — 내 별점과 TMDB 평점을 같은 눈금에 나란히 세운다.
@@ -330,10 +336,11 @@ function renderStats() {
          TMDB 쪽에 `rMin: 0.1`을 함께 거는 건 **이 차트가 별점을 매긴 기록만 세기 때문**이다.
          안 걸면 별점 없는 기록까지 조회돼 막대 높이(11)와 목록 개수(14)가 어긋난다. */
       onClick: (evt, els, chart) => {
-        if (!els.length || typeof jumpToList !== "function") return;
+        if (!els.length) return;
         const n = +chart.data.labels[els[0].index];
         const lo = +(n - 0.9).toFixed(1);
-        jumpToList(els[0].datasetIndex === 0 ? { rMin: lo, rMax: n } : { vMin: lo, vMax: n, rMin: 0.1 });
+        if (els[0].datasetIndex === 0) showPatch(`♥ 내 별점 ${lo}~${n}`, { rMin: lo, rMax: n });
+        else showPatch(`★ TMDB 평점 ${lo}~${n}`, { vMin: lo, vMax: n, rMin: 0.1 });
       },
       plugins: { legend: { position: "top", labels: { font: { size: 12, weight: 500 }, boxWidth: 12 } } },
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
@@ -402,9 +409,9 @@ function renderStats() {
 
   /* 막대를 누르면 **그 막대의 사람 번호**로 조회한다 — 이름(라벨)으로 찾으면 동명이인 중 아무나 걸린다 */
   const clickPerson = (top) => (evt, els) => {
-    if (!els.length || typeof jumpToList !== "function") return;
+    if (!els.length) return;
     const p = top[els[0].index];
-    if (p) jumpToList({ person: p.key });
+    if (p) showPatch(p.name, { person: p.key });
   };
 
   // 배우 TOP 10 ('기타'는 안 그린다)

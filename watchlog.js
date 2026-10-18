@@ -854,8 +854,9 @@ function buildFilterOptions() {
   };
 
   chips("fcType", "type", uniq(State.items.map(i => i.type)));
-  chips("fcCountry", "country", uniq(State.items.map(i => i.country)));
-  chips("fcOtt", "ott", uniq(State.items.flatMap(i => ottList(i))));
+  /* 나라·볼 수 있는 곳이 없는 기록도 고를 수 있게 "미상"·"정보 없음" 칩을 둔다(통계 막대와 같은 이름, 2026-10-18) */
+  chips("fcCountry", "country", uniq(State.items.map(i => i.country || COUNTRY_NONE)));
+  chips("fcOtt", "ott", uniq(State.items.flatMap(ottOrNone)));
   chips("fcGenre", "genre", uniq(State.items.flatMap(i => visibleGenres(i.genres))));
 
   ["rMin", "rMax", "vMin", "vMax"].forEach(k => {
@@ -903,8 +904,8 @@ function clearAllFilters() {
 }
 
 /* 통계 차트 클릭 → 해당 조건으로 목록 탭 조회 */
-function jumpToList(patch) {
-  const backup = { ...Filters };
+/* patch만 걸린 필터 상태(나머지 조건은 다 푼다). 검색어·정렬은 그대로 둔다 */
+function patchedFilters(patch) {
   /* 차트는 `{genre:"액션"}`처럼 값 하나를 넘긴다 — 다중 선택 필터는 배열이라 감싸준다 */
   const norm = {};
   Object.entries(patch || {}).forEach(pair => {
@@ -913,10 +914,15 @@ function jumpToList(patch) {
   });
   const cleared = {};
   MULTI.forEach(k => { cleared[k] = []; });
-  Object.assign(Filters, cleared, RANGE0,
+  return Object.assign(cleared, RANGE0,
     { year: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
       watchingOnly: false, group: "", seriesView: false },
     norm);
+}
+
+function jumpToList(patch) {
+  const backup = { ...Filters };
+  Object.assign(Filters, patchedFilters(patch));
   applyFilters();
 
   if (State.filtered.length === 0) {   // 조회 결과 없으면(예: '기타' 집계) 원복
@@ -1026,13 +1032,14 @@ function filterByPerson(name, id) {
 window.filterByPerson = filterByPerson;
 
 /* ---------- 필터 적용 ---------- */
-function applyFilters() {
-  const F = Filters;
-  State._dupIds = dupTmdbIdSet();     // 매 조회마다 한 번만 계산
-  State._personIdx = personIdIndex();  // 사람 번호 — 이름이 같은 다른 사람을 가른다
-  renderPersonIdInfo();                // 설정 탭 [배우·감독 번호 채우기] 대상 수
-  State._personKo = getPersonCache(); // 이름 판별용 캐시도 한 번만 읽는다
-  let list = State.items.filter(i => {
+/* 나라·볼 수 있는 곳이 비어 있는 기록을 가리키는 이름 — 통계 막대와 필터 칩이 같은 이름을 쓴다(2026-10-18).
+   예전엔 통계의 "정보 없음"·"미상" 막대를 눌러도 걸 필터가 없어 아무 일도 없었다 */
+const OTT_NONE = "정보 없음";
+const COUNTRY_NONE = "미상";
+const ottOrNone = (i) => { const l = ottList(i); return l.length ? l : [OTT_NONE]; };
+
+/* 목록 필터 조건 하나에 기록 하나가 맞는지 — 목록(`applyFilters`)과 통계 팝업(`itemsForPatch`)이 같이 쓴다 */
+function passesFilter(i, F, pIdx) {
     if (F.pendingOnly && i.tmdbId) return false;
     if (F.noSeasonOnly && !needsSeason(i)) return false;
     if (F.engNameOnly && !needsKoName(i)) return false;
@@ -1042,8 +1049,8 @@ function applyFilters() {
     if (F.q && !matchesQuery(i, F.q)) return false;
     /* 다중 선택: 고른 게 없으면 통과, 있으면 그중 하나라도 맞아야 한다 */
     if (F.type.length && !F.type.includes(i.type)) return false;
-    if (F.country.length && !F.country.includes(i.country)) return false;
-    if (F.ott.length && !ottList(i).some(o => F.ott.includes(o))) return false;
+    if (F.country.length && !F.country.includes(i.country || COUNTRY_NONE)) return false;
+    if (F.ott.length && !ottOrNone(i).some(o => F.ott.includes(o))) return false;
     if (F.year && watchYear(i) !== F.year) return false;
     if (F.genre.length && !visibleGenres(i.genres).some(g => F.genre.includes(g))) return false;
     /* 별점 범위. 안 매긴 기록은 0으로 쳐서 기본 범위(0~10)에는 그대로 들어온다 */
@@ -1051,9 +1058,24 @@ function applyFilters() {
     if (myR < F.rMin || myR > F.rMax) return false;
     const tmR = i.voteAverage || 0;
     if (tmR < F.vMin || tmR > F.vMax) return false;
-    if (F.person && !itemHasPerson(i, F.person, State._personIdx)) return false;
+    if (F.person && !itemHasPerson(i, F.person, pIdx)) return false;
     return true;
-  });
+}
+
+/* 통계에서 막대를 눌렀을 때 — 목록 탭으로 옮기지 않고 같은 조건의 기록만 뽑는다(`jumpToList`와 같은 조건) */
+function itemsForPatch(patch) {
+  const F = { ...Filters, ...patchedFilters(patch) };
+  const idx = personIdIndex();
+  return State.items.filter(i => passesFilter(i, F, idx)).sort((a, b) => recDate(b).localeCompare(recDate(a)));
+}
+
+function applyFilters() {
+  const F = Filters;
+  State._dupIds = dupTmdbIdSet();     // 매 조회마다 한 번만 계산
+  State._personIdx = personIdIndex();  // 사람 번호 — 이름이 같은 다른 사람을 가른다
+  renderPersonIdInfo();                // 설정 탭 [배우·감독 번호 채우기] 대상 수
+  State._personKo = getPersonCache(); // 이름 판별용 캐시도 한 번만 읽는다
+  let list = State.items.filter(i => passesFilter(i, F, State._personIdx));
 
   /* 정렬용 날짜. 본 날짜가 없으면 개봉/방영일로 대신한다 —
      `0000-00-00`으로 두면 날짜 없는 기록이 전부 목록 맨 끝에 몰린다.
