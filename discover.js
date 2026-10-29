@@ -2664,6 +2664,7 @@ function renderDcDetail(d, mediaType) {
       ${mediaType === "movie" && d.collectionId ? `<div id="dcSeriesNote" class="dc-series-note hidden"></div><div id="dcParts"></div>` : ""}
       ${castHtml}
       <div id="dcWatch"></div>
+      ${reviewLinksHtml(d.title, mediaType)}
     </div>
     <div class="modal-foot">
       <button onclick="dcModalWish(${d.tmdbId},'${mediaType}')"

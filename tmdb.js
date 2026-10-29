@@ -320,6 +320,25 @@ function watchInfoHtml(w) {
     : `<div class="wi-empty"><i class="fa-solid fa-circle-info mr-1"></i>지금 한국에서 볼 수 있는 곳이 없어요</div>` + link;
 }
 
+/* 다른 사람들의 평 — 왓챠피디아·네이버 검색으로 넘긴다(2026-10-29).
+   TMDB에는 한국어 한줄평이 없고(태그라인은 홍보 문구, 리뷰는 거의 영어 장문),
+   두 사이트는 공식 API가 없어 가져올 수 없다. JustWatch처럼 **검색**으로 보내므로
+   제목이 안 걸려도 검색 화면에는 도착한다. 조회가 없어 TMDB 키·미등록 여부와 무관하게 그린다. */
+function reviewLinksHtml(title, mediaType) {
+  if (!title) return "";
+  const q = encodeURIComponent(title);
+  const naverQ = encodeURIComponent(`${title} ${mediaType === "movie" ? "관람평" : "평점"}`);
+  return `<div class="dt-sec">
+    <div class="dt-sec-h"><i class="fa-solid fa-comments mr-1 text-slate-400"></i>다른 사람들의 평</div>
+    <div class="rv-links">
+      <a href="https://pedia.watcha.com/ko/search?query=${q}" target="_blank" rel="noopener">
+        <i class="fa-solid fa-arrow-up-right-from-square"></i>왓챠피디아</a>
+      <a href="https://search.naver.com/search.naver?query=${naverQ}" target="_blank" rel="noopener">
+        <i class="fa-solid fa-arrow-up-right-from-square"></i>네이버</a>
+    </div>
+  </div>`;
+}
+
 /* 조회해서 `box`에 그린다. 내 기록 상세와 탐색 미리보기가 열릴 때마다 부른다.
    상세는 한 번에 하나뿐이라 호출도 1건이다(목록에 다 붙이면 60건이 된다).
 

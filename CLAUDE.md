@@ -574,6 +574,13 @@ PC가 다시 올려 살렸다(서버 `_bak_prev`에도 사본이 있었다). 시
 - 탐색 카드 위임 핸들러는 `.dc-watch` 안 클릭을 먼저 걸러낸다 — 안 그러면 TMDB 링크를 누를 때
   카드의 detail 모달까지 같이 뜬다.
 
+### 다른 사람들의 평 (`reviewLinksHtml` in tmdb.js, 2026-10-29)
+
+상세 두 곳(`#dtWatch`·`#dcWatch` 바로 아래)에 **[왓챠피디아] [네이버]** 링크. 한국어 한줄평은 TMDB에 없고
+(`tagline` = 제작사 홍보 문구, `/reviews` = 거의 영어 장문), 왓챠·네이버는 공식 API가 없어 가져올 수 없다 — 그래서 넘긴다.
+- JustWatch와 같이 **검색**으로 보낸다: 왓챠 `pedia.watcha.com/ko/search?query=제목`, 네이버 `제목 관람평`(영화)·`제목 평점`(TV).
+- 조회가 없으므로 TMDB 키·미등록 여부와 무관하게 늘 그린다.
+
 각 버튼 옆에 최근 실행 시각 표시 (`LS_UPD`=`watchlog_updated_at`, `markUpd`/`renderUpdInfo`).
 `updRefresh`는 예전 `ott`/`rating`/`collection` 시각 중 가장 최근 것도 함께 본다 — 버튼을 합쳤다고
 "아직 실행 안 함"으로 되돌아가면 안 되기 때문.

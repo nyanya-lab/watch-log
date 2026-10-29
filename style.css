@@ -1089,6 +1089,12 @@ img.rf-b { outline: 2px solid var(--ac); outline-offset: 1px; }
 .wi-link { margin-top: 8px; font-size: 12.5px; }
 .wi-link a { color: var(--ac); }
 .wi-link a:hover { text-decoration: underline; }
+/* 다른 사람들의 평 — 바깥 사이트로 넘기는 알약 두 개 */
+.rv-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-links a { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.rv-links a i { font-size: 10.5px; color: var(--ac); }
+.rv-links a:hover { border-color: var(--ac); color: var(--ac); }
 
 /* 스크롤바 */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

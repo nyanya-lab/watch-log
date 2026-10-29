@@ -1567,6 +1567,7 @@ function openDetail(id) {
       </div>` : ""}
 
       <div id="dtWatch"></div>
+      ${reviewLinksHtml(i.title, mediaTypeOf(i))}
     </div>
     <div class="modal-foot">
       ${i.tmdbId ? `<button onclick="refreshTmdbInDetail(this, '${i.id}')" class="btn btn-ghost"
