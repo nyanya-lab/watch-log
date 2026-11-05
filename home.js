@@ -157,46 +157,69 @@ function availHtml() {
   </section>`;
 }
 
-/* N년 전 오늘 — 몇 년 전 바로 오늘 보던(본) 작품(2026-11-05). 최근 본 작품 바로 아래.
-   처음 본 기간과 다시 본 기간 둘 다 본다(시작~종료 사이에 오늘 날짜가 걸리면). 딱 그날이 없으면 앞뒤 3일까지
-   넓히고 제목을 "이맘때"로 바꾼다. 그래도 없으면 안 그린다. 날짜 없는 기록은 당연히 빠진다. */
-function yearsAgoHits(range) {
+/* 몇 년 전 이맘때 — 지난 해들의 **같은 열흘 구간**에 본 작품(2026-11-05). 최근 본 작품 바로 아래.
+   구간은 1~10일 / 11~20일 / 21일~말일(사용자와 정함 — 하루는 너무 적고, 한 달은 너무 많다).
+   처음 본 기간과 다시 본 기간 둘 다 보고, 그 구간에 하루라도 걸리면 넣는다. 날짜 없는 기록은 빠진다.
+   순서 = 오늘 날짜에 가까운 것부터, 같으면 최근 해부터. 해가 둘 이상이면 [전체 · 1년 전 · 2년 전 …] 칩으로 거른다. */
+let _agoYear = 0;   // 0 = 전체 (세션 동안만 기억)
+
+function agoBlock(y, m, d) {
+  const last = new Date(y, m, 0).getDate();
+  return d <= 10 ? [1, 10] : d <= 20 ? [11, 20] : [21, last];
+}
+
+function yearsAgoHits() {
   const today = localToday();
   const y = +today.slice(0, 4), m = +today.slice(5, 7), d = +today.slice(8, 10);
-  const fmt = (t) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  const pad = (n) => String(n).padStart(2, "0");
   const out = [];
   State.items.forEach(i => {
     for (const [s, e] of [[i.startDate, i.endDate], [i.lastWatchStart, i.lastWatchEnd]]) {
       if (!s) continue;
       const end = e || s;
-      let hit = 0;
-      for (let yy = +s.slice(0, 4); yy <= +end.slice(0, 4) && yy < y; yy++) {
-        const lo = fmt(new Date(yy, m - 1, d - range)), hi = fmt(new Date(yy, m - 1, d + range));
-        if (lo <= end && hi >= s) { hit = yy; break; }
+      let hit = null;
+      for (let yy = +end.slice(0, 4); yy >= +s.slice(0, 4); yy--) {   // 최근 해부터
+        if (yy >= y) continue;
+        const [lo, hi] = agoBlock(yy, m, d);
+        const L = `${yy}-${pad(m)}-${pad(lo)}`, H = `${yy}-${pad(m)}-${pad(hi)}`;
+        if (L <= end && H >= s) {
+          const on = s > L ? s : L;    // 구간 안에서 본 첫날 — 오늘과 얼마나 가까운지 잰다
+          hit = { ago: y - yy, dist: Math.abs(+on.slice(8, 10) - d), on };
+          break;
+        }
       }
-      if (hit) { out.push({ i, ago: y - hit }); break; }
+      if (hit) { out.push({ i, ...hit }); break; }
     }
   });
-  return out.sort((a, b) => a.ago - b.ago || recDate(b.i).localeCompare(recDate(a.i)));
+  return out.sort((a, b) => a.dist - b.dist || a.ago - b.ago);
 }
 
 function agoHtml() {
-  let hits = yearsAgoHits(0), exact = true;
-  if (!hits.length) { hits = yearsAgoHits(3); exact = false; }
+  const hits = yearsAgoHits();
   if (!hits.length) return "";
+  const today = localToday();
+  const m = +today.slice(5, 7);
+  const [lo, hi] = agoBlock(+today.slice(0, 4), m, +today.slice(8, 10));
+  const years = [...new Set(hits.map(h => h.ago))].sort((a, b) => a - b);
+  if (_agoYear && !years.includes(_agoYear)) _agoYear = 0;
+  const shown = _agoYear ? hits.filter(h => h.ago === _agoYear) : hits;
   return `<section class="hm-sec">
     <div class="hm-sec-head">
-      <h2 class="hm-h2 hd">몇 년 전 ${exact ? "오늘" : "이맘때"}<span class="hm-h2small">그때 보던 작품</span></h2>
+      <h2 class="hm-h2 hd">몇 년 전 이맘때<span class="hm-h2small">${m}월 ${lo}~${hi}일에 본 작품 ${hits.length}편</span></h2>
     </div>
-    <div class="hm-mini-row">${hits.slice(0, 8).map(({ i, ago }) => `
-      <div class="hm-mini" data-open="${esc(i.id)}" role="button">
-        ${i.poster ? `<img src="${esc(i.poster)}" alt="" loading="lazy">` : `<div class="hm-mini-ph"><i class="fa-solid fa-film"></i></div>`}
-        <div class="hm-mini-b">
-          <div class="hm-mini-s ac-text"><i class="fa-solid fa-clock-rotate-left"></i>${ago}년 전</div>
-          <div class="hm-mini-t">${esc(i.title)}${seriesLabel(i) ? ` ${esc(seriesLabel(i))}` : ""}</div>
-          ${i.rating ? `<div class="hm-mini-r">${hearts(i.rating)}</div>` : ""}
-        </div>
-      </div>`).join("")}</div>
+    ${years.length > 1 ? `<div class="hm-ago-chips">
+      <button class="hm-ago-chip ${_agoYear ? "" : "on"}" data-ago-y="0">전체</button>
+      ${years.map(n => `<button class="hm-ago-chip ${_agoYear === n ? "on" : ""}" data-ago-y="${n}">${n}년 전</button>`).join("")}
+    </div>` : ""}
+    <div class="hm-shelf-wrap">
+      <button class="hm-arrow" data-dir="-1" title="이전"><i class="fa-solid fa-chevron-left"></i></button>
+      <div class="hm-shelf">${shown.map(({ i, ago, on }) => `
+        <div class="hm-ago-c">${recordCardHtml(i)}
+          <div class="hm-ago-y"><i class="fa-solid fa-clock-rotate-left"></i>${ago}년 전 · ${+on.slice(5, 7)}.${+on.slice(8, 10)}</div>
+        </div>`).join("")}</div>
+      <button class="hm-arrow" data-dir="1" title="다음"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+    <div class="hm-pos"><i></i></div>
   </section>`;
 }
 
@@ -324,16 +347,17 @@ function periodHtml({ big, sub, from, to, diary }) {
 
 /* 선반 화살표·위치 바 — 화살표는 늘 보이고, 끝에 닿은 쪽만 흐려진다.
    위치 바는 **넘기고 있을 때만** 잠깐 보인다(2026-09-17 요청 — 가만히 있을 땐 안 보이는 게 예쁘다) */
-let _shelfBarTimer = null;
 function syncShelfArrows(scrolling) {
-  const wrap = $("#tab-home .hm-shelf-wrap");
-  if (!wrap) return;
+  $$("#tab-home .hm-shelf-wrap").forEach(wrap => syncOneShelf(wrap, scrolling));
+}
+/* 선반이 둘이라(최근 본 작품 · 몇 년 전 이맘때) 하나씩 맞춘다. 위치 바 타이머도 바마다 따로 */
+function syncOneShelf(wrap, scrolling) {
   const s = wrap.querySelector(".hm-shelf");
   const [l, r] = wrap.querySelectorAll(".hm-arrow");
   const max = s.scrollWidth - s.clientWidth;
   l.classList.toggle("off", s.scrollLeft <= 4);
   r.classList.toggle("off", s.scrollLeft >= max - 4);
-  const bar = wrap.parentElement.querySelector(".hm-pos");
+  const bar = wrap.nextElementSibling && wrap.nextElementSibling.classList.contains("hm-pos") ? wrap.nextElementSibling : null;
   if (bar) {
     const w = s.scrollWidth ? s.clientWidth / s.scrollWidth : 1;
     const thumb = bar.firstElementChild;
@@ -341,11 +365,11 @@ function syncShelfArrows(scrolling) {
     thumb.style.left = (max > 0 ? (s.scrollLeft / max) * (1 - w) * 100 : 0).toFixed(2) + "%";
     if (scrolling === true && w < 0.99) {
       bar.classList.add("on");
-      clearTimeout(_shelfBarTimer);
-      _shelfBarTimer = setTimeout(() => bar.classList.remove("on"), 900);
+      clearTimeout(bar._t);
+      bar._t = setTimeout(() => bar.classList.remove("on"), 900);
     }
   }
-  if (!s._bound) { s._bound = true; s.addEventListener("scroll", () => syncShelfArrows(true), { passive: true }); }
+  if (!s._bound) { s._bound = true; s.addEventListener("scroll", () => syncOneShelf(wrap, true), { passive: true }); }
 }
 
 /* 다 봤어요 — 오늘로 끝내고, 별점이 없으면 바로 묻는다(2026-09-17 사용자 선택).
@@ -397,6 +421,7 @@ function initHome() {
       toast(`${REFRESH_SNOOZE_DAYS}일 뒤에 다시 알려드릴게요`);
       return renderHome();
     }
+    if ((el = t("[data-ago-y]"))) { _agoYear = +el.dataset.agoY; return renderHome(); }
     if ((el = t("[data-av-x]"))) return dismissAvail(el.dataset.avX);
     if ((el = t("[data-av]"))) return openDcDetail(+el.dataset.av, el.dataset.mt);
     if ((el = t("[data-finish]"))) return finishWatching(el.dataset.finish);

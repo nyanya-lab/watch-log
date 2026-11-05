@@ -1559,8 +1559,19 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 .hm-mini-s { font-size: 12px; font-weight: 600; margin-top: 3px; }
 .hm-mini-s:first-child { margin: 0 0 3px; }
 .hm-mini-s i { margin-right: 5px; font-size: 11px; }
-.hm-mini-r { margin-top: 4px; font-size: 12px; }
 .hm-mini-x { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 999px;
   color: var(--ink-3); display: flex; align-items: center; justify-content: center; font-size: 12px; }
 .hm-mini-x:hover { background: var(--sink); color: var(--ink); }
 @media (max-width: 639px) { .hm-mini { flex-basis: 230px; } }
+
+/* 몇 년 전 이맘때 — 최근 본 작품과 같은 선반 + 카드 아래 "N년 전 · 11.3" (2026-11-05) */
+.hm-shelf > .hm-ago-c { flex: 0 0 148px; min-width: 0; }
+.hm-ago-c .wl-card { width: 100%; }
+.hm-ago-y { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--ac); }
+.hm-ago-y i { margin-right: 5px; font-size: 11px; }
+.hm-ago-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -4px 0 12px; }
+.hm-ago-chip { padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: #fff;
+  font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.hm-ago-chip:hover { border-color: var(--ac); color: var(--ac); }
+.hm-ago-chip.on { background: var(--ac); border-color: var(--ac); color: #fff; }
+@media (max-width: 639px) { .hm-shelf > .hm-ago-c { flex-basis: 118px; } }
