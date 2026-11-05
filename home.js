@@ -162,8 +162,9 @@ function availHtml() {
    처음 본 기간과 다시 본 기간 둘 다 보고, 그 구간에 하루라도 걸리면 넣는다.
    **본 날짜가 없는 기록(13%)은 방영일(`releaseDate`)로 대신 본다** — 이 줄에서만(사용자 요청). 통계에는 안 쓴다:
    옛 작품은 나오고 한참 뒤에 봤을 테니 연간 결산·연도별 막대가 거짓이 된다. 그래서 배지를 흐린 모양으로 구분한다.
-   순서 = 오늘 날짜에 가까운 것부터, 같으면 최근 해부터. 그 해(`2023`)를 포스터 우상단에 시즌 배지(`S1`)와 같은 모양으로
-   (보는 중 배지 자리 — 지난 작품엔 안 뜬다). "N년 전"은 글자가 길어 배지가 커 보였다(사용자 지적). 방영일로 넣은 건 TV 아이콘만 붙는다. */
+   순서 = 오늘 날짜에 가까운 것부터, 같으면 최근 해부터. 포스터 우상단에 시즌 배지(`S1`)와 같은 모양으로 `⟲ 3Y`
+   (보는 중 배지 자리 — 지난 작품엔 안 뜬다). "N년 전"은 길어 배지가 커 보였고, 옆 `S1`이 영어라 `Y`로 맞췄다(사용자 선택).
+   본 날짜 = 되감기 시계, 방영일로 넣은 것 = TV 아이콘. */
 
 function agoBlock(y, m, d) {
   const last = new Date(y, m, 0).getDate();
@@ -217,7 +218,7 @@ function agoHtml() {
       <button class="hm-arrow" data-dir="-1" title="이전"><i class="fa-solid fa-chevron-left"></i></button>
       <div class="hm-shelf">${hits.map(({ i, ago, est }) => `
         <div class="hm-ago-c">${recordCardHtml(i)}
-          <span class="hm-ago-b" title="${ago}년 전${est ? " · 본 날짜가 없어서 방영일 기준" : ""}">${est ? `<i class="fa-solid fa-tv"></i>` : ""}${y - ago}</span>
+          <span class="hm-ago-b" title="${ago}년 전${est ? " · 본 날짜가 없어서 방영일 기준" : ""}"><i class="fa-solid ${est ? "fa-tv" : "fa-clock-rotate-left"}"></i>${ago}Y</span>
         </div>`).join("")}</div>
       <button class="hm-arrow" data-dir="1" title="다음"><i class="fa-solid fa-chevron-right"></i></button>
     </div>
