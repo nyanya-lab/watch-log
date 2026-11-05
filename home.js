@@ -133,6 +133,73 @@ function refreshNoticeHtml() {
   </div>`;
 }
 
+/* 이제 볼 수 있어요 — 보고싶어요에 담아둔 작품이 정액제에 새로 들어온 것(2026-11-05).
+   확인은 `checkWishAvail`(discover.js)이 하루 한 번 하고, 여기는 그 표시(`availNew`)를 그리기만 한다.
+   보는 중 배너 바로 아래(사용자와 정한 자리) · 해당 작품이 있을 때만 · ✕ = 이 줄에서만 빼기 */
+function availHtml() {
+  const list = (State.wishes || [])
+    .filter(w => (w.availNew || []).length && !myStatus(w.tmdbId, w.mediaType).watched)
+    .sort((a, b) => (b.availAt || "").localeCompare(a.availAt || ""));
+  if (!list.length) return "";
+  return `<section class="hm-sec">
+    <div class="hm-sec-head">
+      <h2 class="hm-h2 hd">이제 볼 수 있어요<span class="hm-h2small">보고싶어요에 담아둔 작품</span></h2>
+    </div>
+    <div class="hm-mini-row">${list.map(w => `
+      <div class="hm-mini" data-av="${w.tmdbId}" data-mt="${esc(w.mediaType)}" role="button">
+        ${w.poster ? `<img src="${esc(w.poster)}" alt="" loading="lazy">` : `<div class="hm-mini-ph"><i class="fa-solid fa-film"></i></div>`}
+        <div class="hm-mini-b">
+          <div class="hm-mini-t">${esc(w.title)}</div>
+          <div class="hm-mini-s ac-text"><i class="fa-solid fa-circle-play"></i>${esc(w.availNew.join(" · "))}에서 새로</div>
+        </div>
+        <button class="hm-mini-x" data-av-x="${w.tmdbId}" title="이 줄에서 빼기 (보고싶어요엔 남아요)"><i class="fa-solid fa-xmark"></i></button>
+      </div>`).join("")}</div>
+  </section>`;
+}
+
+/* N년 전 오늘 — 몇 년 전 바로 오늘 보던(본) 작품(2026-11-05). 최근 본 작품 바로 아래.
+   처음 본 기간과 다시 본 기간 둘 다 본다(시작~종료 사이에 오늘 날짜가 걸리면). 딱 그날이 없으면 앞뒤 3일까지
+   넓히고 제목을 "이맘때"로 바꾼다. 그래도 없으면 안 그린다. 날짜 없는 기록은 당연히 빠진다. */
+function yearsAgoHits(range) {
+  const today = localToday();
+  const y = +today.slice(0, 4), m = +today.slice(5, 7), d = +today.slice(8, 10);
+  const fmt = (t) => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+  const out = [];
+  State.items.forEach(i => {
+    for (const [s, e] of [[i.startDate, i.endDate], [i.lastWatchStart, i.lastWatchEnd]]) {
+      if (!s) continue;
+      const end = e || s;
+      let hit = 0;
+      for (let yy = +s.slice(0, 4); yy <= +end.slice(0, 4) && yy < y; yy++) {
+        const lo = fmt(new Date(yy, m - 1, d - range)), hi = fmt(new Date(yy, m - 1, d + range));
+        if (lo <= end && hi >= s) { hit = yy; break; }
+      }
+      if (hit) { out.push({ i, ago: y - hit }); break; }
+    }
+  });
+  return out.sort((a, b) => a.ago - b.ago || recDate(b.i).localeCompare(recDate(a.i)));
+}
+
+function agoHtml() {
+  let hits = yearsAgoHits(0), exact = true;
+  if (!hits.length) { hits = yearsAgoHits(3); exact = false; }
+  if (!hits.length) return "";
+  return `<section class="hm-sec">
+    <div class="hm-sec-head">
+      <h2 class="hm-h2 hd">몇 년 전 ${exact ? "오늘" : "이맘때"}<span class="hm-h2small">그때 보던 작품</span></h2>
+    </div>
+    <div class="hm-mini-row">${hits.slice(0, 8).map(({ i, ago }) => `
+      <div class="hm-mini" data-open="${esc(i.id)}" role="button">
+        ${i.poster ? `<img src="${esc(i.poster)}" alt="" loading="lazy">` : `<div class="hm-mini-ph"><i class="fa-solid fa-film"></i></div>`}
+        <div class="hm-mini-b">
+          <div class="hm-mini-s ac-text"><i class="fa-solid fa-clock-rotate-left"></i>${ago}년 전</div>
+          <div class="hm-mini-t">${esc(i.title)}${seriesLabel(i) ? ` ${esc(seriesLabel(i))}` : ""}</div>
+          ${i.rating ? `<div class="hm-mini-r">${hearts(i.rating)}</div>` : ""}
+        </div>
+      </div>`).join("")}</div>
+  </section>`;
+}
+
 function renderHome() {
   const box = $("#tab-home");
   if (!box || box.classList.contains("hidden")) return;
@@ -187,6 +254,8 @@ function renderHome() {
 
     ${heroArea(ws, latest)}
 
+    ${availHtml()}
+
     ${recent.length ? `<section class="hm-sec">
       <div class="hm-sec-head">
         <h2 class="hm-h2 hd">최근 본 작품</h2>
@@ -200,6 +269,8 @@ function renderHome() {
       </div>
       <div class="hm-pos"><i></i></div>
     </section>` : ""}
+
+    ${agoHtml()}
 
     <!-- 기간 기록 — 이번 달 / 최근 6개월을 위아래로, 맨 아래에 정리할 것.
          예전 "이번 달 기록" 줄 목록은 최근 본 작품과 겹쳐서 없앴다(2026-09-17) -->
@@ -302,6 +373,8 @@ function initHome() {
   const box = $("#tab-home");
   if (!box) return;
   window.addEventListener("resize", debounce(syncShelfArrows, 150));
+  /* 보고싶어요 작품이 볼 수 있게 됐는지 — 하루 한 번. 서버 것을 받을 틈을 두고 조금 뒤에 돈다 */
+  setTimeout(() => checkWishAvail(), 8000);
   box.addEventListener("click", e => {
     const t = (sel) => e.target.closest(sel);
     let el;
@@ -324,6 +397,8 @@ function initHome() {
       toast(`${REFRESH_SNOOZE_DAYS}일 뒤에 다시 알려드릴게요`);
       return renderHome();
     }
+    if ((el = t("[data-av-x]"))) return dismissAvail(el.dataset.avX);
+    if ((el = t("[data-av]"))) return openDcDetail(+el.dataset.av, el.dataset.mt);
     if ((el = t("[data-finish]"))) return finishWatching(el.dataset.finish);
     if ((el = t("[data-rate]"))) return rateOne(el.dataset.rate);
     if ((el = t("[data-todo]"))) {

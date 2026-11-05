@@ -140,7 +140,8 @@ TMDB API 키도 코드에 없음. 사용자가 설정 탭에서 입력 → `loca
 ```js
 { id:"w...", tmdbId, mediaType:"movie"|"tv", title, originalTitle, poster,
   year, voteAverage, overview, otts:["넷플릭스"],
-  reason:"「기생충」과 비슷", addedAt:"ISO" }
+  reason:"「기생충」과 비슷", addedAt:"ISO",
+  availNew:["넷플릭스"], availAt:"2026-11-05" }   // 정액제에 새로 들어온 OTT (있을 때만, checkWishAvail)
 ```
 
 **관심없음**(`State.hides`) — 볼 생각이 없는 작품. 추천·이어보기에서 걸러낸다
@@ -208,6 +209,7 @@ TMDB가 준 `media_type`을 그대로 저장하므로 짐작이 아니고, 국�
 - `watchlog_collections` — 컬렉션 편 정보 캐시 `{[collectionId]: {name, total, parts:[{tmdbId,no,title,releaseDate,poster}]}}`.
   영화 이어보기에서 **미개봉 편을 걸러내려면 편별 개봉일**이 필요해서 둔다. TMDB로 다시 만들 수 있는
   정보다 (`getCollCache`/`saveCollInfo` in tmdb.js)
+- `watchlog_upcoming` — "곧 나와요" TV 캐시 `{[tmdbId]: {at, ended, season, date, poster}}` (이 기기만, TMDB로 다시 만듦)
 - `watchlog_franchises` — 프랜차이즈(MCU·미들어스 등) 영화 목록 캐시 `{[key]: {parts, updatedAt}}`.
   탐색 탭 "시리즈" 뷰가 쓴다
 - `watchlog_person_ko` — 한글 표기 캐시. `""`는 "확인했지만 한글 표기 없음"으로 **확정된** 값.
@@ -528,6 +530,23 @@ PC가 다시 올려 살렸다(서버 `_bak_prev`에도 사본이 있었다). 시
   `selectTmdb`(새로 등록·수정), `tmdbAutoMatch`(일괄 채우기), `runAutoRematch`(시리즈 재매칭).
   한 군데라도 빠뜨리면 **설정에서 정리해도 새로 등록한 작품이 다시 영문으로 들어온다.**
   cast/director를 저장하는 곳은 이 셋뿐이니 새 경로를 만들면 여기도 걸어야 한다.
+
+### 2026-11-05 추가 네 가지
+
+- **별점 기준 — 같은 점수를 준 내 작품**(`renderRatingRef`·`initRatingRef` in watchlog.js): 글로 된 기준표가 없어서
+  "1~10 기준이 매번 헷갈린다" → 숫자를 치면 아래에 **그 점수대(8~8.9 = 8점대, 10은 10점)를 준 내 작품**을 최근 본 순 8개.
+  비면 가장 가까운 점수대, 위아래 점수대는 칩으로 넘긴다. 포스터를 누르면 **그 작품 별점을 그 자리에서** 고친다
+  (Enter·벗어나기 = 저장, Esc = 취소 — 둘 다 `stopPropagation`, 안 그러면 몰아넣기의 Enter·Esc까지 돈다).
+  자리: 별점 몰아넣기·한 장짜리 별점 창(`#qrRef`) · 수정창(`#fRatingRef`). 칸 값을 코드로 바꾸는 곳은 `input` 이벤트를 쏴야 따라온다.
+- **곧 나와요**(discover.js `upcomingList`·`refreshUpcoming`): 이어보기 맨 앞 묶음 + 상세 한 줄(`upcomingNoteHtml`, `.dt-up`).
+  영화 = 컬렉션 캐시의 미개봉 편(조회 없음) · TV = `mediaType`이 저장된 tv 기록만 `tmdbDetail`로 "아직 방영 안 한 첫 시즌"
+  (`nextAir`로 날짜 보충), 하루 1번(끝난 작품 30일), `sameWork` 아니면 30일 건너뜀. Ended·Canceled에 날짜 없는 칸은 TMDB 빈 칸이라 무시.
+  ⚠ 이어보기 목록에 **따로 앞에 붙인다** — `localeCompare`는 기호를 숫자보다 앞에 세워 정렬 키(`"~"`)로 맨 앞에 두려던 게 맨 뒤로 갔다.
+- **이제 볼 수 있어요**(discover.js `checkWishAvail` → home.js `availHtml`): 보고싶어요 작품이 정액제에 새로 들어오면 홈 보는 중 배너 아래.
+  앱을 열고 8초 뒤 **하루 한 번**(`prefs.wishCheckAt`, 동기화 — 다른 기기가 또 안 돈다). 새 OTT는 위시의 `availNew`·`availAt`(동기화).
+  ✕ = 그 둘만 지움(`dismissAvail`). 조회 실패는 `tmdbProviders(.., strict)`로 던져서 건너뛴다 — 빈 목록으로 저장하면 다음에 전부 "새로"가 된다.
+- **몇 년 전 오늘**(home.js `agoHtml`·`yearsAgoHits`): 최근 본 작품 아래. 처음 본 기간·다시 본 기간에 몇 년 전 오늘이 걸린 기록.
+  없으면 앞뒤 3일("이맘때"), 그래도 없으면 안 그린다.
 
 ### 사람은 이름이 아니라 번호로 묶는다 (2026-10-12)
 

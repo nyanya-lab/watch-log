@@ -239,12 +239,14 @@ async function tmdbSeasonStill(tvId, seasonNo) {
   } catch { return null; }
 }
 
-async function tmdbProviders(id, mediaType) {
+/* `strict`면 실패를 빈 목록으로 삼키지 않고 던진다 — 보고싶어요 확인(`checkWishAvail`)은
+   "못 받음"을 "어디에도 없음"으로 읽으면 다음 확인 때 전부 "새로 들어왔다"고 잘못 알린다 */
+async function tmdbProviders(id, mediaType, strict) {
   try {
     const key = getTmdbKey();
     const url = `${TMDB_BASE}/${mediaType}/${id}/watch/providers?api_key=${key}`;
     const res = await fetch(url);
-    if (!res.ok) return [];
+    if (!res.ok) { if (strict) throw new Error(String(res.status)); return []; }
     const data = await res.json();
     const kr = (data.results && data.results.KR) || {};
     const list = [...(kr.flatrate || []), ...(kr.free || []), ...(kr.ads || [])];
@@ -255,7 +257,7 @@ async function tmdbProviders(id, mediaType) {
       if (mapped && !seen.has(mapped)) { seen.add(mapped); otts.push(mapped); }
     });
     return otts;
-  } catch { return []; }
+  } catch (e) { if (strict) throw e; return []; }
 }
 
 /* ---------- 볼 수 있는 곳 전체 (정액제 + 대여 + 구매) ----------
@@ -465,6 +467,9 @@ async function tmdbDetail(id, mediaType) {
     director: director ? director.name : (creator ? creator.name : ""),
     directorId: director ? director.id : (creator ? creator.id : null),
     status: d.status || "",
+    /* 다음에 방영할 회차 — "곧 나와요"가 다음 시즌 방영일을 시즌 칸보다 먼저 알 때가 있어서 담는다 */
+    nextAir: d.next_episode_to_air
+      ? { season: d.next_episode_to_air.season_number, date: d.next_episode_to_air.air_date || "" } : null,
     type: mapType(mediaType, d.genres)
   };
 }

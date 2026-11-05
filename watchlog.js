@@ -322,6 +322,7 @@ function initWatchlog() {
     if (!f) return;
     const inp = $("#fRating");
     inp.value = f.dataset.fill;
+    inp.dispatchEvent(new Event("input"));
     inp.focus();
     inp.select();
   });
@@ -467,7 +468,8 @@ function initWatchlog() {
   }
 
   /* 별점 (숫자 입력, 10점 만점 소수 가능) */
-  $("#clearStar").addEventListener("click", () => { $("#fRating").value = ""; });
+  $("#clearStar").addEventListener("click", () => { $("#fRating").value = ""; $("#fRating").dispatchEvent(new Event("input")); });
+  initRatingRef($("#fRatingRef"), $("#fRating"), () => State.editingId);
 
   /* 스테퍼 */
   $$(".step-btn").forEach(btn => {
@@ -1554,6 +1556,7 @@ function openDetail(id) {
       </div>` : ""}
 
       <!-- 시리즈 전체를 포스터로 (안 본 편까지). 못 그리는 경우에만 아래 배지 줄로 물러난다 -->
+      ${upcomingNoteHtml(i)}
       <div id="dtParts"></div>
       ${siblings.length && !hasParts ? `<div class="dt-sec">
         <div class="dt-sec-h">
@@ -1889,6 +1892,8 @@ function renderQuickRate() {
       <p class="text-xs text-slate-400 font-medium mt-2">
         <b>Enter</b>로 저장하고 다음 · 빈 칸으로 <b>Enter</b>면 건너뛰기 · <b>Esc</b>로 닫기
       </p>
+      <!-- 그 점수를 준 내 작품 — 기준이 헷갈릴 때 견줘 본다(renderRatingRef) -->
+      <div id="qrRef" class="rr"></div>
       <!-- 기억이 안 날 때를 위한 도움닫기. 점수를 **미리 보여주지는 않는다** — 눌러야 칸에 들어온다.
            평소에 보이면 내 점수가 그쪽으로 끌려가지만, 눌러서 가져오는 건 내가 고른 것이라 다르다.
            바로 저장하지 않고 입력칸에만 채워서, 보고 조정한 뒤 Enter를 치게 한다. -->
@@ -1919,9 +1924,12 @@ function renderQuickRate() {
     e.preventDefault();
     quickRateSubmit();
   });
+  initRatingRef($("#qrRef"), input, () => i.id);
+  renderRatingRef($("#qrRef"), input, i.id);
   const useTmdb = $("#qrUseTmdb");
   if (useTmdb) useTmdb.addEventListener("click", () => {
     input.value = i.voteAverage;
+    input.dispatchEvent(new Event("input"));
     input.focus();
     input.select();               // 바로 고쳐 쓸 수 있게 선택해 둔다
   });
@@ -1952,6 +1960,93 @@ function quickRateSubmit() {
   }
   QuickRate.idx++;
   renderQuickRate();
+}
+
+/* ---------- 별점 기준 — 같은 점수를 준 내 작품 (2026-11-05) ----------
+   "1~10점 기준이 매번 헷갈린다"는 요청. 글로 된 기준표는 없어서, **그 점수를 준 내 작품**을 띄워
+   "이거보다 나았나?"로 견주게 한다. 별점 몰아넣기 · 한 장짜리 별점 창 · 수정창 세 곳이 같은 함수를 쓴다.
+   · 점수는 **점대**로 묶는다(8 ~ 8.9 = 8점대, 10은 10점). 그 칸이 비면 가장 가까운 칸, 위아래 칸은 칩으로 넘긴다.
+   · 최근 본 순 8개. **포스터를 누르면 그 작품의 별점을 그 자리에서 고친다**(Enter·칸 벗어나기 = 저장, Esc = 취소).
+     지금 매기던 창은 그대로 둔다 — 기준작을 고치다가 매기던 걸 잃으면 안 된다. */
+const rBucket = (r) => Math.min(10, Math.max(0, Math.floor(r)));
+const rLabel = (b) => b >= 10 ? "10점" : `${b}점대`;
+
+function renderRatingRef(box, input, excludeId, pick) {
+  if (!box || !input) return;
+  const pool = State.items.filter(i => i.rating > 0 && i.id !== excludeId);
+  const buckets = [...new Set(pool.map(i => rBucket(i.rating)))].sort((a, b) => a - b);
+  if (!buckets.length) { box.innerHTML = ""; return; }
+  const v = parseFloat(input.value);
+  let b = pick != null ? pick : (isFinite(v) && v > 0 ? rBucket(v) : null);
+  if (b == null) {
+    box.innerHTML = `<div class="rr-hint"><i class="fa-solid fa-scale-balanced"></i>점수를 넣으면 그 점수를 준 내 작품이 떠요</div>`;
+    return;
+  }
+  if (!buckets.includes(b)) b = buckets.reduce((best, x) => Math.abs(x - b) < Math.abs(best - b) ? x : best, buckets[0]);
+  const at = buckets.indexOf(b);
+  const lo = buckets[at - 1], hi = buckets[at + 1];
+  const list = pool.filter(i => rBucket(i.rating) === b).sort((x, y) => recDate(y).localeCompare(recDate(x)));
+  box.dataset.b = b;
+  box.innerHTML = `
+    <div class="rr-head">
+      <span class="rr-title"><i class="fa-solid fa-heart"></i>내가 <b>${rLabel(b)}</b> 준 작품 <span class="rr-n">${list.length}편</span></span>
+      <span class="rr-navs">
+        ${lo != null ? `<button type="button" class="rr-nav" data-rb="${lo}"><i class="fa-solid fa-chevron-left"></i>${rLabel(lo)}</button>` : ""}
+        ${hi != null ? `<button type="button" class="rr-nav" data-rb="${hi}">${rLabel(hi)}<i class="fa-solid fa-chevron-right"></i></button>` : ""}
+      </span>
+    </div>
+    <div class="rr-list">${list.slice(0, 8).map(i => `
+      <div class="rr-item" data-rid="${esc(i.id)}" title="눌러서 이 작품의 별점 고치기">
+        ${i.poster ? `<img src="${esc(i.poster)}" alt="" loading="lazy">` : `<div class="rr-ph"><i class="fa-solid fa-film"></i></div>`}
+        <span class="rr-score"><i class="fa-solid fa-heart"></i>${fmtRating(i.rating)}</span>
+        <span class="rr-t">${esc(i.title)}${seriesLabel(i) ? ` ${esc(seriesLabel(i))}` : ""}</span>
+      </div>`).join("")}</div>`;
+}
+
+/* 한 번만 건다(상자마다). `getEx` = 지금 매기는 기록 id — 자기 자신은 기준작에서 뺀다 */
+function initRatingRef(box, input, getEx) {
+  if (!box || !input || box._rr) return;
+  box._rr = true;
+  input.addEventListener("input", () => renderRatingRef(box, input, getEx()));
+  box.addEventListener("click", e => {
+    const nav = e.target.closest("[data-rb]");
+    if (nav) { renderRatingRef(box, input, getEx(), +nav.dataset.rb); return; }
+    const it = e.target.closest("[data-rid]");
+    if (!it || it.querySelector("input")) return;
+    const item = State.items.find(x => x.id === it.dataset.rid);
+    if (!item) return;
+    const sc = it.querySelector(".rr-score");
+    sc.innerHTML = `<input type="number" class="rr-edit" min="0" max="10" step="0.1" value="${item.rating}">`;
+    const ed = sc.querySelector("input");
+    ed.focus(); ed.select();
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      if (save) {
+        const r = parseFloat(ed.value);
+        if (isFinite(r) && r > 0) {
+          const nv = Math.min(10, Math.round(r * 10) / 10);
+          if (nv !== item.rating) {
+            const old = item.rating;
+            item.rating = nv;
+            saveLocal();
+            applyFilters();
+            toast(`「${item.title}」 ♥${fmtRating(old)} → ♥${fmtRating(nv)}`, "success");
+          }
+        }
+      }
+      renderRatingRef(box, input, getEx(), +box.dataset.b);
+      input.focus();
+    };
+    /* Enter·Esc는 여기서 멈춘다 — 안 멈추면 별점 몰아넣기의 Enter(저장하고 다음)·Esc(창 닫기)까지 같이 돈다 */
+    ed.addEventListener("keydown", ev => {
+      if (ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); finish(true); }
+      else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); finish(false); }
+    });
+    ed.addEventListener("blur", () => finish(true));
+    ed.addEventListener("click", ev => ev.stopPropagation());
+  });
 }
 
 /* ---------- 등록/수정 모달 ---------- */
@@ -2048,6 +2143,7 @@ function openEdit(id) {
   }
 
   updateStepperLabel("fCount");
+  renderRatingRef($("#fRatingRef"), $("#fRating"), id);   // 그 점수를 준 내 작품 (기준 견주기)
   $("#editModal").classList.remove("hidden");
 }
 

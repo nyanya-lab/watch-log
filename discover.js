@@ -259,6 +259,146 @@ async function verifyAiredSeasons(list) {
   if (changed) { saveLocal(); applyFilters(); renderDiscover(); }
 }
 
+/* ---------- 곧 나와요 — 본 작품의 다음 시즌 방영일 · 속편 개봉일 (2026-11-05 요청) ----------
+   이어보기는 **나온 것 중 안 본 것**만 다뤄서, 발표만 된 다음 시즌·속편은 언제 나오는지 알 길이 없었다.
+   · 영화 = 컬렉션 캐시의 **미개봉 편**(조회 없음). 날짜가 없으면 "날짜 미정".
+   · TV = 작품마다 `tmdbDetail` 1회로 **아직 방영 안 한 첫 시즌**을 찾는다. 이 기기 캐시(`watchlog_upcoming`)에
+     남기고 하루에 한 번만(끝난 작품은 30일에 한 번) 다시 본다. TMDB로 다시 만들 수 있는 값이라 동기화하지 않는다.
+   · `mediaType`이 **저장된** tv 기록만 본다 — 짐작으로 조회해 남의 작품 시즌을 띄우지 않는다. 받은 게 `sameWork`가
+     아니면 그 작품은 30일 동안 건너뛴다.
+   · 끝났다고(Ended·Canceled) 나온 작품에 날짜 없는 시즌 칸이 있으면 TMDB의 빈 칸이라 안 띄운다. */
+const LS_UPCOMING = "watchlog_upcoming";
+function getUpCache() {
+  try { return JSON.parse(localStorage.getItem(LS_UPCOMING) || "{}"); } catch { return {}; }
+}
+function setUpCache(c) {
+  try { localStorage.setItem(LS_UPCOMING, JSON.stringify(c)); } catch { /* 저장 공간 문제면 다음에 다시 받는다 */ }
+}
+
+function upcomingTvTargets() {
+  const m = new Map();
+  State.items.forEach(i => { if (i.tmdbId && i.mediaType === "tv" && !m.has(i.tmdbId)) m.set(i.tmdbId, i); });
+  return [...m.values()];
+}
+
+function upcomingList() {
+  const today = localToday();
+  const out = [];
+  const c = getUpCache();
+  upcomingTvTargets().forEach(i => {
+    const e = c[i.tmdbId];
+    if (!e || !e.season) return;
+    out.push({ kind: "tv", tmdbId: i.tmdbId, item: i, season: e.season, date: e.date || "",
+      poster: e.poster || i.poster, title: i.title });
+  });
+  const cache = getCollCache();
+  const colls = new Map();
+  State.items.forEach(i => { if (i.collectionId && !colls.has(i.collectionId)) colls.set(i.collectionId, i); });
+  colls.forEach((i, cid) => {
+    const info = cache[cid];
+    if (!info || !info.parts) return;
+    info.parts.filter(p => !(p.releaseDate && p.releaseDate <= today) && !isHidden(p.tmdbId, "movie")).forEach(p =>
+      out.push({ kind: "movie", tmdbId: p.tmdbId, item: i, cid, no: p.no, date: p.releaseDate || "",
+        poster: p.poster, title: p.title, collName: info.name }));
+  });
+  return out.sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"));
+}
+
+let _upChecking = false;
+async function refreshUpcoming() {
+  if (_upChecking || !getTmdbKey()) return;
+  const c = getUpCache();
+  const now = Date.now();
+  const todo = upcomingTvTargets().filter(i => {
+    const e = c[i.tmdbId];
+    return !e || now - (Date.parse(e.at) || 0) > (e.ended ? 30 : 1) * 864e5;
+  });
+  if (!todo.length) return;
+  _upChecking = true;
+  let changed = false;
+  const today = localToday();
+  for (const i of todo) {
+    try {
+      const d = await tmdbDetail(i.tmdbId, "tv");
+      const at = new Date().toISOString();
+      let e;
+      if (!sameWork(i, d)) e = { at, ended: true };
+      else {
+        const ended = /Ended|Canceled/i.test(d.status || "");
+        const next = (d.seasons || []).find(s => !(s.airDate && s.airDate <= today));
+        if (next && (next.airDate || !ended)) {
+          const date = next.airDate || (d.nextAir && d.nextAir.season === next.number ? d.nextAir.date : "");
+          e = { at, ended: false, season: next.number, date: date || "", poster: next.poster || d.poster || "" };
+        } else e = { at, ended };
+      }
+      const old = c[i.tmdbId] || {};
+      if (old.season !== e.season || (old.date || "") !== (e.date || "")) changed = true;
+      c[i.tmdbId] = e;
+      setUpCache(c);
+    } catch { /* 실패는 다음에 다시 */ }
+    await new Promise(r => setTimeout(r, 240));
+  }
+  _upChecking = false;
+  if (changed && Discover.view === "next") renderDiscover();
+}
+
+/* 상세에 붙일 한 줄 — "S3 2027.03.12 방영 예정" */
+function upcomingNoteHtml(i) {
+  if (!i || !i.tmdbId) return "";
+  const u = upcomingList().filter(x => x.kind === "tv"
+    ? (i.mediaType === "tv" && x.tmdbId === i.tmdbId)
+    : (i.collectionId && x.cid === i.collectionId));
+  if (!u.length) return "";
+  const t = u.slice(0, 3).map(x => `${x.kind === "tv" ? `S${x.season}` : esc(x.title)} ${x.date ? fmtDate(x.date) : "날짜 미정"} ${x.kind === "tv" ? "방영" : "개봉"} 예정`);
+  return `<div class="dt-up"><i class="fa-solid fa-calendar-plus"></i>${t.join(" · ")}${u.length > 3 ? ` 외 ${u.length - 3}편` : ""}</div>`;
+}
+
+/* ---------- 보고싶어요 — 볼 수 있게 됐는지 (2026-11-05 요청) ----------
+   담을 때 대여만 있던 작품이 정액제에 들어오면 홈 "이제 볼 수 있어요"에 띄운다(home.js `availHtml`).
+   · **하루에 한 번, 앱을 열고 조금 뒤 저절로.** 확인한 날은 `prefs.wishCheckAt`(동기화)에 남겨 다른 기기가 또 돌지 않게 한다.
+   · 새로 생긴 OTT는 그 위시의 `availNew`·`availAt`에 남긴다 — 위시 칸이라 다른 기기에도 그대로 뜬다.
+     홈에서 ✕를 누르면 그 둘만 지운다(위시는 그대로).
+   · 조회 실패는 건너뛴다(`tmdbProviders(.., strict)`). "못 받음"을 "어디에도 없음"으로 저장하면
+     다음 확인 때 전부 새로 들어온 것처럼 보인다. 빠진 OTT는 `availNew`에서도 뺀다. */
+let _wishChecking = false;
+async function checkWishAvail(force) {
+  if (_wishChecking || !getTmdbKey()) return;
+  const today = localToday();
+  if (!force && (State.prefs || {}).wishCheckAt === today) return;
+  const list = State.wishes.filter(w => w.tmdbId && w.mediaType && !myStatus(w.tmdbId, w.mediaType).watched);
+  if (!list.length) return;
+  _wishChecking = true;
+  savePrefs({ wishCheckAt: today });
+  let changed = false;
+  for (const w of list) {
+    try {
+      const otts = await tmdbProviders(w.tmdbId, w.mediaType, true);
+      const old = w.otts || [];
+      const added = otts.filter(o => !old.includes(o));
+      if (added.length) { w.availNew = [...new Set([...(w.availNew || []), ...added])]; w.availAt = today; changed = true; }
+      if (!sameVal(otts, old)) { w.otts = otts; changed = true; }
+      if (w.availNew) {
+        const keep = w.availNew.filter(o => otts.includes(o));
+        if (keep.length !== w.availNew.length) {
+          changed = true;
+          if (keep.length) w.availNew = keep; else { delete w.availNew; delete w.availAt; }
+        }
+      }
+    } catch { /* 이번엔 못 받음 — 그대로 둔다 */ }
+    await new Promise(r => setTimeout(r, 240));
+  }
+  _wishChecking = false;
+  if (changed) { saveLocal(); renderHome(); renderDiscover(); }
+}
+
+function dismissAvail(tmdbId) {
+  const w = State.wishes.find(x => String(x.tmdbId) === String(tmdbId));
+  if (!w) return;
+  delete w.availNew; delete w.availAt;
+  saveLocal();
+  renderHome();
+}
+
 function continueList() {
   const byId = new Map();
   State.items.forEach(i => {
@@ -2064,7 +2204,33 @@ function renderDcNext() {
       ]
     })));
 
-  const list = [...tv, ...movie].sort((a, b) => (b._sort || "").localeCompare(a._sort || ""));
+  /* 곧 나와요 — 맨 앞 한 칸. 날짜 순(미정은 뒤). 나머지와 **따로** 붙인다 — `localeCompare`는 기호를 숫자보다
+     앞에 세워서 정렬 키로 맨 앞에 두려던 게 맨 뒤로 갔다 */
+  refreshUpcoming();   // TV 다음 시즌은 뒤에서 받아 오고, 바뀌면 다시 그린다
+  const upAll = upcomingList();
+  const up = upAll.map(u => ({
+    tmdbId: u.tmdbId,
+    mediaType: u.kind === "tv" ? "tv" : "movie",
+    title: u.kind === "tv" ? `${u.title} S${u.season}` : u.title,
+    poster: u.poster,
+    year: (u.date || "").slice(0, 4),
+    voteAverage: null,
+    flag: `<span class="dc-flag dc-flag-up"><i class="fa-solid fa-calendar-day mr-1"></i>${u.date ? fmtDate(u.date) : "날짜 미정"}</span>`,
+    group: {
+      key: "upcoming",
+      icon: `<i class="fa-solid fa-calendar-plus mr-1.5 ac-text"></i>`,
+      name: "곧 나와요",
+      sub: `<span class="wl-meta">본 작품의 다음 시즌·속편 ${upAll.length}개 · 가까운 날짜부터</span>`
+    },
+    note: "",
+    actions: u.kind === "tv"
+      ? [{ act: "open", id: u.item.id, label: "내 기록", icon: "fa-clock-rotate-left" }]
+      : [{ act: "wish", label: isWished(u.tmdbId) ? "담아둠" : "보고싶어요", icon: "fa-bookmark",
+           cls: isWished(u.tmdbId) ? "dc-btn-on" : "" },
+         { act: "open", id: u.item.id, label: "내 기록", icon: "fa-clock-rotate-left" }]
+  }));
+
+  const list = [...up, ...[...tv, ...movie].sort((a, b) => (b._sort || "").localeCompare(a._sort || ""))];
 
   /* 편 정보를 안 가져온 영화 시리즈가 있으면 안내.
      실패한 것만 남았을 때는 "가져오기"가 아니라 "다시 시도"를 제안한다 — 그 상태에서
