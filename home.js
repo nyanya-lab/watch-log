@@ -159,9 +159,10 @@ function availHtml() {
 
 /* 몇 년 전 이맘때 — 지난 해들의 **같은 열흘 구간**에 본 작품(2026-11-05). 최근 본 작품 바로 아래.
    구간은 1~10일 / 11~20일 / 21일~말일(사용자와 정함 — 하루는 너무 적고, 한 달은 너무 많다).
-   처음 본 기간과 다시 본 기간 둘 다 보고, 그 구간에 하루라도 걸리면 넣는다. 날짜 없는 기록은 빠진다.
-   순서 = 오늘 날짜에 가까운 것부터, 같으면 최근 해부터. 해가 둘 이상이면 [전체 · 1년 전 · 2년 전 …] 칩으로 거른다. */
-let _agoYear = 0;   // 0 = 전체 (세션 동안만 기억)
+   처음 본 기간과 다시 본 기간 둘 다 보고, 그 구간에 하루라도 걸리면 넣는다.
+   **본 날짜가 없는 기록(13%)은 방영일(`releaseDate`)로 대신 본다** — 이 줄에서만(사용자 요청). 통계에는 안 쓴다:
+   옛 작품은 나오고 한참 뒤에 봤을 테니 연간 결산·연도별 막대가 거짓이 된다. 그래서 배지를 흐린 모양으로 구분한다.
+   순서 = 오늘 날짜에 가까운 것부터, 같으면 최근 해부터. "N년 전"은 포스터 우상단 배지(보는 중 배지 자리 — 지난 작품엔 안 뜬다). */
 
 function agoBlock(y, m, d) {
   const last = new Date(y, m, 0).getDate();
@@ -190,6 +191,13 @@ function yearsAgoHits() {
       }
       if (hit) { out.push({ i, ...hit }); break; }
     }
+    /* 본 날짜가 아예 없으면 방영일로 — 그 해 같은 구간에 나온 작품 */
+    const r = i.releaseDate || "";
+    if (!i.startDate && !i.lastWatchStart && /^\d{4}-\d{2}-\d{2}$/.test(r) && +r.slice(0, 4) < y && +r.slice(5, 7) === m) {
+      const [lo, hi] = agoBlock(+r.slice(0, 4), m, d);
+      const dd = +r.slice(8, 10);
+      if (dd >= lo && dd <= hi) out.push({ i, ago: y - +r.slice(0, 4), dist: Math.abs(dd - d), on: r, est: true });
+    }
   });
   return out.sort((a, b) => a.dist - b.dist || a.ago - b.ago);
 }
@@ -200,22 +208,15 @@ function agoHtml() {
   const today = localToday();
   const m = +today.slice(5, 7);
   const [lo, hi] = agoBlock(+today.slice(0, 4), m, +today.slice(8, 10));
-  const years = [...new Set(hits.map(h => h.ago))].sort((a, b) => a - b);
-  if (_agoYear && !years.includes(_agoYear)) _agoYear = 0;
-  const shown = _agoYear ? hits.filter(h => h.ago === _agoYear) : hits;
   return `<section class="hm-sec">
     <div class="hm-sec-head">
       <h2 class="hm-h2 hd">몇 년 전 이맘때<span class="hm-h2small">${m}월 ${lo}~${hi}일에 본 작품 ${hits.length}편</span></h2>
     </div>
-    ${years.length > 1 ? `<div class="hm-ago-chips">
-      <button class="hm-ago-chip ${_agoYear ? "" : "on"}" data-ago-y="0">전체</button>
-      ${years.map(n => `<button class="hm-ago-chip ${_agoYear === n ? "on" : ""}" data-ago-y="${n}">${n}년 전</button>`).join("")}
-    </div>` : ""}
     <div class="hm-shelf-wrap">
       <button class="hm-arrow" data-dir="-1" title="이전"><i class="fa-solid fa-chevron-left"></i></button>
-      <div class="hm-shelf">${shown.map(({ i, ago, on }) => `
+      <div class="hm-shelf">${hits.map(({ i, ago, est }) => `
         <div class="hm-ago-c">${recordCardHtml(i)}
-          <div class="hm-ago-y"><i class="fa-solid fa-clock-rotate-left"></i>${ago}년 전 · ${+on.slice(5, 7)}.${+on.slice(8, 10)}</div>
+          <span class="hm-ago-b ${est ? "est" : ""}" title="${est ? "본 날짜가 없어서 방영일 기준" : ""}">${est ? `<i class="fa-solid fa-tv"></i>` : ""}${ago}년 전</span>
         </div>`).join("")}</div>
       <button class="hm-arrow" data-dir="1" title="다음"><i class="fa-solid fa-chevron-right"></i></button>
     </div>
@@ -421,7 +422,6 @@ function initHome() {
       toast(`${REFRESH_SNOOZE_DAYS}일 뒤에 다시 알려드릴게요`);
       return renderHome();
     }
-    if ((el = t("[data-ago-y]"))) { _agoYear = +el.dataset.agoY; return renderHome(); }
     if ((el = t("[data-av-x]"))) return dismissAvail(el.dataset.avX);
     if ((el = t("[data-av]"))) return openDcDetail(+el.dataset.av, el.dataset.mt);
     if ((el = t("[data-finish]"))) return finishWatching(el.dataset.finish);
