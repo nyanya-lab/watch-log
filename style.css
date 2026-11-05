@@ -1569,9 +1569,6 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 .hm-ago-c .wl-card { width: 100%; }
 .hm-ago-c .wl-live { display: none; }   /* 같은 자리 — 지난 작품이라 보는 중일 일이 거의 없다 */
 .hm-ago-b { position: absolute; top: 6px; right: 6px; z-index: 1; display: inline-flex; align-items: center; gap: 4px;
-  background: var(--ac); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.2); }
-.hm-ago-b i { font-size: 9px; }
-/* 본 날짜가 없어 방영일로 넣은 것 — 흰 바탕으로 구분 */
-.hm-ago-b.est { background: #fff; color: var(--ac); }
+  background: rgba(29,26,24,.74); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px; }
+.hm-ago-b i { font-size: 9px; opacity: .85; }   /* 방영일로 넣은 것 — 아이콘만으로 구분 */
 @media (max-width: 639px) { .hm-shelf > .hm-ago-c { flex-basis: 118px; } }

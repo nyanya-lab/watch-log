@@ -82,6 +82,9 @@ function renderStats() {
   });
   const byGenre = countBy(items.flatMap(i => visibleGenres(i.genres)), g => g);
   const byYear = countBy(items.filter(watchYear), watchYear);
+  /* 방영(개봉) 연도별 — 내가 본 작품이 몇 년도에 나온 것인지(2026-11-05 요청). 본 날짜가 없는 기록도 들어간다 */
+  const byRel = countBy(items.filter(relYearOf), relYearOf);
+  const relYears = Object.keys(byRel).sort();
   /* 배우·감독은 **TMDB 번호로** 센다(2026-10-12) — 이름으로 세면 동명이인(박지훈 둘)이 한 막대가 된다 */
   const pIdx = personIdIndex();
   const actorTop = countPeople(items, "actor", pIdx).slice(0, 10);
@@ -227,6 +230,13 @@ function renderStats() {
       <div style="height:260px"><canvas id="chartYear"></canvas></div>
     </section>
 
+    <!-- 방영 연도별 막대 — 본 해가 아니라 **나온 해** -->
+    <section class="stat-sec">
+      <h3 class="stat-h"><i class="fa-solid fa-clapperboard"></i>방영 연도별</h3>
+      <p class="stat-note">내가 본 작품이 몇 년도에 나왔는지 — 시즌은 그 시즌이 방영한 해 · 본 날짜가 없는 기록도 들어갑니다</p>
+      <div style="height:260px"><canvas id="chartRel"></canvas></div>
+    </section>
+
     <!-- 월별 추이 -->
     <section class="stat-sec">
       <h3 class="stat-h"><i class="fa-solid fa-calendar-week"></i>월별 시청 (전체 기간)</h3>
@@ -266,6 +276,27 @@ function renderStats() {
     },
     options: { ...commonOpts, onClick: clickToFilter(l => ({ year: String(l).replace("년", "") })), plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
   }));
+
+  // 방영 연도별 — 비어 있는 해도 칸을 둔다(간격이 보여야 "언제 나온 걸 많이 봤나"가 읽힌다)
+  /* 1999년 이전은 한 칸(`~1999`)으로 — 1950년 작품 하나 때문에 빈 칸이 50개 생겨 막대가 실처럼 가늘어졌다 */
+  if (relYears.length) {
+    const OLD = 2000;
+    const old = relYears.filter(y => +y < OLD).reduce((n, y) => n + byRel[y], 0);
+    const lo = Math.max(OLD, +relYears[0]), hi = +relYears[relYears.length - 1];
+    const span = old ? ["~1999"] : [];
+    for (let y = lo; y <= hi; y++) span.push(String(y));
+    const cnt = (y) => y === "~1999" ? old : (byRel[y] || 0);
+    _charts.push(new Chart($("#chartRel"), {
+      type: "bar",
+      data: {
+        labels: span.map(y => y === "~1999" ? "~1999년" : y + "년"),
+        datasets: [{ label: "작품 수", data: span.map(cnt), backgroundColor: chartPalette(6)[5] || accentColor(), borderRadius: 4 }]
+      },
+      options: { ...commonOpts, onClick: clickToFilter(l => { const y = String(l).replace("년", ""); return cnt(y) ? { relYear: y } : null; }),
+        plugins: { legend: { display: false }, tooltip: { callbacks: { title: (c) => `${c[0].label} 방영` } } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { ticks: { autoSkip: true, maxRotation: 0 } } } }
+    }));
+  }
 
   // 장르 파이
   // 장르 도넛. 한 작품이 장르를 여러 개 가지므로 분모는 "작품 수"가 아니라 "전체 장르 태그 수".

@@ -11,13 +11,14 @@ const MULTI = ["type", "country", "ott", "genre"];
 const RANGE0 = { rMin: 0, rMax: 10, vMin: 0, vMax: 10 };
 
 /* 정렬 기준마다 자연스러운 기본 방향이 다르다 — 날짜·별점은 높은(최근) 쪽, 제목은 가나다 */
-const SORT_DIR0 = { date: "desc", title: "asc", rating: "desc", vote: "desc" };
+const SORT_DIR0 = { date: "desc", title: "asc", rating: "desc", vote: "desc", release: "desc" };
 
 const Filters = {
   q: "", type: [], country: [], ott: [], genre: [],
   rMin: 0, rMax: 10,                // 내 별점 범위
   vMin: 0, vMax: 10,                // TMDB 평점 범위
   year: "",                         // 연도는 해마다 늘어나 칩으로 두기 어렵다 (드롭다운 유지)
+  relYear: "",                      // 방영(개봉) 연도 — 통계 "방영 연도별" 막대에서만 건다 (2026-11-05)
   person: "",                       // 배우/감독 (배지 클릭 전용)
   sort: "date", sortDir: "desc", pendingOnly: false,
   noSeasonOnly: false,              // 시즌이 여러 개인데 시즌을 기록 안 한 항목만
@@ -395,7 +396,7 @@ function initWatchlog() {
 
   $("#resetFilter").addEventListener("click", () => {
     MULTI.forEach(k => { Filters[k] = []; });
-    Object.assign(Filters, RANGE0, { year: "", sort: "date", sortDir: "desc" });
+    Object.assign(Filters, RANGE0, { year: "", relYear: "", sort: "date", sortDir: "desc" });
     applyFilters();
     buildFilterOptions();
   });
@@ -868,7 +869,7 @@ function buildFilterOptions() {
 
   const arrow = (k) => Filters.sort === k
     ? `<span class="fdir">${Filters.sortDir === "asc" ? "↑" : "↓"}</span>` : "";
-  const sorts = [["date", "본 날짜"], ["title", "가나다"], ["rating", "♥ 내 별점"], ["vote", "★ TMDB 평점"]];
+  const sorts = [["date", "본 날짜"], ["release", "방영일"], ["title", "가나다"], ["rating", "♥ 내 별점"], ["vote", "★ TMDB 평점"]];
   $("#fcSort").innerHTML = sorts.map(pair =>
     `<button class="fchip ${Filters.sort === pair[0] ? "on" : ""}" data-fkey="sort" data-fval="${pair[0]}">${pair[1]}${arrow(pair[0])}</button>`).join("");
 
@@ -886,7 +887,7 @@ function buildFilterOptions() {
 
 function hasActiveFilter() {
   const ranged = Object.keys(RANGE0).some(k => Filters[k] !== RANGE0[k]);
-  return !!(MULTI.some(k => Filters[k].length) || ranged || Filters.year || Filters.person ||
+  return !!(MULTI.some(k => Filters[k].length) || ranged || Filters.year || Filters.relYear || Filters.person ||
             Filters.q || Filters.pendingOnly || Filters.noSeasonOnly || Filters.engNameOnly ||
             Filters.dupOnly || Filters.watchingOnly || Filters.group ||
             Filters.seriesView ||
@@ -897,7 +898,7 @@ function hasActiveFilter() {
 function clearAllFilters() {
   MULTI.forEach(k => { Filters[k] = []; });
   Object.assign(Filters, RANGE0, {
-    q: "", year: "", person: "", sort: "date", sortDir: "desc",
+    q: "", year: "", relYear: "", person: "", sort: "date", sortDir: "desc",
     pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
     watchingOnly: false, group: "", seriesView: false
   });
@@ -917,7 +918,7 @@ function patchedFilters(patch) {
   const cleared = {};
   MULTI.forEach(k => { cleared[k] = []; });
   return Object.assign(cleared, RANGE0,
-    { year: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
+    { year: "", relYear: "", person: "", pendingOnly: false, noSeasonOnly: false, engNameOnly: false, dupOnly: false,
       watchingOnly: false, group: "", seriesView: false },
     norm);
 }
@@ -1041,6 +1042,10 @@ const COUNTRY_NONE = "미상";
 const ottOrNone = (i) => { const l = ottList(i); return l.length ? l : [OTT_NONE]; };
 
 /* 목록 필터 조건 하나에 기록 하나가 맞는지 — 목록(`applyFilters`)과 통계 팝업(`itemsForPatch`)이 같이 쓴다 */
+/* 방영(개봉)일 · 연도 — 날짜가 없으면 연도만이라도 (2026-11-05, 통계 "방영 연도별"·정렬 "방영일") */
+function relKey(i) { return i.releaseDate || (i.releaseYear ? i.releaseYear + "-01-01" : "0000-00-00"); }
+function relYearOf(i) { return (i.releaseDate || "").slice(0, 4) || String(i.releaseYear || ""); }
+
 function passesFilter(i, F, pIdx) {
     if (F.pendingOnly && i.tmdbId) return false;
     if (F.noSeasonOnly && !needsSeason(i)) return false;
@@ -1054,6 +1059,7 @@ function passesFilter(i, F, pIdx) {
     if (F.country.length && !F.country.includes(i.country || COUNTRY_NONE)) return false;
     if (F.ott.length && !ottOrNone(i).some(o => F.ott.includes(o))) return false;
     if (F.year && watchYear(i) !== F.year) return false;
+    if (F.relYear && (F.relYear === "~1999" ? !(relYearOf(i) && +relYearOf(i) < 2000) : relYearOf(i) !== F.relYear)) return false;
     if (F.genre.length && !visibleGenres(i.genres).some(g => F.genre.includes(g))) return false;
     /* 별점 범위. 안 매긴 기록은 0으로 쳐서 기본 범위(0~10)에는 그대로 들어온다 */
     const myR = i.rating || 0;
@@ -1089,7 +1095,9 @@ function applyFilters() {
     date: (a, b) => dkey(a).localeCompare(dkey(b)),
     title: (a, b) => (a.title || "").localeCompare(b.title || "", "ko"),
     rating: (a, b) => (a.rating || 0) - (b.rating || 0),
-    vote: (a, b) => (a.voteAverage || 0) - (b.voteAverage || 0)
+    vote: (a, b) => (a.voteAverage || 0) - (b.voteAverage || 0),
+    /* 방영(개봉)일 — 시즌 기록은 그 시즌 방영일이다. 같으면 본 날짜로 */
+    release: (a, b) => relKey(a).localeCompare(relKey(b)) || dkey(a).localeCompare(dkey(b))
   };
   const base = CMP[F.sort] || CMP.date;
   const sgn = F.sortDir === "asc" ? 1 : -1;
